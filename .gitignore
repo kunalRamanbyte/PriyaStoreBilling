@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# PyInstaller
+# Keep .spec files if they are needed to build the project
+# *.spec
+
+# SQLite databases (local database containing transaction/billing data)
+*.db
+*.sqlite3
+
+# Logs and temporary build files
+*.log
+*.err
+build_done.txt
+build_log.txt
+crash_log.txt
+
+# OS/System files
+.DS_Store
+.fuse_hidden*
+Thumbs.db
