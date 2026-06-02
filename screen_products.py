@@ -174,7 +174,12 @@ class ProductScreen(ctk.CTkFrame):
                     pass
 
             low_tag = "low" if p["current_stock"] <= p["reorder_level"] else ""
-            tags = tuple(t for t in (exp_tag or low_tag or ("alt" if i % 2 == 0 else ""),) if t)
+            if exp_tag:
+                tags = (exp_tag,)
+            elif low_tag:
+                tags = (low_tag,)
+            else:
+                tags = (f"row{i % len(COLORS['ROW_COLORS'])}",)
             self.tree.insert("", "end", iid=str(p["product_id"]), values=(
                 p.get("product_code", ""),
                 p["name"],
@@ -189,10 +194,11 @@ class ProductScreen(ctk.CTkFrame):
                 "✅ Active" if p["is_active"] else "❌ Off",
             ), tags=tags)
 
-        self.tree.tag_configure("expired",  background="#FFEBEE")   # red tint
-        self.tree.tag_configure("expiring", background="#FFF8E1")   # amber tint
+        self.tree.tag_configure("expired",  background="#FFEBEE")
+        self.tree.tag_configure("expiring", background="#FFF8E1")
         self.tree.tag_configure("low",      background=COLORS["tbl_low_stock"])
-        self.tree.tag_configure("alt",      background=COLORS["tbl_row_alt"])
+        for idx, color in enumerate(COLORS["ROW_COLORS"]):
+            self.tree.tag_configure(f"row{idx}", background=color)
         self.count_label.configure(text=f"{len(prods)} product(s)")
 
     def _get_selected_product_id(self):

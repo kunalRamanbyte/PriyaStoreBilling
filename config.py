@@ -126,6 +126,16 @@ COLORS = {
 
     # -- Category default --
     "cat_default"   : "#64748B",
+
+    # ── Rotating row palette (6 soft pastels, used across all treeviews) ──
+    "ROW_COLORS": [
+        "#E3F2FD",   # Light Blue
+        "#E8F5E9",   # Light Green
+        "#F3E5F5",   # Light Purple
+        "#FFF3E0",   # Light Orange
+        "#E0F7FA",   # Light Teal
+        "#FCE4EC",   # Light Pink
+    ],
 }
 
 # --- Category Color Wheel (Modern vibrant) ---

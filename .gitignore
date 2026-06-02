@@ -10,6 +10,7 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+installer/*.zip
 
 # PyInstaller
 # Keep .spec files if they are needed to build the project
@@ -17,6 +18,8 @@ dist/
 
 # SQLite databases (local database containing transaction/billing data)
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 
 # Logs and temporary build files

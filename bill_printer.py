@@ -13,6 +13,18 @@ import subprocess
 from datetime import datetime
 
 
+def open_file(path: str):
+    """Open a file with the OS default application (cross-platform)."""
+    if not path:
+        return
+    if sys.platform.startswith("win"):
+        os.startfile(path)  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", path])
+    else:
+        subprocess.Popen(["xdg-open", path])
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # A4 PDF BILL
 # ─────────────────────────────────────────────────────────────────────────────

@@ -114,8 +114,9 @@ class SupplierScreen(ctk.CTkFrame):
         search = self.search_var.get().strip()
         rows   = self.db.get_suppliers(active_only=False, search=search)
         self.tree.delete(*self.tree.get_children())
+        _row_colors = COLORS["ROW_COLORS"]
         for i, s in enumerate(rows):
-            tag = "alt" if i % 2 == 0 else ""
+            tag = f"row{i % len(_row_colors)}"
             self.tree.insert("", "end", iid=str(s["supplier_id"]), values=(
                 s["name"],
                 s.get("contact_person", "") or "",
@@ -124,6 +125,8 @@ class SupplierScreen(ctk.CTkFrame):
                 s.get("gst_number", "") or "",
                 "✅ Active" if s["is_active"] else "❌ Inactive",
             ), tags=(tag,))
+        for idx, color in enumerate(_row_colors):
+            self.tree.tag_configure(f"row{idx}", background=color)
         self.count_lbl.configure(text=f"{len(rows)} supplier(s)")
 
     def _get_selected_id(self):
@@ -364,4 +367,35 @@ class SupplierScreen(ctk.CTkFrame):
 
     def _deactivate(self):
         sid = self._get_selected_id()
-       
+        if not sid:
+            return
+        sup = self.db.get_supplier_by_id(sid)
+        if not sup:
+            return
+        if not sup["is_active"]:
+            messagebox.showinfo("Already Inactive",
+                                f"'{sup['name']}' is already inactive.",
+                                parent=self.winfo_toplevel())
+            return
+        if messagebox.askyesno("Deactivate Supplier",
+                               f"Deactivate '{sup['name']}'?\n"
+                               f"They will be hidden from purchase forms.",
+                               parent=self.winfo_toplevel()):
+            self.db.deactivate_supplier(sid)
+            self._load_suppliers()
+
+    def _delete_supplier(self):
+        sid = self._get_selected_id()
+        if not sid:
+            return
+        sup = self.db.get_supplier_by_id(sid)
+        if not sup:
+            return
+        if not messagebox.askyesno("Delete Supplier",
+                                   f"Delete '{sup['name']}'?\n\n"
+                                   f"If they have purchase records they will be deactivated instead.",
+                                   parent=self.winfo_toplevel()):
+            return
+        ok, msg = self.db.delete_supplier(sid)
+        messagebox.showinfo("Done", msg, parent=self.winfo_toplevel())
+        self._load_suppliers()

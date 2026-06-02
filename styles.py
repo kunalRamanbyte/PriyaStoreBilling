@@ -92,6 +92,15 @@ def setup_ttk_styles():
         relief="flat",
     )
 
+    # ── Cart table gets a vibrant violet header ──────────────
+    s.configure("Cart.Treeview.Heading",
+        font=FONTS["table_hdr"],
+        background="#4C1D95",
+        foreground="#FFFFFF",
+        relief="flat",
+        padding=(10, 0),
+    )
+
     # ── Global Scrollbar (horizontal + vertical fallback) ─────
     s.configure("TScrollbar",
         background=COLORS["glass_border"],

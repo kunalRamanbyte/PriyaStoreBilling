@@ -145,9 +145,10 @@ class CustomerScreen(ctk.CTkFrame):
         search = self.search_var.get().strip()
         rows   = self.db.get_customers(search=search)
         self.tree.delete(*self.tree.get_children())
+        _row_colors = COLORS["ROW_COLORS"]
         for i, c in enumerate(rows):
             bal = c.get("credit_balance") or 0
-            tag = "credit" if bal > 0 else ("alt" if i % 2 == 0 else "")
+            tag = "credit" if bal > 0 else f"row{i % len(_row_colors)}"
             self.tree.insert("", "end", iid=str(c["customer_id"]), values=(
                 c["name"],
                 c.get("phone", "") or "",
@@ -155,6 +156,8 @@ class CustomerScreen(ctk.CTkFrame):
                 f"₹{bal:,.2f}" if bal > 0 else "—",
                 "✅ Active" if (c.get("is_active") in (None, 1)) else "❌ Inactive",
             ), tags=(tag,))
+        for idx, color in enumerate(_row_colors):
+            self.tree.tag_configure(f"row{idx}", background=color)
         self.count_lbl.configure(text=f"{len(rows)} customer(s)")
 
     def _get_selected_id(self):

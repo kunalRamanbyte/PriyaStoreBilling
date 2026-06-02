@@ -12,6 +12,9 @@ from config import COLORS, FONTS, PAYMENT_MODES
 
 
 class BillingScreen(ctk.CTkFrame):
+    _RESPONSIVE_SUMMARY_BREAK = 1000
+    _RESPONSIVE_BUTTON_BREAK = 860
+
     def __init__(self, parent, db, current_user, app):
         super().__init__(parent, fg_color=COLORS["bg_main"], corner_radius=0)
         self.db           = db
@@ -24,8 +27,10 @@ class BillingScreen(ctk.CTkFrame):
         self.cust_popup   = None
         self._pending_udhaar        = 0.0   # BIL-5: outstanding due of selected customer
         self._selected_customer_id  = None  # BIL-5: customer id
+        self._selected_customer_name = None
         self._build()
         self._bind_keys()
+        self.bind("<Configure>", self._on_resize)
 
     # ─────────────────────────────────────────────────────────────
     # Build UI
@@ -41,106 +46,138 @@ class BillingScreen(ctk.CTkFrame):
         self._build_status_bar()
 
     def _build_top_bar(self):
-        top = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0, height=70)
+        top = ctk.CTkFrame(self, fg_color="#FDFBFF", corner_radius=0, height=58)
         top.grid(row=0, column=0, sticky="ew")
         top.grid_propagate(False)
         top.grid_columnconfigure(1, weight=1)
+        self.top_bar = top
 
-        # Title
+        title_box = ctk.CTkFrame(top, fg_color="transparent")
+        title_box.grid(row=0, column=0, padx=16, pady=8, sticky="w")
         ctk.CTkLabel(
-            top, text="🧾   New Bill",
-            font=FONTS["heading"], text_color=COLORS["text_dark"]
-        ).grid(row=0, column=0, padx=20, pady=12, sticky="w")
+            title_box, text="Priya Store",
+            font=("Segoe UI Semibold", 15, "bold"), text_color="#F43F8C"
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            title_box, text="Bright Billing Dashboard",
+            font=("Segoe UI", 11), text_color="#64748B"
+        ).pack(anchor="w")
 
-        # Bill number badge
-        bill_no = self.db.next_bill_number()
-        self.bill_no_label = ctk.CTkLabel(
+        _user_name = self.current_user.get("name") or self.current_user.get("username", "User")
+        _user_role = (self.current_user.get("role") or "").title()
+        self.user_badge = ctk.CTkLabel(
             top,
-            text=f"Bill: {bill_no}",
-            font=FONTS["body_bold"],
+            text=f"◉  {_user_name}  •  {_user_role}",
+            font=("Segoe UI", 12, "bold"),
             text_color="white",
-            fg_color=COLORS["btn_primary"],
-            corner_radius=10,
-            padx=14, pady=6,
+            fg_color="#A855F7",
+            corner_radius=14,
+            padx=14,
+            pady=7,
         )
-        self.bill_no_label.grid(row=0, column=2, padx=10, pady=12)
-
-        # Customer name (optional)
-        ctk.CTkLabel(top, text="Customer:", font=FONTS["body"],
-                     text_color=COLORS["text_muted"]).grid(row=0, column=3, padx=(10, 4))
-        self.customer_entry = ctk.CTkEntry(
-            top, placeholder_text="Walk-in Customer",
-            font=FONTS["input"], width=200, height=40,
-            border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"],
-        )
-        self.customer_entry.grid(row=0, column=4, padx=(0, 8))
-        # Autocomplete: show matching saved customers as you type
-        self.customer_entry.bind("<KeyRelease>", self._on_customer_search)
-        self.customer_entry.bind("<Down>", lambda e: self._focus_cust_popup())
-
-        # Udhaar badge — shown only when selected customer has pending credit
-        self.udhaar_badge = ctk.CTkLabel(
-            top,
-            text="",
-            font=FONTS["small_bold"],
-            text_color="white",
-            fg_color=COLORS["btn_warning"],
-            corner_radius=8,
-            padx=10, pady=4,
-        )
-        # not gridded here — shown/hidden dynamically in _select_customer
+        self.user_badge.grid(row=0, column=2, padx=16, pady=10, sticky="e")
 
     def _build_body(self):
         body = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
         body.grid(row=1, column=0, sticky="nsew", padx=12, pady=8)
         body.grid_columnconfigure(0, weight=1)
         body.grid_columnconfigure(1, weight=0)
-        body.grid_rowconfigure(1, weight=1)
+        body.grid_rowconfigure(2, weight=1)
+        self.body_frame = body
 
-        # ── Search bar ───────────────────────────────────────
-        search_frame = ctk.CTkFrame(body, fg_color=COLORS["bg_card"], corner_radius=16, height=62)
-        search_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
+        self.context_frame = ctk.CTkFrame(body, fg_color="transparent")
+        self.context_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        self.context_frame.grid_columnconfigure(0, weight=1)
+        self.context_left = ctk.CTkFrame(self.context_frame, fg_color="transparent")
+        self.context_left.grid(row=0, column=0, sticky="w")
+
+        self.section_chip = self._make_chip(
+            self.context_left, "New Bill", "#F8E9FF", "#A21CAF", 44
+        )
+        self.section_chip.pack(side="left", padx=(0, 8))
+
+        bill_no = self.db.next_bill_number()
+        self.bill_no_label = self._make_chip(
+            self.context_left, f"Bill: {bill_no}", "#0EA5E9", "white", 44
+        )
+        self.bill_no_label.pack(side="left", padx=(0, 8))
+
+        self.customer_entry = ctk.CTkEntry(
+            self.context_left,
+            placeholder_text="Customer: Search or type customer name...",
+            font=("Segoe UI", 14),
+            width=260,
+            height=42,
+            border_width=1,
+            border_color="#99F6E4",
+            fg_color="#F8FFFE",
+            text_color=COLORS["text_dark"],
+            corner_radius=14,
+        )
+        self.customer_entry.pack(side="left", fill="x", expand=False, padx=(0, 8))
+        self.customer_entry.bind("<KeyRelease>", self._on_customer_search)
+        self.customer_entry.bind("<Down>", lambda e: self._focus_cust_popup())
+
+        # Walk-in indicator — shown when no saved customer is linked
+        self.walkin_badge = self._make_chip(
+            self.context_left, "Walk-in", "#94A3B8", "white", 44
+        )
+        self.walkin_badge.pack(side="left", padx=(0, 4))
+
+        # Gridded dynamically in _select_customer; hidden until a credit customer is picked
+        self.udhaar_badge = self._make_chip(
+            self.context_frame, "", "#FF9800", "white", 42
+        )
+
+        search_frame = ctk.CTkFrame(
+            body,
+            fg_color="#FFF8FB",
+            corner_radius=18,
+            height=62,
+            border_width=1,
+            border_color="#E9D5FF",
+        )
+        search_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         search_frame.grid_propagate(False)
-        search_frame.grid_columnconfigure(1, weight=1)
-
-        ctk.CTkLabel(search_frame, text="🔍  F2", font=FONTS["body_bold"],
-                     text_color=COLORS["btn_primary"]).grid(row=0, column=0, padx=16, pady=10)
+        search_frame.grid_columnconfigure(0, weight=1)
+        self.search_frame = search_frame
 
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", self._on_search_change)
         self.search_entry = ctk.CTkEntry(
             search_frame,
             textvariable=self.search_var,
-            placeholder_text="Type product name or code to search…",
-            font=("Segoe UI", 18),
+            placeholder_text="🔍  Scan barcode or search product…   (F2)",
+            font=("Segoe UI", 15),
             height=44,
-            border_width=2,
-            border_color=COLORS["border_focus"],
-            fg_color=COLORS["bg_input"],
+            border_width=1,
+            border_color="#E9D5FF",
+            fg_color="#FFFFFF",
             text_color=COLORS["text_dark"],
             corner_radius=16,
         )
-        self.search_entry.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=9)
+        self.search_entry.grid(row=0, column=0, sticky="ew", padx=12, pady=9)
 
-
-        # ── Cart + Right panel ───────────────────────────────
-        # Cart table
-        cart_frame = ctk.CTkFrame(body, fg_color=COLORS["bg_card"], corner_radius=16)
-        cart_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 8))
+        cart_frame = ctk.CTkFrame(
+            body,
+            fg_color="#FFFFFF",
+            corner_radius=18,
+            border_width=1,
+            border_color="#DDD6FE"
+        )
+        cart_frame.grid(row=2, column=0, sticky="nsew", padx=(0, 10))
         cart_frame.grid_rowconfigure(0, weight=1)
         cart_frame.grid_columnconfigure(0, weight=1)
+        self.cart_frame = cart_frame
 
         self._build_cart_table(cart_frame)
-
-        # Action buttons — horizontal bar directly beneath the cart list
         self._build_action_buttons(body)
 
-        # Right panel (totals + payment) — spans the cart + button rows
-        right_panel = ctk.CTkFrame(body, fg_color="transparent", corner_radius=0,
-                                    width=300)
-        right_panel.grid(row=1, column=1, rowspan=2, sticky="nsew")
+        right_panel = ctk.CTkFrame(body, fg_color="transparent", corner_radius=0, width=290)
+        right_panel.grid(row=2, column=1, rowspan=2, sticky="nsew")
         right_panel.grid_propagate(False)
         right_panel.grid_rowconfigure(0, weight=1)
+        self.right_panel = right_panel
 
         self._build_totals_panel(right_panel)
 
@@ -153,19 +190,17 @@ class BillingScreen(ctk.CTkFrame):
             style="Cart.Treeview", selectmode="browse"
         )
         heads  = ("#", "Product Name", "Unit", "Qty", "Price ₹", "Disc ₹", "Total ₹", "")
-        widths = (40,  280,           70,     70,    90,       80,       100,      70)
+        widths = (40,  200,           65,     65,    85,       75,       90,       50)
         for col, h, w in zip(cols, heads, widths):
             self.cart_tree.heading(col, text=h)
             anch = "e" if col in ("qty", "price", "disc", "total") else "center"
             self.cart_tree.column(col, width=w, anchor=anch, minwidth=w)
 
-        vsb = ttk.Scrollbar(parent, orient="vertical",   command=self.cart_tree.yview)
-        hsb = ttk.Scrollbar(parent, orient="horizontal", command=self.cart_tree.xview)
-        self.cart_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        vsb = ttk.Scrollbar(parent, orient="vertical", command=self.cart_tree.yview)
+        self.cart_tree.configure(yscrollcommand=vsb.set)
 
-        self.cart_tree.grid(row=0, column=0, sticky="nsew", padx=(6, 0), pady=(6, 0))
-        vsb.grid(row=0, column=1, sticky="ns",  pady=(6, 0), padx=(0, 4))
-        hsb.grid(row=1, column=0, sticky="ew",  padx=(6, 0), pady=(0, 4))
+        self.cart_tree.grid(row=0, column=0, sticky="nsew", padx=(6, 0), pady=(6, 6))
+        vsb.grid(row=0, column=1, sticky="ns", pady=(6, 6), padx=(0, 4))
 
         # Double-click to edit qty
         self.cart_tree.bind("<Double-1>", self._edit_cart_item)
@@ -179,129 +214,140 @@ class BillingScreen(ctk.CTkFrame):
         )
 
     def _build_totals_panel(self, parent):
-        # Scrollable panel so Payment Mode / Cash / Change are always visible
-        # on any screen resolution (fixes BIL-4)
-        panel = ctk.CTkScrollableFrame(
-            parent, fg_color=COLORS["bg_card"],
-            corner_radius=14,
-            scrollbar_button_color=COLORS["btn_primary"],
+        panel = ctk.CTkFrame(
+            parent,
+            fg_color="#FFF4F8",
+            corner_radius=18,
+            border_width=1,
+            border_color="#F5D0FE",
         )
         panel.grid(row=0, column=0, sticky="nsew", pady=(0, 8))
         panel.grid_columnconfigure(0, weight=1)
+        self.summary_panel = panel
 
-        ctk.CTkLabel(panel, text="Bill Summary",
-                     font=FONTS["subheading"], text_color=COLORS["btn_primary"]
-                    ).pack(pady=(10, 4), padx=16, anchor="w")
+        _font_lbl = ("Segoe UI", 12)
+        _font_lbl_b = ("Segoe UI", 12, "bold")
+        _font_val = ("Segoe UI", 13, "bold")
+        _font_total = ("Segoe UI Semibold", 20, "bold")
+        _font_entry = ("Segoe UI", 12, "bold")
 
-        ctk.CTkFrame(panel, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=12)
+        header = ctk.CTkFrame(panel, fg_color="transparent")
+        header.pack(fill="x", padx=12, pady=(10, 2))
+        ctk.CTkLabel(header, text="Summary", font=("Segoe UI", 15, "bold"),
+                     text_color="#F43F8C").pack(side="left")
+        ctk.CTkFrame(panel, fg_color="#F5D0FE", height=2).pack(fill="x", padx=10)
 
-        # Row helper
-        def row(lbl, val_attr, color="#1A1A2E", big=False):
-            f = ctk.CTkFrame(panel, fg_color="transparent")
-            f.pack(fill="x", padx=16, pady=3)
-            font_l = FONTS["body_bold"] if big else FONTS["body"]
-            font_v = FONTS["num_sm"]    if big else FONTS["body_bold"]
-            ctk.CTkLabel(f, text=lbl, font=font_l, text_color=COLORS["text_muted"]
-                        ).pack(side="left")
-            lbl_w = ctk.CTkLabel(f, text="₹ 0.00", font=font_v, text_color=color)
-            lbl_w.pack(side="right")
+        def row(lbl, val_attr, color="#1A1A2E"):
+            f = ctk.CTkFrame(panel, fg_color="#FFFFFF", corner_radius=12, border_width=1,
+                             border_color="#E9D5FF")
+            f.pack(fill="x", padx=12, pady=3)
+            f.grid_columnconfigure(1, weight=1)
+            ctk.CTkLabel(f, text=lbl, font=_font_lbl, text_color=COLORS["text_muted"],
+                         anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
+            lbl_w = ctk.CTkLabel(f, text="₹ 0.00", font=_font_val, text_color=color, anchor="e")
+            lbl_w.grid(row=0, column=1, sticky="e", padx=10, pady=6)
             setattr(self, val_attr, lbl_w)
 
-        row("Subtotal :",      "lbl_subtotal")
-        row("Discount (₹) :", "lbl_discount", COLORS["btn_warning"])
+        row("Subtotal :", "lbl_subtotal")
+        row("Discount (₹) :", "lbl_discount", "#EF4444")
 
-        ctk.CTkFrame(panel, fg_color=COLORS["btn_primary"], height=2).pack(fill="x", padx=12, pady=4)
+        ctk.CTkFrame(panel, fg_color="#E9D5FF", height=2).pack(fill="x", padx=10, pady=4)
 
-        # Grand total — very large
-        gt_frame = ctk.CTkFrame(panel, fg_color=COLORS["tbl_select"], corner_radius=16)
-        gt_frame.pack(fill="x", padx=12, pady=4)
+        gt_frame = ctk.CTkFrame(panel, fg_color="#B91CFF", corner_radius=14)
+        gt_frame.pack(fill="x", padx=10, pady=3)
+        gt_frame.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(gt_frame, text="TOTAL",
-                     font=("Segoe UI", 14, "bold"),
-                     text_color=COLORS["btn_primary"]).pack(side="left", padx=12, pady=10)
+                     font=("Segoe UI", 13, "bold"),
+                     text_color="white").grid(row=0, column=0, padx=10, pady=8, sticky="w")
         self.lbl_grand_total = ctk.CTkLabel(
             gt_frame, text="₹  0.00",
-            font=FONTS["num_md"], text_color=COLORS["btn_primary"]
+            font=_font_total, text_color="white", anchor="e"
         )
-        self.lbl_grand_total.pack(side="right", padx=12)
+        self.lbl_grand_total.grid(row=0, column=1, padx=10, pady=8, sticky="e")
 
-        ctk.CTkFrame(panel, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=12, pady=(4, 0))
-
-        # Discount entry
-        disc_f = ctk.CTkFrame(panel, fg_color="transparent")
-        disc_f.pack(fill="x", padx=16, pady=(8, 4))
-        ctk.CTkLabel(disc_f, text="Bill Discount (₹):", font=FONTS["body"],
-                     text_color=COLORS["text_dark"]).pack(side="left")
+        disc_f = ctk.CTkFrame(panel, fg_color="#FFFFFF", corner_radius=12, border_width=1,
+                              border_color="#FDE68A")
+        disc_f.pack(fill="x", padx=12, pady=(6, 3))
+        disc_f.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(disc_f, text="Bill Discount (₹):", font=_font_lbl,
+                     text_color=COLORS["text_dark"], anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
         self.discount_var = tk.StringVar(value="0")
         self.discount_var.trace_add("write", lambda *_: self._recalculate())
         self.discount_entry = ctk.CTkEntry(
             disc_f, textvariable=self.discount_var,
-            width=90, height=36, font=FONTS["body_bold"],
-            border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
+            height=30, width=84, font=_font_entry,
+            border_width=0, fg_color="#FEFCE8", justify="right"
         )
-        self.discount_entry.pack(side="right")
+        self.discount_entry.grid(row=0, column=1, sticky="e", padx=(8, 10), pady=6)
 
-        ctk.CTkFrame(panel, fg_color="#E0E0E0", height=1).pack(fill="x", padx=12, pady=6)
-
-        # Payment mode
-        pm_f = ctk.CTkFrame(panel, fg_color="transparent")
-        pm_f.pack(fill="x", padx=16, pady=4)
-        ctk.CTkLabel(pm_f, text="Payment Mode:", font=FONTS["body"],
-                     text_color=COLORS["text_dark"]).pack(side="left")
+        pm_f = ctk.CTkFrame(panel, fg_color="#FFFFFF", corner_radius=12, border_width=1,
+                            border_color="#E9D5FF")
+        pm_f.pack(fill="x", padx=12, pady=3)
+        pm_f.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(pm_f, text="Payment Mode", font=_font_lbl,
+                     text_color=COLORS["text_dark"], anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
         self.payment_mode_var = tk.StringVar(value="Cash")
-        pm_menu = ctk.CTkOptionMenu(
+        self.payment_mode_menu = ctk.CTkOptionMenu(
             pm_f, variable=self.payment_mode_var,
             values=PAYMENT_MODES,
-            font=FONTS["body"], width=130, height=36,
-            fg_color=COLORS["btn_primary"], button_color="#005BBE",
+            font=_font_lbl, height=30, width=116, corner_radius=10,
+            fg_color="#FFFFFF", button_color="#FFFFFF", button_hover_color="#F3E8FF",
+            text_color="#7C3AED", dropdown_fg_color="#FFFFFF", dropdown_text_color="#334155",
             command=self._on_payment_mode_change,
         )
-        pm_menu.pack(side="right")
+        self.payment_mode_menu.grid(row=0, column=1, sticky="e", padx=(8, 10), pady=6)
 
-        # Cash tendered & change
-        self.cash_frame = ctk.CTkFrame(panel, fg_color="transparent")
-        self.cash_frame.pack(fill="x", padx=16, pady=4)
-        ctk.CTkLabel(self.cash_frame, text="Cash Received (₹):", font=FONTS["body"],
-                     text_color=COLORS["text_dark"]).pack(side="left")
+        self.cash_frame = ctk.CTkFrame(panel, fg_color="#FFFFFF", corner_radius=12, border_width=1,
+                                       border_color="#A7F3D0")
+        self.cash_frame.pack(fill="x", padx=12, pady=3)
+        self.cash_frame.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(self.cash_frame, text="Cash Received (₹)", font=_font_lbl,
+                     text_color=COLORS["text_dark"], anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
         self.cash_var = tk.StringVar(value="0")
         self.cash_var.trace_add("write", lambda *_: self._calc_change())
-        ctk.CTkEntry(
+        self.cash_entry = ctk.CTkEntry(
             self.cash_frame, textvariable=self.cash_var,
-            width=90, height=36, font=FONTS["body_bold"],
-            border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
-        ).pack(side="right")
+            height=30, width=84, font=_font_entry,
+            border_width=0, fg_color="#ECFDF5", justify="right"
+        )
+        self.cash_entry.grid(row=0, column=1, sticky="e", padx=(8, 10), pady=6)
 
-        change_f = ctk.CTkFrame(panel, fg_color="#E8F5E9", corner_radius=10)
-        change_f.pack(fill="x", padx=12, pady=(4, 8))
-        ctk.CTkLabel(change_f, text="Change Due :", font=FONTS["body_bold"],
-                     text_color=COLORS["btn_success"]).pack(side="left", padx=10, pady=8)
+        change_f = ctk.CTkFrame(panel, fg_color="#14CBA8", corner_radius=12)
+        change_f.pack(fill="x", padx=10, pady=(5, 8))
+        change_f.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(change_f, text="Change Due :", font=_font_lbl_b,
+                     text_color="white", anchor="w").grid(row=0, column=0, padx=10, pady=6, sticky="w")
         self.lbl_change = ctk.CTkLabel(change_f, text="₹  0.00",
-                                        font=FONTS["num_sm"], text_color=COLORS["btn_success"])
-        self.lbl_change.pack(side="right", padx=10)
+                                       font=("Segoe UI Semibold", 16, "bold"), text_color="white",
+                                       anchor="e")
+        self.lbl_change.grid(row=0, column=1, padx=10, pady=8, sticky="e")
+
 
     def _build_action_buttons(self, parent):
-        # Horizontal action bar beneath the cart list (row 2, left column)
         btn_panel = ctk.CTkFrame(parent, fg_color="transparent")
-        btn_panel.grid(row=2, column=0, sticky="ew", padx=(0, 8), pady=(8, 0))
-        for i in range(3):
-            btn_panel.grid_columnconfigure(i, weight=1)
+        btn_panel.grid(row=3, column=0, sticky="ew", padx=(0, 10), pady=(10, 0))
+        self.action_panel = btn_panel
 
         btns = [
-            ("🖨️  F10  Print & Save", COLORS["btn_success"], "#28A745", self._save_and_print),
-            ("✋  F8   Hold Bill",     COLORS["btn_warning"], "#CC7700", self._hold_bill),
-            ("🗑️  ESC  Clear Cart",    COLORS["btn_secondary"],"#263238", self._clear_cart),
+            ("F10 Print & Save", "#10B981", "#059669", self._save_and_print),
+            ("F8 Hold Bill", "#F59E0B", "#D97706", self._hold_bill),
+            ("ESC Clear Cart", "#F43F5E", "#E11D48", self._clear_cart),
         ]
-        for idx, (text, fg, hov, cmd) in enumerate(btns):
-            ctk.CTkButton(
+        self.action_buttons = []
+        for text, fg, hov, cmd in btns:
+            btn = ctk.CTkButton(
                 btn_panel, text=text,
-                font=FONTS["button"],
+                font=("Segoe UI", 13, "bold"),
                 fg_color=fg, hover_color=hov,
-                height=54, corner_radius=16,
+                height=44, corner_radius=14,
                 command=cmd
-            ).grid(row=0, column=idx, sticky="ew",
-                   padx=(0 if idx == 0 else 8, 0))
+            )
+            self.action_buttons.append(btn)
+
+        self._layout_action_buttons(stacked=False)
 
     def _build_status_bar(self):
-        bar = ctk.CTkFrame(self, fg_color="#1A237E", corner_radius=0, height=30)
+        bar = ctk.CTkFrame(self, fg_color="#7E22CE", corner_radius=0, height=30)
         bar.grid(row=2, column=0, sticky="ew")
         bar.grid_propagate(False)
 
@@ -311,14 +357,74 @@ class BillingScreen(ctk.CTkFrame):
             "Del": "Remove Item",  "Ctrl+N": "New Bill"
         }.items()])
         ctk.CTkLabel(
-            bar, text=f"⌨️  Shortcuts:  {shortcuts}",
-            font=("Segoe UI", 12), text_color=COLORS["border_focus"]
+            bar, text=f"Shortcuts:  {shortcuts}",
+            font=("Segoe UI", 11), text_color="#E9D5FF"
         ).pack(side="left", padx=16)
 
         self.status_label = ctk.CTkLabel(
-            bar, text="Ready ✅", font=("Segoe UI", 12), text_color="#A5D6A7"
+            bar, text="Ready", font=("Segoe UI", 11, "bold"), text_color="#A7F3D0"
         )
         self.status_label.pack(side="right", padx=16)
+
+    def _make_chip(self, parent, text, fg_color, text_color, height):
+        return ctk.CTkLabel(
+            parent,
+            text=text,
+            font=("Segoe UI", 12, "bold"),
+            text_color=text_color,
+            fg_color=fg_color,
+            corner_radius=14,
+            height=height,
+            padx=14,
+            pady=6,
+        )
+
+    def _on_resize(self, _event=None):
+        self.after_idle(self._apply_responsive_layout)
+
+    def _apply_responsive_layout(self):
+        width = self.winfo_width()
+        if width <= 1 or not hasattr(self, "right_panel"):
+            return
+
+        summary_below = width < self._RESPONSIVE_SUMMARY_BREAK
+        buttons_stacked = width < self._RESPONSIVE_BUTTON_BREAK
+
+        if summary_below:
+            self.cart_frame.grid_configure(row=2, column=0, columnspan=2, padx=(0, 0), pady=(0, 10))
+            self.right_panel.grid_configure(row=3, column=0, columnspan=2, rowspan=1, sticky="ew", pady=(0, 0))
+            self.action_panel.grid_configure(row=4, column=0, columnspan=2, padx=(0, 0), pady=(10, 0))
+            self.right_panel.configure(width=0)
+        else:
+            self.cart_frame.grid_configure(row=2, column=0, columnspan=1, padx=(0, 10), pady=(0, 0))
+            self.right_panel.grid_configure(row=2, column=1, columnspan=1, rowspan=2, sticky="nsew", pady=(0, 0))
+            self.action_panel.grid_configure(row=3, column=0, columnspan=1, padx=(0, 10), pady=(10, 0))
+            self.right_panel.configure(width=290)
+
+        if width < 980:
+            self.context_left.grid_configure(row=0, column=0, sticky="ew")
+            self.customer_entry.configure(width=220)
+        else:
+            self.context_left.grid_configure(row=0, column=0, sticky="w")
+            self.customer_entry.configure(width=260)
+
+        self._layout_action_buttons(stacked=buttons_stacked)
+
+    def _layout_action_buttons(self, stacked: bool):
+        for i in range(3):
+            self.action_panel.grid_columnconfigure(i, weight=0)
+        for btn in self.action_buttons:
+            btn.grid_forget()
+
+        if stacked:
+            self.action_panel.grid_columnconfigure(0, weight=1)
+            for idx, btn in enumerate(self.action_buttons):
+                btn.grid(row=idx, column=0, sticky="ew", pady=(0 if idx == 0 else 8, 0))
+        else:
+            for i in range(3):
+                self.action_panel.grid_columnconfigure(i, weight=1)
+            for idx, btn in enumerate(self.action_buttons):
+                btn.grid(row=0, column=idx, sticky="ew", padx=(0 if idx == 0 else 8, 0))
 
     # ─────────────────────────────────────────────────────────────
     # Keyboard bindings
@@ -335,21 +441,7 @@ class BillingScreen(ctk.CTkFrame):
         self.search_entry.bind("<Return>", lambda e: self._focus_popup())
 
     def _new_bill_shortcut(self):
-        """Ctrl+N — clear cart and start a fresh bill."""
-        if self.cart:
-            if not messagebox.askyesno(
-                "New Bill",
-                "Start a new bill? Current cart items will be cleared.",
-                parent=self.winfo_toplevel()
-            ):
-                return
-        self._clear_cart_silent()
-        self._refresh_bill_number()
-        self._set_status("🆕  New bill started  (Ctrl+N)")
-        self._focus_search()
-
-    def _new_bill_shortcut(self):
-        """Ctrl+N — start a fresh bill (BIL-1)."""
+        """Ctrl+N — start a fresh bill."""
         if self.cart:
             if not messagebox.askyesno("New Bill",
                                         "Start a new bill? Current cart items will be cleared.",
@@ -376,6 +468,8 @@ class BillingScreen(ctk.CTkFrame):
         self._draft_bill_id = draft_bill_id
 
         cname = bill.get("customer_name", "")
+        self._selected_customer_id = bill.get("customer_id")
+        self._selected_customer_name = cname if self._selected_customer_id else None
         if cname and cname != "Walk-in Customer":
             self.customer_entry.delete(0, "end")
             self.customer_entry.insert(0, cname)
@@ -520,9 +614,11 @@ class BillingScreen(ctk.CTkFrame):
         ):
             return
         query = self.customer_entry.get().strip()
+        if self._selected_customer_id and query != self._selected_customer_name:
+            self._clear_selected_customer()
         if len(query) < 1 or query == "Walk-in Customer":
             self._close_cust_popup()
-            self.udhaar_badge.grid_remove()
+            self._clear_selected_customer()
             return
         self.udhaar_badge.grid_remove()  # hide until a customer is confirmed via autocomplete
         results = self.db.search_customers_billing(query)
@@ -597,11 +693,12 @@ class BillingScreen(ctk.CTkFrame):
         self.customer_entry.insert(0, c["name"])
         # Store selected customer id for due auto-attach
         self._selected_customer_id = c.get("customer_id")
+        self._selected_customer_name = c["name"]
 
         bal = float(c.get("credit_balance") or 0)
         if bal > 0:
             self.udhaar_badge.configure(text=f"⚠️  Udhaar Pending: ₹{bal:,.2f}")
-            self.udhaar_badge.grid(row=0, column=5, padx=(0, 16), pady=12)
+            self.udhaar_badge.grid(row=0, column=1, sticky="e", padx=(12, 0), pady=2)
             # BIL-5: Auto-attach previous due to bill discount field (show as warning)
             if messagebox.askyesno(
                 "Previous Udhaar Detected",
@@ -620,7 +717,29 @@ class BillingScreen(ctk.CTkFrame):
             self.udhaar_badge.grid_remove()
             self._pending_udhaar = 0
 
+        self._update_walkin_badge()
         self.search_entry.focus_set()
+
+    def _update_walkin_badge(self):
+        """Show 'Walk-in' badge if no saved customer linked, hide it otherwise."""
+        try:
+            if self._selected_customer_id:
+                self.walkin_badge.pack_forget()
+            else:
+                if not self.walkin_badge.winfo_ismapped():
+                    self.walkin_badge.pack(side="left", padx=(0, 4))
+        except Exception:
+            pass
+
+    def _clear_selected_customer(self):
+        self._selected_customer_id = None
+        self._selected_customer_name = None
+        self._pending_udhaar = 0.0
+        try:
+            self.udhaar_badge.grid_remove()
+        except Exception:
+            pass
+        self._update_walkin_badge()
 
     # ─────────────────────────────────────────────────────────────
     # Cart management
@@ -666,8 +785,9 @@ class BillingScreen(ctk.CTkFrame):
             self.cart_empty_label.place_forget()
             self.cart_tree.grid()
 
+        _row_colors = COLORS["ROW_COLORS"]
         for i, item in enumerate(self.cart, 1):
-            tag = "alt" if i % 2 == 0 else ""
+            tag = f"row{(i-1) % len(_row_colors)}"
             self.cart_tree.insert("", "end", iid=str(i-1), values=(
                 i,
                 item["product_name"],
@@ -679,7 +799,8 @@ class BillingScreen(ctk.CTkFrame):
                 "✏️ Edit",
             ), tags=(tag,))
 
-        self.cart_tree.tag_configure("alt", background=COLORS["tbl_row_alt"])
+        for idx, color in enumerate(_row_colors):
+            self.cart_tree.tag_configure(f"row{idx}", background=color)
 
     def _edit_cart_item(self, event):
         sel = self.cart_tree.selection()
@@ -771,10 +892,10 @@ class BillingScreen(ctk.CTkFrame):
                                        parent=self.winfo_toplevel()):
                 return
         self.cart = []
+        self._clear_selected_customer()
         self.discount_var.set("0")
         self.cash_var.set("0")
         self.customer_entry.delete(0, "end")
-        self.udhaar_badge.grid_remove()
         self.payment_mode_var.set("Cash")
         self._refresh_cart_tree()
         self._recalculate()
@@ -812,9 +933,12 @@ class BillingScreen(ctk.CTkFrame):
 
     def _on_payment_mode_change(self, mode):
         if mode == "Cash":
-            self.cash_frame.pack(fill="x", padx=16, pady=4)
+            self.cash_frame.pack(fill="x", padx=12, pady=3)
         else:
             self.cash_frame.pack_forget()
+        # Warn immediately if Udhaar chosen with no linked customer
+        if mode == "Credit (Udhaar)" and not self._selected_customer_id:
+            self._set_status("⚠️  Credit (Udhaar) requires a saved customer — search and select one.")
 
     def _get_bill_data(self):
         """Return dict with current bill totals."""
@@ -831,9 +955,16 @@ class BillingScreen(ctk.CTkFrame):
             amount_paid = grand_total
         change_due  = max(0, round(amount_paid - grand_total, 2))
         mode        = self.payment_mode_var.get()
+        customer_name = self.customer_entry.get().strip() or "Walk-in Customer"
+        customer_id = (
+            self._selected_customer_id
+            if self._selected_customer_id and customer_name == self._selected_customer_name
+            else None
+        )
 
         return {
-            "customer_name": self.customer_entry.get().strip() or "Walk-in Customer",
+            "customer_id"  : customer_id,
+            "customer_name": customer_name,
             "subtotal"     : subtotal,
             "discount"     : discount,
             "grand_total"  : grand_total,
@@ -853,24 +984,50 @@ class BillingScreen(ctk.CTkFrame):
             return
 
         bill_data = self._get_bill_data()
+        is_walk_in = not bill_data.get("customer_id")
 
-        # Confirm payment for Cash mode
+        # Cash mode: if walk-in and cash field untouched (0), assume exact payment
         mode = self.payment_mode_var.get()
         if mode == "Cash":
             try:
                 paid = float(self.cash_var.get() or 0)
             except ValueError:
                 paid = 0
-            if paid < bill_data["grand_total"]:
-                if not messagebox.askyesno(
-                    "Underpayment",
-                    f"Cash received ₹{paid:.2f} is less than total ₹{bill_data['grand_total']:.2f}.\n"
-                    f"Save as credit?",
-                    parent=self.winfo_toplevel()
-                ):
-                    self._focus_search()
+            if paid == 0 and is_walk_in:
+                # Walk-in exact cash — no prompt needed
+                bill_data["amount_paid"] = bill_data["grand_total"]
+                bill_data["change_due"]  = 0.0
+            elif paid < bill_data["grand_total"]:
+                if is_walk_in:
+                    # Walk-in underpayment — can't save as credit without a customer
+                    messagebox.showwarning(
+                        "Underpayment",
+                        f"Cash received ₹{paid:.2f} is less than total ₹{bill_data['grand_total']:.2f}.\n\n"
+                        f"Please enter the correct cash amount, or select a saved customer to save as credit.",
+                        parent=self.winfo_toplevel()
+                    )
+                    self.cash_entry.focus_set()
                     return
-                bill_data["payment_mode"] = "Credit (Udhaar)"
+                else:
+                    if not messagebox.askyesno(
+                        "Underpayment",
+                        f"Cash received ₹{paid:.2f} is less than total ₹{bill_data['grand_total']:.2f}.\n"
+                        f"Save as credit (Udhaar) for {bill_data['customer_name']}?",
+                        parent=self.winfo_toplevel()
+                    ):
+                        self._focus_search()
+                        return
+                    bill_data["payment_mode"] = "Credit (Udhaar)"
+
+        if bill_data["payment_mode"] == "Credit (Udhaar)" and not bill_data.get("customer_id"):
+            messagebox.showwarning(
+                "Select Customer",
+                "Credit bills must be linked to a saved customer.\n\n"
+                "Select the customer from the Customer search dropdown, then save again.",
+                parent=self.winfo_toplevel()
+            )
+            self.customer_entry.focus_set()
+            return
 
         bill_id = self.db.save_bill(
             bill_data, self.cart, self.current_user["user_id"]
@@ -906,3 +1063,200 @@ class BillingScreen(ctk.CTkFrame):
         messagebox.showinfo("Bill Held",
                             f"Bill saved as draft.\nYou can resume it from Bill History.",
                             parent=self.winfo_toplevel())
+        self._clear_cart_silent()
+        self._refresh_bill_number()
+        self._set_status("✋  Bill held. Cart cleared for next bill.")
+
+    # ─────────────────────────────────────────────────────────────
+    # Status bar
+    # ─────────────────────────────────────────────────────────────
+    def _set_status(self, text: str):
+        """Update the status bar message."""
+        try:
+            self.status_label.configure(text=text)
+        except Exception:
+            pass
+
+    # ─────────────────────────────────────────────────────────────
+    # Silent cart clear (no confirmation prompt)
+    # ─────────────────────────────────────────────────────────────
+    def _clear_cart_silent(self):
+        """Clear cart without prompting — used after save or hold."""
+        self.cart = []
+        self._draft_bill_id        = None
+        self._clear_selected_customer()
+        self.discount_var.set("0")
+        self.cash_var.set("0")
+        self.customer_entry.delete(0, "end")
+        self.payment_mode_var.set("Cash")
+        self._on_payment_mode_change("Cash")
+        self._refresh_cart_tree()
+        self._recalculate()
+
+    # ─────────────────────────────────────────────────────────────
+    # Receipt popup (shown after every successful bill save)
+    # ─────────────────────────────────────────────────────────────
+    def _show_receipt(self, bill_id: int):
+        """Formatted bill receipt with Thermal Print / PDF (A4) options."""
+        bill, items = self.db.get_bill_by_id(bill_id)
+        if not bill:
+            return
+
+        settings = {
+            "shop_name"   : self.db.get_setting("shop_name",     "Priya Store"),
+            "shop_address": self.db.get_setting("shop_address",  ""),
+            "shop_city"   : self.db.get_setting("shop_city",     ""),
+            "shop_phone"  : self.db.get_setting("shop_phone",    ""),
+            "shop_gst"    : self.db.get_setting("shop_gst",      ""),
+        }
+
+        raw_dt = str(bill.get("bill_date", "") or "")
+        date_str, time_str = raw_dt[:10], raw_dt
+        try:
+            _dt = datetime.strptime(raw_dt[:19], "%Y-%m-%d %H:%M:%S")
+            date_str = _dt.strftime("%Y-%m-%d")
+            time_str = _dt.strftime("%d %b %Y  \u2022  %I:%M %p")
+        except Exception:
+            pass
+
+        BLUE, GREEN, MUTED, DARK = "#1D4ED8", "#16A34A", "#64748B", "#1A1A2E"
+
+        dlg = ctk.CTkToplevel(self.winfo_toplevel())
+        dlg.title("Bill Receipt")
+        dlg.geometry("500x640")
+        dlg.grab_set()
+        dlg.attributes("-topmost", True)
+
+        scroll = ctk.CTkScrollableFrame(dlg, fg_color="#FFFFFF")
+        scroll.pack(fill="both", expand=True, padx=2, pady=2)
+
+        def hline(color=BLUE, h=2, pady=(8, 8)):
+            ctk.CTkFrame(scroll, fg_color=color, height=h).pack(fill="x", padx=24, pady=pady)
+
+        # Shop header
+        ctk.CTkLabel(scroll, text=settings["shop_name"] or "Priya Store",
+                     font=("Segoe UI Semibold", 22, "bold"), text_color=BLUE).pack(pady=(16, 0))
+        addr = ", ".join([p for p in (settings["shop_address"], settings["shop_city"]) if p])
+        if addr:
+            ctk.CTkLabel(scroll, text=addr, font=("Segoe UI", 12), text_color=MUTED).pack()
+        if settings["shop_phone"]:
+            ctk.CTkLabel(scroll, text=f"\U0001F4DE  {settings['shop_phone']}",
+                         font=("Segoe UI", 12), text_color=MUTED).pack(pady=(2, 0))
+        if settings["shop_gst"]:
+            ctk.CTkLabel(scroll, text=f"GSTIN: {settings['shop_gst']}",
+                         font=("Segoe UI", 11), text_color=MUTED).pack()
+
+        hline()
+
+        def meta_row(left, right, rcolor=DARK):
+            f = ctk.CTkFrame(scroll, fg_color="transparent")
+            f.pack(fill="x", padx=24, pady=1)
+            ctk.CTkLabel(f, text=left, font=("Segoe UI", 13, "bold"),
+                         text_color=DARK, anchor="w").pack(side="left")
+            ctk.CTkLabel(f, text=right, font=("Segoe UI", 13, "bold"),
+                         text_color=rcolor, anchor="e").pack(side="right")
+
+        meta_row(f"Bill: {bill['bill_number']}", date_str)
+        meta_row(f"Customer: {bill.get('customer_name', 'Walk-in Customer')}",
+                 bill.get("payment_mode", "Cash"), rcolor=BLUE)
+
+        hline(color="#E2E8F0", h=1, pady=(10, 4))
+
+        # Items table
+        tbl = ctk.CTkFrame(scroll, fg_color="transparent")
+        tbl.pack(fill="x", padx=24, pady=(2, 2))
+        tbl.grid_columnconfigure(0, weight=1)
+        for c in (1, 2, 3, 4):
+            tbl.grid_columnconfigure(c, weight=0, minsize=56)
+
+        for c, h in enumerate(["Item", "Qty", "Rate", "Disc", "Amt"]):
+            ctk.CTkLabel(tbl, text=h, font=("Segoe UI", 12, "bold"), text_color=MUTED,
+                         anchor="w" if c == 0 else "e").grid(
+                row=0, column=c, sticky="w" if c == 0 else "e",
+                pady=(0, 4), padx=(0, 0) if c == 0 else (6, 0))
+
+        for r, it in enumerate(items, start=1):
+            ctk.CTkLabel(tbl, text=it["product_name"], font=("Segoe UI", 12),
+                         text_color=DARK, anchor="w").grid(row=r, column=0, sticky="w", pady=2)
+            ctk.CTkLabel(tbl, text=f"{it['quantity']:g}", font=("Segoe UI", 12),
+                         text_color=DARK, anchor="e").grid(row=r, column=1, sticky="e", padx=(6, 0))
+            ctk.CTkLabel(tbl, text=f"{it['unit_price']:.0f}", font=("Segoe UI", 12),
+                         text_color=DARK, anchor="e").grid(row=r, column=2, sticky="e", padx=(6, 0))
+            ctk.CTkLabel(tbl, text=f"{it.get('discount', 0):.0f}", font=("Segoe UI", 12),
+                         text_color=DARK, anchor="e").grid(row=r, column=3, sticky="e", padx=(6, 0))
+            ctk.CTkLabel(tbl, text=f"{it['line_total']:.2f}", font=("Segoe UI", 12, "bold"),
+                         text_color=DARK, anchor="e").grid(row=r, column=4, sticky="e", padx=(6, 0))
+
+        hline(color="#E2E8F0", h=1, pady=(8, 6))
+
+        def tot_row(lbl, val, color=DARK, bold=False):
+            f = ctk.CTkFrame(scroll, fg_color="transparent")
+            f.pack(fill="x", padx=24, pady=1)
+            ctk.CTkLabel(f, text=lbl, font=("Segoe UI", 13, "bold" if bold else "normal"),
+                         text_color=color, anchor="w").pack(side="left")
+            ctk.CTkLabel(f, text=val, font=("Segoe UI", 13, "bold"),
+                         text_color=color, anchor="e").pack(side="right")
+
+        tot_row("Subtotal:", f"\u20b9 {bill['subtotal']:,.2f}")
+        if bill.get("discount"):
+            tot_row("Discount:", f"\u2212 \u20b9 {bill['discount']:,.2f}", color="#EF4444")
+
+        gt = ctk.CTkFrame(scroll, fg_color="#DBEAFE", corner_radius=10)
+        gt.pack(fill="x", padx=24, pady=(6, 6))
+        ctk.CTkLabel(gt, text="GRAND TOTAL:", font=("Segoe UI", 14, "bold"),
+                     text_color=BLUE, anchor="w").pack(side="left", padx=14, pady=10)
+        ctk.CTkLabel(gt, text=f"\u20b9 {bill['grand_total']:,.2f}",
+                     font=("Segoe UI Semibold", 16, "bold"), text_color=BLUE,
+                     anchor="e").pack(side="right", padx=14, pady=10)
+
+        tot_row("Amount Paid:", f"\u20b9 {bill.get('amount_paid', 0):,.2f}", color=GREEN)
+        tot_row("Change Due:",  f"\u20b9 {bill.get('change_due', 0):,.2f}", color=GREEN)
+
+        hline(pady=(10, 8))
+
+        ctk.CTkLabel(scroll, text="Thank you for shopping with us!  \U0001F64F",
+                     font=("Segoe UI", 13, "bold"), text_color=GREEN).pack(pady=(0, 2))
+        if time_str:
+            ctk.CTkLabel(scroll, text=time_str, font=("Segoe UI", 11),
+                         text_color=MUTED).pack(pady=(0, 12))
+
+        def _thermal():
+            try:
+                from bill_printer import print_thermal
+                paper = self.db.get_setting("thermal_paper_width", "80mm") or "80mm"
+                ok, msg = print_thermal(bill, items, settings, paper)
+                if ok:
+                    messagebox.showinfo("Printed", f"Receipt sent to: {msg}", parent=dlg)
+                else:
+                    messagebox.showerror("Thermal Print Failed", str(msg), parent=dlg)
+            except Exception as e:
+                messagebox.showerror("Thermal Print Error", str(e), parent=dlg)
+
+        def _pdf():
+            try:
+                from bill_printer import generate_pdf_bill, open_file
+                import tkinter.filedialog as fd
+                path = fd.asksaveasfilename(
+                    defaultextension=".pdf",
+                    filetypes=[("PDF file", "*.pdf")],
+                    initialfile=f"Bill_{bill['bill_number']}.pdf",
+                    title="Save PDF Bill",
+                    parent=dlg,
+                )
+                if path:
+                    generate_pdf_bill(bill, items, settings, path)
+                    open_file(path)
+            except Exception as e:
+                messagebox.showerror("PDF Error", str(e), parent=dlg)
+
+        btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
+        btn_row.pack(fill="x", padx=16, pady=(4, 12))
+        ctk.CTkButton(btn_row, text="\U0001F5A8  Thermal Print", font=("Segoe UI", 13, "bold"),
+                      fg_color="#3B82F6", hover_color="#2563EB", height=46, corner_radius=12,
+                      command=_thermal).pack(side="left", fill="x", expand=True, padx=(0, 6))
+        ctk.CTkButton(btn_row, text="\U0001F4C4  PDF / A4", font=("Segoe UI", 13, "bold"),
+                      fg_color="#A855F7", hover_color="#9333EA", height=46, corner_radius=12,
+                      command=_pdf).pack(side="left", fill="x", expand=True, padx=(0, 6))
+        ctk.CTkButton(btn_row, text="\u2705  Done", font=("Segoe UI", 13, "bold"),
+                      fg_color="#22C55E", hover_color="#16A34A", height=46, corner_radius=12,
+                      command=dlg.destroy).pack(side="left", fill="x", expand=True)

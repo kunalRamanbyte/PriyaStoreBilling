@@ -170,9 +170,16 @@ class BillHistoryScreen(ctk.CTkFrame):
 
     def _render_table(self, bills):
         self.tree.delete(*self.tree.get_children())
+        _row_colors = COLORS["ROW_COLORS"]
+        normal_idx = 0
         for b in bills:
-            tag = "void" if b["status"] == "Void" else \
-                  "draft" if b["status"] == "Draft" else ""
+            if b["status"] == "Void":
+                tag = "void"
+            elif b["status"] == "Draft":
+                tag = "draft"
+            else:
+                tag = f"row{normal_idx % len(_row_colors)}"
+                normal_idx += 1
             self.tree.insert("", "end", iid=str(b["bill_id"]), values=(
                 b["bill_number"],
                 b["bill_date"][:16] if b["bill_date"] else "",
@@ -186,6 +193,8 @@ class BillHistoryScreen(ctk.CTkFrame):
             ), tags=(tag,))
         self.tree.tag_configure("void",  background="#FFEBEE", foreground="#CC2200")
         self.tree.tag_configure("draft", background="#FFF8E1")
+        for idx, color in enumerate(_row_colors):
+            self.tree.tag_configure(f"row{idx}", background=color)
 
     def _get_selected_bill_id(self):
         sel = self.tree.selection()
@@ -371,4 +380,8 @@ class BillHistoryScreen(ctk.CTkFrame):
                 f"Bill '{bill['bill_number']}' is currently '{bill['status']}'.",
                 parent=self.winfo_toplevel()
             )
-        
+            return
+        self.app.navigate_to("billing")
+        billing = self.app.screens.get("billing")
+        if billing:
+            billing.load_draft(bill_id, bill, items)

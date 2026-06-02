@@ -334,6 +334,24 @@ class Database:
             )
             conn.commit()
 
+    def _claim_number(self, conn, setting_key: str, prefix: str, fallback_sql: str = None) -> str:
+        """Claim the next document number inside an active write transaction."""
+        row = conn.execute("SELECT value FROM settings WHERE key=?", (setting_key,)).fetchone()
+        if row:
+            n = int(row["value"])
+        elif fallback_sql:
+            n = int(conn.execute(fallback_sql).fetchone()[0])
+            conn.execute("INSERT INTO settings (key, value) VALUES (?,?)", (setting_key, str(n)))
+        else:
+            n = 1
+            conn.execute("INSERT INTO settings (key, value) VALUES (?,?)", (setting_key, "1"))
+
+        conn.execute(
+            "UPDATE settings SET value=CAST(? AS TEXT) WHERE key=?",
+            (n + 1, setting_key)
+        )
+        return f"{prefix}-{n:05d}"
+
     # ─── Categories ───────────────────────────────────────────
 
     def get_categories(self, active_only=True):
@@ -486,8 +504,11 @@ class Database:
 
     def save_bill(self, bill_data: dict, items: list, user_id: int) -> int:
         """Save bill + items + deduct stock in one transaction."""
-        bill_number = self.next_bill_number()
         with self.get_conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            pfx = conn.execute("SELECT value FROM settings WHERE key='bill_prefix'").fetchone()
+            prefix = pfx["value"] if pfx else "BILL"
+            bill_number = self._claim_number(conn, "next_bill_no", prefix)
             cur = conn.execute(
                 """INSERT INTO bills
                    (bill_number, customer_id, customer_name, subtotal, discount,
@@ -547,21 +568,24 @@ class Database:
 
             conn.commit()
 
-        self.increment_bill_number()
         self.log_activity(user_id, "BILL_SAVED", f"Bill {bill_number} saved. Total: ₹{bill_data['grand_total']:.2f}")
         return bill_id
 
     def save_draft_bill(self, bill_data: dict, items: list, user_id: int) -> int:
         """Save bill as Draft (stock NOT deducted)."""
-        bill_number = self.next_bill_number()
         with self.get_conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            pfx = conn.execute("SELECT value FROM settings WHERE key='bill_prefix'").fetchone()
+            prefix = pfx["value"] if pfx else "BILL"
+            bill_number = self._claim_number(conn, "next_bill_no", prefix)
             cur = conn.execute(
                 """INSERT INTO bills
-                   (bill_number, customer_name, subtotal, discount,
+                   (bill_number, customer_id, customer_name, subtotal, discount,
                     grand_total, payment_mode, amount_paid, change_due, status, created_by)
-                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     bill_number,
+                    bill_data.get("customer_id"),
                     bill_data.get("customer_name", "Walk-in Customer"),
                     bill_data["subtotal"],
                     bill_data["discount"],
@@ -593,7 +617,6 @@ class Database:
                 )
             conn.commit()
 
-        self.increment_bill_number()
         return bill_id
 
     def get_bills(self, search="", date_from=None, date_to=None, status=None, limit=200):
@@ -628,7 +651,7 @@ class Database:
             return dict(bill), [dict(i) for i in items]
 
     def void_bill(self, bill_id: int, reason: str, user_id: int):
-        """Void a bill and reverse stock."""
+        """Void a bill, reverse stock, and reverse credit balance for Udhaar bills."""
         bill, items = self.get_bill_by_id(bill_id)
         if not bill or bill["status"] != "Active":
             return False
@@ -641,6 +664,21 @@ class Database:
                 conn.execute(
                     "UPDATE products SET current_stock = current_stock + ? WHERE product_id=?",
                     (item["quantity"], item["product_id"])
+                )
+            # Reverse the customer credit balance that was created when the Udhaar bill was saved
+            if bill.get("payment_mode") == "Credit (Udhaar)" and bill.get("customer_id"):
+                conn.execute(
+                    "UPDATE customers"
+                    " SET credit_balance = MAX(0, credit_balance - ?)"
+                    " WHERE customer_id=?",
+                    (bill["grand_total"], bill["customer_id"])
+                )
+                conn.execute(
+                    """INSERT INTO customer_transactions
+                       (customer_id, txn_type, amount, reference, notes, created_by)
+                       VALUES (?,?,?,?,?,?)""",
+                    (bill["customer_id"], "Payment", bill["grand_total"],
+                     bill["bill_number"], "Auto-reversed: bill voided", user_id)
                 )
             conn.commit()
         self.log_activity(user_id, "BILL_VOID", f"Bill {bill['bill_number']} voided. Reason: {reason}")
@@ -817,15 +855,25 @@ class Database:
 
     def next_grn_number(self) -> str:
         with self.get_conn() as conn:
-            n = conn.execute(
-                "SELECT COUNT(*) FROM purchase_entries"
-            ).fetchone()[0]
-            return f"GRN-{(n+1):05d}"
+            row = conn.execute("SELECT value FROM settings WHERE key='next_grn_no'").fetchone()
+            if row:
+                n = int(row["value"])
+            else:
+                n = conn.execute(
+                    "SELECT COALESCE(MAX(purchase_id), 0) + 1 FROM purchase_entries"
+                ).fetchone()[0]
+            return f"GRN-{n:05d}"
 
     def save_purchase(self, purchase_data: dict, items: list, user_id: int) -> int:
         """Save GRN + items + increase stock in one transaction."""
-        grn_number = self.next_grn_number()
         with self.get_conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            grn_number = self._claim_number(
+                conn,
+                "next_grn_no",
+                "GRN",
+                "SELECT COALESCE(MAX(purchase_id), 0) + 1 FROM purchase_entries"
+            )
             cur = conn.execute(
                 """INSERT INTO purchase_entries
                    (grn_number, supplier_id, supplier_name, total_amount, notes, created_by)
@@ -873,7 +921,10 @@ class Database:
 
     def get_purchases(self, search="", date_from=None, date_to=None, limit=200):
         with self.get_conn() as conn:
-            q = "SELECT * FROM purchase_entries WHERE 1=1"
+            q = """SELECT pe.*,
+                          (SELECT COUNT(*) FROM purchase_items
+                           WHERE purchase_id = pe.purchase_id) AS item_count
+                   FROM purchase_entries pe WHERE 1=1"""
             params = []
             if search:
                 q += " AND (grn_number LIKE ? OR supplier_name LIKE ?)"
@@ -1384,7 +1435,7 @@ class Database:
                     GROUP BY customer_id
                 ) last_txn ON last_txn.customer_id = c.customer_id
                 WHERE c.credit_balance > 0
-                  AND c.is_active = 1
+                  AND (c.is_active IS NULL OR c.is_active = 1)
                 ORDER BY c.credit_balance DESC
             """).fetchall()
             return [dict(r) for r in rows]

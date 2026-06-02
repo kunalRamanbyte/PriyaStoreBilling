@@ -436,8 +436,9 @@ class PurchaseScreen(ctk.CTkFrame):
     def _refresh_cart(self):
         self.cart_tree.delete(*self.cart_tree.get_children())
         total = 0.0
+        _row_colors = COLORS["ROW_COLORS"]
         for i, item in enumerate(self._cart):
-            tag = "alt" if i % 2 == 0 else ""
+            tag = f"row{i % len(_row_colors)}"
             self.cart_tree.insert("", "end", iid=str(i), values=(
                 i + 1,
                 item["product_name"],
@@ -447,6 +448,8 @@ class PurchaseScreen(ctk.CTkFrame):
                 f"{item['line_total']:.2f}",
             ), tags=(tag,))
             total += item["line_total"]
+        for idx, color in enumerate(_row_colors):
+            self.cart_tree.tag_configure(f"row{idx}", background=color)
         self.items_var.set(str(len(self._cart)))
         self.total_var.set(f"₹ {total:,.2f}")
 
@@ -604,21 +607,21 @@ class PurchaseScreen(ctk.CTkFrame):
         tree.configure(yscrollcommand=vsb.set)
         tree.grid(row=0, column=0, sticky="nsew", padx=(6, 0), pady=6)
         vsb.grid(row=0, column=1, sticky="ns", pady=6)
-        tree.tag_configure("alt", background=COLORS["tbl_row_alt"])
-
         def load(q=""):
             purchases = self.db.get_purchases(search=q)
             tree.delete(*tree.get_children())
+            _row_colors = COLORS["ROW_COLORS"]
             for i, p in enumerate(purchases):
-                _, pitems = self.db.get_purchase_by_id(p["purchase_id"])
-                tag = "alt" if i % 2 == 0 else ""
+                tag = f"row{i % len(_row_colors)}"
                 tree.insert("", "end", iid=str(p["purchase_id"]), values=(
                     p["grn_number"],
                     p["purchase_date"][:16],
                     p["supplier_name"],
-                    len(pitems),
+                    p.get("item_count", 0),
                     f"{p['total_amount']:,.2f}",
                 ), tags=(tag,))
+            for idx, color in enumerate(_row_colors):
+                tree.tag_configure(f"row{idx}", background=color)
 
         search_var.trace_add("write", lambda *_: load(search_var.get().strip()))
         load()

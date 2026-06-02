@@ -169,6 +169,7 @@ class InventoryScreen(ctk.CTkFrame):
         elif flt == "Out of Stock":
             prods = [p for p in prods if p["current_stock"] <= 0]
 
+        _row_colors = COLORS["ROW_COLORS"]
         self.tree.delete(*self.tree.get_children())
         for i, p in enumerate(prods):
             stk = p["current_stock"]
@@ -180,7 +181,7 @@ class InventoryScreen(ctk.CTkFrame):
                 tag    = "low"
                 status = "⚠️  Low Stock"
             else:
-                tag    = "ok" if i % 2 == 0 else "alt"
+                tag    = f"row{i % len(_row_colors)}"
                 status = "✅ In Stock"
 
             val = stk * p.get("purchase_price", 0)
@@ -195,6 +196,8 @@ class InventoryScreen(ctk.CTkFrame):
                 status,
                 f"{val:.2f}",
             ), tags=(tag,))
+        for idx, color in enumerate(_row_colors):
+            self.tree.tag_configure(f"row{idx}", background=color)
 
     def _get_selected_pid(self):
         sel = self.tree.selection()
