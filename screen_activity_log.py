@@ -242,6 +242,7 @@ class ActivityLogScreen(ctk.CTkFrame):
         if not path:
             return
         try:
+            from datetime import datetime as _dt
             search = self._search_var.get().strip()
             all_rows = self.db.get_activity_log(
                 search=search, limit=99999, offset=0)
@@ -250,7 +251,13 @@ class ActivityLogScreen(ctk.CTkFrame):
                 w = csv.writer(f)
                 w.writerow(headers)
                 for r in all_rows:
-                    ts = str(r.get("timestamp", ""))[:19].replace("T", " ")
+                    raw = str(r.get("timestamp", ""))[:19].replace("T", " ")
+                    # Format as "30-May-2026 08:48:23" so Excel does NOT
+                    # auto-convert to a date serial and show "########" (ACT-1 fix)
+                    try:
+                        ts = _dt.strptime(raw, "%Y-%m-%d %H:%M:%S").strftime("%d-%b-%Y  %I:%M:%S %p")
+                    except Exception:
+                        ts = raw
                     w.writerow([
                         ts,
                         r.get("user_name", ""),

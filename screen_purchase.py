@@ -46,6 +46,14 @@ class PurchaseScreen(ctk.CTkFrame):
         ctk.CTkLabel(hdr, text="🛒   New Purchase / GRN",
                      font=FONTS["heading"], text_color=COLORS["text_dark"]
                     ).pack(side="left", padx=25, pady=15)
+        # GRN-4: show auto-generated next GRN number
+        self.grn_no_label = ctk.CTkLabel(
+            hdr, text="GRN: —",
+            font=FONTS["body_bold"], text_color="white",
+            fg_color=COLORS["btn_primary"], corner_radius=10,
+            padx=14, pady=6,
+        )
+        self.grn_no_label.pack(side="right", padx=20, pady=15)
 
         # GRN meta row (supplier + notes)
         meta = ctk.CTkFrame(left, fg_color=COLORS["bg_card"], corner_radius=16, height=70)
@@ -203,6 +211,15 @@ class PurchaseScreen(ctk.CTkFrame):
     # ─────────────────────────────────────────────────────────────
     def on_show(self):
         self._load_suppliers()
+        self._refresh_grn_number()
+
+    def _refresh_grn_number(self):
+        """Display next auto-generated GRN number (GRN-4)."""
+        try:
+            grn_no = self.db.next_grn_number()
+            self.grn_no_label.configure(text=f"GRN: {grn_no}")
+        except Exception:
+            pass
 
     def _load_suppliers(self):
         sups = self.db.get_suppliers()
@@ -274,9 +291,22 @@ class PurchaseScreen(ctk.CTkFrame):
         elif results:
             self._show_popup(results)
         else:
-            messagebox.showinfo("Not Found",
-                                f"No product found matching '{q}'.",
-                                parent=self.winfo_toplevel())
+            # GRN-3: product not in system — give options
+            choice = messagebox.askyesno(
+                "Product Not Found",
+                f"No product found for '{q}'\n\n"
+                "Click YES to add it to the Product Master first.\n"
+                "Click NO to add it as a one-time manual GRN entry.",
+                parent=self.winfo_toplevel()
+            )
+            if choice:
+                self.app.navigate_to("products")
+                if "products" in self.app.screens:
+                    self.app.screens["products"]._open_add_form()
+            else:
+                # Allow manual entry without product master (GRN-3)
+                temp = {"product_id": None, "name": q, "unit": "piece", "purchase_price": 0}
+                self._edit_item_dialog(temp, new=True)
 
     def _add_product_to_cart(self, prod):
         self._close_popup()
@@ -457,6 +487,7 @@ class PurchaseScreen(ctk.CTkFrame):
         )
         self._show_grn_receipt(purchase_id)
         self._clear_all()
+        self._refresh_grn_number()  # GRN-4: update badge to next number
         # Refresh inventory if open
         if "inventory" in self.app.screens:
             self.app.screens["inventory"].on_show()

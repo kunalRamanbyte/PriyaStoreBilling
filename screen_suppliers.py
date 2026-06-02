@@ -97,9 +97,14 @@ class SupplierScreen(ctk.CTkFrame):
                       command=self._record_payment
                      ).pack(side="left", padx=(0, 6), pady=8)
         ctk.CTkButton(act, text="🚫  Deactivate",
-                      font=FONTS["button"], fg_color=COLORS["btn_danger"],
+                      font=FONTS["button"], fg_color="#FF8C00",
                       height=42, width=140, corner_radius=10,
                       command=self._deactivate
+                     ).pack(side="left", padx=(0, 6), pady=8)
+        ctk.CTkButton(act, text="🗑️  Delete",
+                      font=FONTS["button"], fg_color=COLORS["btn_danger"],
+                      height=42, width=110, corner_radius=10,
+                      command=self._delete_supplier
                      ).pack(side="left", padx=(0, 6), pady=8)
 
     def on_show(self):
@@ -226,6 +231,11 @@ class SupplierScreen(ctk.CTkFrame):
                 messagebox.showinfo("Added", f"Supplier '{name}' added.", parent=dlg)
             dlg.destroy()
             self._load_suppliers()
+
+        # Enter key submits the form
+        dlg.bind("<Return>", lambda e: save())
+
+        dlg.bind("<Return>", lambda e: save())  # SUP-2: Enter key submits form
 
         btn_row = ctk.CTkFrame(scroll, fg_color="transparent")
         btn_row.pack(fill="x", padx=24, pady=14)
@@ -354,13 +364,4 @@ class SupplierScreen(ctk.CTkFrame):
 
     def _deactivate(self):
         sid = self._get_selected_id()
-        if not sid:
-            return
-        sup = self.db.get_supplier_by_id(sid)
-        if not sup:
-            return
-        if messagebox.askyesno("Deactivate Supplier",
-                               f"Deactivate '{sup['name']}'?",
-                               parent=self.winfo_toplevel()):
-            self.db.deactivate_supplier(sid)
-            self._load_suppliers()
+       

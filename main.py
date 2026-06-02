@@ -151,8 +151,7 @@ class BillingApp(ctk.CTk):
         elif ratio < self._RATIO_TALL:      # too tall -> trim height
             h = int(w / self._RATIO_TALL)
 
-        # Honour the 1280x720 floor (minsize enforces it if the screen is
-        # physically smaller, e.g. a literal 720p panel run maximized)
+        # Honour the 1280x720 floor — 720p is the minimum supported resolution.
         win_w = max(self._MIN_W, w)
         win_h = max(self._MIN_H, h)
 
@@ -379,26 +378,36 @@ class BillingApp(ctk.CTk):
         ctk.CTkFrame(sidebar, fg_color=COLORS["sidebar_divider"],
                      height=1).pack(fill="x", padx=18, pady=(0, 10))
 
-        # ── Nav buttons (pixel-aligned pill style) ────────
+        # ── Nav buttons — inside a scrollable area so they never overflow
+        # on low-res or short screens (mousewheel scrolls the nav list).
+        nav_scroll = ctk.CTkScrollableFrame(
+            sidebar,
+            fg_color="transparent",
+            scrollbar_fg_color=COLORS["bg_sidebar"],
+            scrollbar_button_color=COLORS["sidebar_hover"],
+            scrollbar_button_hover_color=COLORS["sidebar_active"],
+            corner_radius=0,
+        )
+        nav_scroll.pack(fill="both", expand=True, padx=0, pady=0)
+
         for icon, label, screen, roles in NAV:
             if self.current_role not in roles:
                 continue
             btn = ctk.CTkButton(
-                sidebar,
-                text=f"          {label}", # Shifted label (10 spaces) to prevent emoji overlap
+                nav_scroll,
+                text=f"          {label}",
                 font=FONTS["sidebar"],
                 fg_color="transparent",
                 hover_color=COLORS["sidebar_hover"],
                 text_color=COLORS["sidebar_text"],
                 anchor="w",
-                height=38,                  # Reduced from 46 to fit all items perfectly
+                height=38,
                 corner_radius=RADII["sidebar"],
                 command=lambda s=screen: self.navigate_to(s),
             )
-            btn.pack(fill="x", padx=12, pady=1) # Reduced padding from 2 to 1 for small screens
+            btn.pack(fill="x", padx=12, pady=1)
             self.nav_buttons[screen] = btn
 
-            # Pixel-precise emoji placement for perfect vertical alignment
             icon_lbl = ctk.CTkLabel(
                 btn,
                 text=icon,
@@ -407,12 +416,9 @@ class BillingApp(ctk.CTk):
                 fg_color="transparent"
             )
             icon_lbl.place(x=16, rely=0.5, anchor="w")
-            
-            # Clicking the icon label also activates navigation
             icon_lbl.bind("<Button-1>", lambda e, s=screen: self.navigate_to(s))
 
-        # ── Spacer + logout ──────────────────────────
-        ctk.CTkFrame(sidebar, fg_color="transparent").pack(fill="y", expand=True)
+        # ── Logout ───────────────────────────────────
         ctk.CTkFrame(sidebar, fg_color=COLORS["sidebar_divider"],
                      height=1).pack(fill="x", padx=18, pady=(0, 6))
 

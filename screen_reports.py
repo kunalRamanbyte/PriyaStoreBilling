@@ -139,7 +139,7 @@ class ReportScreen(ctk.CTkFrame):
         # ── Right content panel ───────────────────────────────
         right = ctk.CTkFrame(self, fg_color="transparent")
         right.grid(row=1, column=1, sticky="nsew", padx=10, pady=10)
-        right.grid_rowconfigure(2, weight=1)
+        right.grid_rowconfigure(3, weight=1)
         right.grid_columnconfigure(0, weight=1)
 
         # Controls bar
@@ -205,9 +205,16 @@ class ReportScreen(ctk.CTkFrame):
                                         text_color=COLORS["text_muted"])
         self._title_lbl.grid(row=1, column=0, pady=(8, 4), sticky="w")
 
+        # Summary row count / grand total label (RPT-1 fix: was missing entirely)
+        self._summary_lbl = ctk.CTkLabel(
+            right, text="",
+            font=FONTS["small_bold"], text_color=COLORS["text_muted"]
+        )
+        self._summary_lbl.grid(row=2, column=0, sticky="w", pady=(0, 4))
+
         # Table area
         tbl_frame = ctk.CTkFrame(right, fg_color=COLORS["bg_card"], corner_radius=16)
-        tbl_frame.grid(row=2, column=0, sticky="nsew")
+        tbl_frame.grid(row=3, column=0, sticky="nsew")
         tbl_frame.grid_rowconfigure(0, weight=1)
         tbl_frame.grid_columnconfigure(0, weight=1)
 
@@ -539,8 +546,17 @@ class ReportScreen(ctk.CTkFrame):
             doc.build(story)
             messagebox.showinfo("PDF Exported", f"Saved to:\n{path}",
                                 parent=self.winfo_toplevel())
-            import os
-            os.startfile(path)
+            # Open PDF — try multiple methods (RPT-2 fix)
+            try:
+                import os; os.startfile(path)
+            except Exception:
+                try:
+                    import subprocess; subprocess.Popen(["start", "", path], shell=True)
+                except Exception:
+                    try:
+                        import webbrowser; webbrowser.open(path)
+                    except Exception:
+                        pass
 
         except ImportError:
             messagebox.showerror("Missing Library",

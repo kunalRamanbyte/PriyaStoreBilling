@@ -94,11 +94,13 @@ class CustomerScreen(ctk.CTkFrame):
                                   style="Cust.Treeview", selectmode="browse")
         for col, head, w in zip(cols, heads, widths):
             self.tree.heading(col, text=head)
-            self.tree.column(col, width=w, minwidth=50)
-        vsb = ttk.Scrollbar(tbl, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=vsb.set)
-        self.tree.grid(row=0, column=0, sticky="nsew", padx=(6, 0), pady=6)
-        vsb.grid(row=0, column=1, sticky="ns", pady=6)
+            self.tree.column(col, width=w, minwidth=50, stretch=False)  # CUST-2 fix
+        vsb = ttk.Scrollbar(tbl, orient="vertical",   command=self.tree.yview)
+        hsb = ttk.Scrollbar(tbl, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        self.tree.grid(row=0, column=0, sticky="nsew", padx=(6, 0), pady=(6, 0))
+        vsb.grid(row=0, column=1, sticky="ns",  pady=(6, 0))
+        hsb.grid(row=1, column=0, sticky="ew",  padx=(6, 0), pady=(0, 4))
         self.tree.bind("<Double-1>", lambda e: self._open_edit_form())
         self.tree.tag_configure("alt",    background=COLORS["tbl_row_alt"])
         self.tree.tag_configure("credit", background="#FFF3E0")  # orange tint if has balance
@@ -110,13 +112,14 @@ class CustomerScreen(ctk.CTkFrame):
         for txt, color, cmd in [
             ("✏️  Edit",          COLORS["btn_primary"],   self._open_edit_form),
             ("📖  View Ledger",   COLORS["btn_purple"],    self._open_ledger),
+            ("🖨️  Print Ledger",  "#0277BD",               self._print_ledger),
             ("💳  Add Payment",   COLORS["btn_success"],   self._add_payment),
             ("📝  Add Udhaar",    COLORS["btn_warning"],   self._add_udhaar),
-            ("🚫  Deactivate",    COLORS["btn_danger"],    self._deactivate),
+            ("🗑️  Delete",        COLORS["btn_danger"],    self._delete_customer),
         ]:
             ctk.CTkButton(act, text=txt, font=FONTS["button"],
                           fg_color=color, height=44, corner_radius=10,
-                          command=cmd).pack(side="left", padx=(12, 0), pady=9)
+                          command=cmd).pack(side="left", padx=(8, 0), pady=9)
 
     # ── KPI helper ───────────────────────────────────────────
     def _make_kpi(self, parent, label, value, color, col):
@@ -409,6 +412,115 @@ class CustomerScreen(ctk.CTkFrame):
         ctk.CTkButton(btn_row, text="Cancel", font=FONTS["button"],
                       fg_color=COLORS["btn_secondary"], height=50, corner_radius=16,
                       command=dlg.destroy).pack(side="left", width=110)
+
+    def _delete_customer(self):
+        """Permanently delete customer (CUST-1). Deactivates if has bills."""
+        cid = self._get_selected_id()
+        if not cid:
+            return
+        cust = self.db.get_customer_by_id(cid)
+        if not cust:
+            return
+        if not messagebox.askyesno(
+            "Delete Customer",
+            f"Permanently DELETE '{cust['name']}'?\n\n"
+            "⚠️  Cannot be undone.\n"
+            "If this customer has billing history they will be deactivated instead.",
+            parent=self.winfo_toplevel()
+        ):
+            return
+        ok, msg = self.db.delete_customer(cid)
+        if ok:
+            messagebox.showinfo("Deleted", msg, parent=self.winfo_toplevel())
+        else:
+            messagebox.showwarning("Cannot Delete", msg, parent=self.winfo_toplevel())
+            self.db.deactivate_customer(cid)
+        self._load_customers()
+        self._load_kpis()
+
+    def _print_ledger(self):
+        """Print customer ledger as PDF (CUST-3)."""
+        cid = self._get_selected_id()
+        if not cid:
+            return
+        cust = self.db.get_customer_by_id(cid)
+        if not cust:
+            return
+        txns = self.db.get_customer_transactions(cid, limit=500)
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.units import mm
+            from reportlab.lib import colors
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+            from reportlab.lib.styles import ParagraphStyle
+            from reportlab.lib.enums import TA_CENTER, TA_LEFT
+            import tkinter.filedialog as fd, os
+
+            path = fd.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF file", "*.pdf")],
+                initialfile=f"Ledger_{cust['name'].replace(' ','_')}.pdf",
+                title="Save Customer Ledger",
+                parent=self.winfo_toplevel(),
+            )
+            if not path:
+                return
+
+            BLUE = colors.HexColor("#1565C0")
+            doc  = SimpleDocTemplate(path, pagesize=A4,
+                                     leftMargin=15*mm, rightMargin=15*mm,
+                                     topMargin=10*mm, bottomMargin=10*mm)
+            h_s = ParagraphStyle("h", fontSize=14, fontName="Helvetica-Bold",
+                                  textColor=BLUE, alignment=TA_CENTER)
+            s_s = ParagraphStyle("s", fontSize=10, fontName="Helvetica",
+                                  textColor=colors.grey, alignment=TA_CENTER)
+            c_s = ParagraphStyle("c", fontSize=9,  fontName="Helvetica")
+            t_s = ParagraphStyle("t", fontSize=9,  fontName="Helvetica-Bold",
+                                  textColor=colors.white)
+
+            shop = self.db.get_setting("shop_name", "FMCG Shop")
+            bal  = float(cust.get("credit_balance") or 0)
+            story = [
+                Paragraph(shop, h_s),
+                Paragraph("Customer Ledger Statement", s_s),
+                Spacer(1, 4*mm),
+                Paragraph(f"Customer: {cust['name']}   |   Phone: {cust.get('phone','—')}   |   Outstanding: ₹{bal:,.2f}", s_s),
+                Spacer(1, 4*mm),
+            ]
+            hdr_row = [Paragraph(x, t_s) for x in ["Date & Time","Type","Amount ₹","Reference","Notes"]]
+            rows = [hdr_row]
+            for t in txns:
+                rows.append([
+                    Paragraph(str(t.get("created_at",""))[:16], c_s),
+                    Paragraph(str(t.get("txn_type","")),         c_s),
+                    Paragraph(f"₹{float(t.get('amount',0)):,.2f}", c_s),
+                    Paragraph(str(t.get("reference","") or ""), c_s),
+                    Paragraph(str(t.get("notes","") or ""),     c_s),
+                ])
+            tbl = Table(rows, colWidths=[38*mm,28*mm,28*mm,40*mm,48*mm], repeatRows=1)
+            tbl.setStyle(TableStyle([
+                ("BACKGROUND",    (0,0),(-1,0),  BLUE),
+                ("ROWBACKGROUNDS",(0,1),(-1,-1), [colors.white, colors.HexColor("#F5F7FF")]),
+                ("GRID",          (0,0),(-1,-1), 0.3, colors.HexColor("#CCCCCC")),
+                ("TOPPADDING",    (0,0),(-1,-1), 4),
+                ("BOTTOMPADDING", (0,0),(-1,-1), 4),
+                ("VALIGN",        (0,0),(-1,-1), "MIDDLE"),
+            ]))
+            story += [tbl, Spacer(1,6*mm),
+                      Paragraph(f"<b>Total Outstanding: ₹{bal:,.2f}</b>",
+                                ParagraphStyle("sum",fontSize=11,fontName="Helvetica-Bold",
+                                               textColor=BLUE,alignment=TA_LEFT))]
+            doc.build(story)
+            messagebox.showinfo("Saved", f"Ledger saved:\n{path}", parent=self.winfo_toplevel())
+            try:
+                os.startfile(path)
+            except Exception:
+                import webbrowser; webbrowser.open(path)
+        except ImportError:
+            messagebox.showerror("Missing Library","reportlab is required.\nRun: pip install reportlab",
+                                 parent=self.winfo_toplevel())
+        except Exception as e:
+            messagebox.showerror("PDF Error", str(e), parent=self.winfo_toplevel())
 
     def _deactivate(self):
         cid = self._get_selected_id()

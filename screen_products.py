@@ -105,7 +105,8 @@ class ProductScreen(ctk.CTkFrame):
         for col, head, w in zip(cols, heads, widths):
             self.tree.heading(col, text=head)
             anch = "e" if col in ("sell_price","buy_price","stock","reorder") else "w"
-            self.tree.column(col, width=w, anchor=anch, minwidth=50)
+            # stretch=False keeps fixed column width so horizontal scroll works (PROD-4 fix)
+            self.tree.column(col, width=w, anchor=anch, minwidth=50, stretch=False)
 
         vsb = ttk.Scrollbar(tbl_frame, orient="vertical",   command=self.tree.yview)
         hsb = ttk.Scrollbar(tbl_frame, orient="horizontal", command=self.tree.xview)
@@ -126,9 +127,14 @@ class ProductScreen(ctk.CTkFrame):
                       command=self._open_edit_form
                      ).pack(side="left", padx=(20, 6), pady=8)
         ctk.CTkButton(act, text="🚫  Deactivate",
-                      font=FONTS["button"], fg_color=COLORS["btn_danger"],
+                      font=FONTS["button"], fg_color="#FF8C00",
                       height=42, width=130, corner_radius=10,
                       command=self._deactivate_product
+                     ).pack(side="left", padx=(0, 6), pady=8)
+        ctk.CTkButton(act, text="🗑️  Delete",
+                      font=FONTS["button"], fg_color=COLORS["btn_danger"],
+                      height=42, width=100, corner_radius=10,
+                      command=self._delete_product
                      ).pack(side="left", padx=(0, 6), pady=8)
 
     def on_show(self):
@@ -331,6 +337,8 @@ class ProductScreen(ctk.CTkFrame):
             dlg.destroy()
             self._load_products()
 
+        dlg.bind("<Return>", lambda e: save())  # SUP-2/global: Enter submits form
+
         btn_row = ctk.CTkFrame(scroll, fg_color="transparent")
         btn_row.pack(fill="x", padx=24, pady=12)
         ctk.CTkButton(btn_row, text="💾  Save Product",
@@ -357,3 +365,27 @@ class ProductScreen(ctk.CTkFrame):
         ):
             self.db.deactivate_product(pid)
             self._load_products()
+
+    def _delete_product(self):
+        """Permanently delete product (PROD-1). Deactivates if used in bills."""
+        pid = self._get_selected_product_id()
+        if not pid:
+            return
+        prod = self.db.get_product_by_id(pid)
+        if not prod:
+            return
+        if not messagebox.askyesno(
+            "Delete Product",
+            f"Permanently DELETE  '{prod['name']}'?\n\n"
+            "⚠️  This cannot be undone.\n"
+            "If the product has billing history it will be deactivated instead.",
+            parent=self.winfo_toplevel()
+        ):
+            return
+        ok, msg = self.db.delete_product(pid)
+        if ok:
+            messagebox.showinfo("Deleted", msg, parent=self.winfo_toplevel())
+        else:
+            messagebox.showwarning("Cannot Delete", msg, parent=self.winfo_toplevel())
+            self.db.deactivate_product(pid)
+        self._load_products()

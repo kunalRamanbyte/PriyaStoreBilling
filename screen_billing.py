@@ -22,6 +22,8 @@ class BillingScreen(ctk.CTkFrame):
         self.search_popup = None
         self.cust_results = []          # customer-name autocomplete results
         self.cust_popup   = None
+        self._pending_udhaar        = 0.0   # BIL-5: outstanding due of selected customer
+        self._selected_customer_id  = None  # BIL-5: customer id
         self._build()
         self._bind_keys()
 
@@ -71,10 +73,22 @@ class BillingScreen(ctk.CTkFrame):
             font=FONTS["input"], width=200, height=40,
             border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"],
         )
-        self.customer_entry.grid(row=0, column=4, padx=(0, 20))
+        self.customer_entry.grid(row=0, column=4, padx=(0, 8))
         # Autocomplete: show matching saved customers as you type
         self.customer_entry.bind("<KeyRelease>", self._on_customer_search)
         self.customer_entry.bind("<Down>", lambda e: self._focus_cust_popup())
+
+        # Udhaar badge — shown only when selected customer has pending credit
+        self.udhaar_badge = ctk.CTkLabel(
+            top,
+            text="",
+            font=FONTS["small_bold"],
+            text_color="white",
+            fg_color=COLORS["btn_warning"],
+            corner_radius=8,
+            padx=10, pady=4,
+        )
+        # not gridded here — shown/hidden dynamically in _select_customer
 
     def _build_body(self):
         body = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
@@ -108,13 +122,6 @@ class BillingScreen(ctk.CTkFrame):
         )
         self.search_entry.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=9)
 
-        ctk.CTkButton(
-            search_frame, text="+ Add Item",
-            font=FONTS["button"],
-            fg_color=COLORS["btn_primary"], hover_color="#005BBE",
-            height=44, width=120, corner_radius=16,
-            command=self._focus_search,
-        ).grid(row=0, column=2, padx=(0, 14), pady=9)
 
         # ── Cart + Right panel ───────────────────────────────
         # Cart table
@@ -152,11 +159,13 @@ class BillingScreen(ctk.CTkFrame):
             anch = "e" if col in ("qty", "price", "disc", "total") else "center"
             self.cart_tree.column(col, width=w, anchor=anch, minwidth=w)
 
-        vsb = ttk.Scrollbar(parent, orient="vertical", command=self.cart_tree.yview)
-        self.cart_tree.configure(yscrollcommand=vsb.set)
+        vsb = ttk.Scrollbar(parent, orient="vertical",   command=self.cart_tree.yview)
+        hsb = ttk.Scrollbar(parent, orient="horizontal", command=self.cart_tree.xview)
+        self.cart_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
 
-        self.cart_tree.grid(row=0, column=0, sticky="nsew", padx=(6, 0), pady=6)
-        vsb.grid(row=0, column=1, sticky="ns", pady=6, padx=(0, 4))
+        self.cart_tree.grid(row=0, column=0, sticky="nsew", padx=(6, 0), pady=(6, 0))
+        vsb.grid(row=0, column=1, sticky="ns",  pady=(6, 0), padx=(0, 4))
+        hsb.grid(row=1, column=0, sticky="ew",  padx=(6, 0), pady=(0, 4))
 
         # Double-click to edit qty
         self.cart_tree.bind("<Double-1>", self._edit_cart_item)
@@ -170,11 +179,13 @@ class BillingScreen(ctk.CTkFrame):
         )
 
     def _build_totals_panel(self, parent):
-        # Plain frame (no scrollbar) — the panel footprint is kept compact
-        # enough that Payment Mode / Cash Received / Change Due all fit on
-        # a 720p window without scrolling or right-edge clipping.
-        panel = ctk.CTkFrame(parent, fg_color=COLORS["bg_card"],
-                             corner_radius=14)
+        # Scrollable panel so Payment Mode / Cash / Change are always visible
+        # on any screen resolution (fixes BIL-4)
+        panel = ctk.CTkScrollableFrame(
+            parent, fg_color=COLORS["bg_card"],
+            corner_radius=14,
+            scrollbar_button_color=COLORS["btn_primary"],
+        )
         panel.grid(row=0, column=0, sticky="nsew", pady=(0, 8))
         panel.grid_columnconfigure(0, weight=1)
 
@@ -296,7 +307,8 @@ class BillingScreen(ctk.CTkFrame):
 
         shortcuts = "  |  ".join([f"{k} = {v}" for k, v in {
             "F2": "Search",  "F8": "Hold",
-            "F10": "Print & Save",  "ESC": "Clear Cart",  "Del": "Remove Item"
+            "F10": "Print & Save",  "ESC": "Clear Cart",
+            "Del": "Remove Item",  "Ctrl+N": "New Bill"
         }.items()])
         ctk.CTkLabel(
             bar, text=f"⌨️  Shortcuts:  {shortcuts}",
@@ -313,12 +325,40 @@ class BillingScreen(ctk.CTkFrame):
     # ─────────────────────────────────────────────────────────────
     def _bind_keys(self):
         root = self.winfo_toplevel()
-        root.bind("<F2>",  lambda e: self._focus_search())
-        root.bind("<F8>",  lambda e: self._hold_bill())
-        root.bind("<F10>", lambda e: self._save_and_print())
-        root.bind("<Escape>", lambda e: self._close_popup_or_clear())
+        root.bind("<F2>",        lambda e: self._focus_search())
+        root.bind("<F8>",        lambda e: self._hold_bill())
+        root.bind("<F10>",       lambda e: self._save_and_print())
+        root.bind("<Escape>",    lambda e: self._close_popup_or_clear())
+        root.bind("<Control-n>", lambda e: self._new_bill_shortcut())
+        root.bind("<Control-N>", lambda e: self._new_bill_shortcut())
         self.search_entry.bind("<Down>",   lambda e: self._focus_popup())
         self.search_entry.bind("<Return>", lambda e: self._focus_popup())
+
+    def _new_bill_shortcut(self):
+        """Ctrl+N — clear cart and start a fresh bill."""
+        if self.cart:
+            if not messagebox.askyesno(
+                "New Bill",
+                "Start a new bill? Current cart items will be cleared.",
+                parent=self.winfo_toplevel()
+            ):
+                return
+        self._clear_cart_silent()
+        self._refresh_bill_number()
+        self._set_status("🆕  New bill started  (Ctrl+N)")
+        self._focus_search()
+
+    def _new_bill_shortcut(self):
+        """Ctrl+N — start a fresh bill (BIL-1)."""
+        if self.cart:
+            if not messagebox.askyesno("New Bill",
+                                        "Start a new bill? Current cart items will be cleared.",
+                                        parent=self.winfo_toplevel()):
+                return
+        self._clear_cart_silent()
+        self._refresh_bill_number()
+        self._set_status("🆕  New bill started  (Ctrl+N)")
+        self._focus_search()
 
     def on_show(self):
         """Called each time we navigate to this screen."""
@@ -372,7 +412,7 @@ class BillingScreen(ctk.CTkFrame):
     # Search
     # ─────────────────────────────────────────────────────────────
     def _focus_search(self):
-        self.search_entry.focus()
+        self.search_entry.focus_set()
         self.search_entry.select_range(0, "end")
 
     def _on_search_change(self, *_):
@@ -482,7 +522,9 @@ class BillingScreen(ctk.CTkFrame):
         query = self.customer_entry.get().strip()
         if len(query) < 1 or query == "Walk-in Customer":
             self._close_cust_popup()
+            self.udhaar_badge.grid_remove()
             return
+        self.udhaar_badge.grid_remove()  # hide until a customer is confirmed via autocomplete
         results = self.db.search_customers_billing(query)
         self.cust_results = results
         if results:
@@ -553,7 +595,32 @@ class BillingScreen(ctk.CTkFrame):
         self._close_cust_popup()
         self.customer_entry.delete(0, "end")
         self.customer_entry.insert(0, c["name"])
-        self.search_entry.focus()
+        # Store selected customer id for due auto-attach
+        self._selected_customer_id = c.get("customer_id")
+
+        bal = float(c.get("credit_balance") or 0)
+        if bal > 0:
+            self.udhaar_badge.configure(text=f"⚠️  Udhaar Pending: ₹{bal:,.2f}")
+            self.udhaar_badge.grid(row=0, column=5, padx=(0, 16), pady=12)
+            # BIL-5: Auto-attach previous due to bill discount field (show as warning)
+            if messagebox.askyesno(
+                "Previous Udhaar Detected",
+                f"Customer '{c['name']}' has a pending due of ₹{bal:,.2f}.\n\n"
+                f"Would you like to collect this due with the new bill?\n\n"
+                f"(The due amount will be shown on the bill. Collect separately.)",
+                parent=self.winfo_toplevel()
+            ):
+                self._pending_udhaar = bal
+                self._set_status(
+                    f"⚠️  Udhaar ₹{bal:,.2f} will be shown on the bill."
+                )
+            else:
+                self._pending_udhaar = 0
+        else:
+            self.udhaar_badge.grid_remove()
+            self._pending_udhaar = 0
+
+        self.search_entry.focus_set()
 
     # ─────────────────────────────────────────────────────────────
     # Cart management
@@ -644,19 +711,25 @@ class BillingScreen(ctk.CTkFrame):
                         ).pack(side="right")
             return var
 
-        qty_var  = field(dlg, f"Quantity ({item['unit']}):", item["quantity"])
-        disc_var = field(dlg, "Item Discount (₹):",           item["discount"])
+        qty_var   = field(dlg, f"Quantity ({item['unit']}):", item["quantity"])
+        price_var = field(dlg, "Unit Price (₹):",            item["unit_price"])
+        disc_var  = field(dlg, "Item Discount (₹):",         item["discount"])
 
         def apply_edit():
             try:
-                qty  = float(qty_var.get())
-                disc = float(disc_var.get())
+                qty   = float(qty_var.get())
+                price = float(price_var.get())
+                disc  = float(disc_var.get())
                 if qty <= 0:
                     messagebox.showerror("Error", "Quantity must be greater than 0.", parent=dlg)
                     return
+                if price < 0:
+                    messagebox.showerror("Error", "Price cannot be negative.", parent=dlg)
+                    return
                 item["quantity"]   = qty
+                item["unit_price"] = price
                 item["discount"]   = disc
-                item["line_total"] = round(qty * item["unit_price"] - disc, 2)
+                item["line_total"] = round(qty * price - disc, 2)
                 self._refresh_cart_tree()
                 self._recalculate()
                 dlg.destroy()
@@ -701,6 +774,7 @@ class BillingScreen(ctk.CTkFrame):
         self.discount_var.set("0")
         self.cash_var.set("0")
         self.customer_entry.delete(0, "end")
+        self.udhaar_badge.grid_remove()
         self.payment_mode_var.set("Cash")
         self._refresh_cart_tree()
         self._recalculate()
@@ -832,227 +906,3 @@ class BillingScreen(ctk.CTkFrame):
         messagebox.showinfo("Bill Held",
                             f"Bill saved as draft.\nYou can resume it from Bill History.",
                             parent=self.winfo_toplevel())
-        self._clear_cart_silent()
-        self._refresh_bill_number()
-        self._set_status("✋  Bill held (draft saved).")
-
-    def _clear_cart_silent(self):
-        """Clear without confirmation."""
-        self.cart = []
-        self._draft_bill_id = None
-        self.discount_var.set("0")
-        self.cash_var.set("0")
-        self.customer_entry.delete(0, "end")
-        self.payment_mode_var.set("Cash")
-        self._refresh_cart_tree()
-        self._recalculate()
-
-    # ─────────────────────────────────────────────────────────────
-    # Receipt popup
-    # ─────────────────────────────────────────────────────────────
-    def _show_receipt(self, bill_id):
-        bill, items = self.db.get_bill_by_id(bill_id)
-        if not bill:
-            return
-
-        dlg = ctk.CTkToplevel(self.winfo_toplevel())
-        dlg.title("🧾  Bill Receipt")
-        dlg.geometry("520x680")
-        dlg.resizable(False, True)
-        dlg.grab_set()
-        dlg.attributes("-topmost", True)
-        dlg.configure(fg_color="#ECEFF1")
-
-        # ── Scrollable receipt area ──────────────────────────
-        scroll = ctk.CTkScrollableFrame(
-            dlg, fg_color="#ECEFF1", corner_radius=0,
-            scrollbar_button_color="#B0BEC5",
-        )
-        scroll.pack(fill="both", expand=True, padx=0, pady=0)
-
-        # ── Receipt card ─────────────────────────────────────
-        card = ctk.CTkFrame(scroll, fg_color="#FFFFFF", corner_radius=12,
-                            border_width=1, border_color="#E0E0E0")
-        card.pack(fill="x", padx=16, pady=(12, 8))
-
-        # Monospace font for aligned receipt
-        MONO   = ("Consolas", 13)
-        MONO_B = ("Consolas", 13, "bold")
-        MONO_L = ("Consolas", 15, "bold")  # large for total
-
-        shop = self.db.get_setting("shop_name", "FMCG Shop")
-        addr = self.db.get_setting("shop_address", "")
-        phone = self.db.get_setting("shop_phone", "")
-        gst   = self.db.get_setting("shop_gst", "")
-        W = 44  # receipt character width
-
-        def center(s):
-            return s[:W].center(W)
-
-        def ljr(left, right):
-            left = str(left)[:W - len(str(right)) - 1]
-            return left + " " * (W - len(left) - len(str(right))) + str(right)
-
-        def add_line(text, font=MONO, color="#263238", bg=None, pady=(0, 0)):
-            lf = ctk.CTkFrame(card, fg_color=bg or "transparent")
-            lf.pack(fill="x", padx=16, pady=pady)
-            ctk.CTkLabel(lf, text=text, font=font, text_color=color,
-                         anchor="w", justify="left").pack(fill="x")
-
-        def add_sep(char="─", color="#B0BEC5", pady=(4, 4)):
-            add_line(char * W, MONO, color, pady=pady)
-
-        # ── Header ───────────────────────────────────────────
-        # Shop name — large centered
-        ctk.CTkLabel(card, text=shop, font=("Segoe UI", 20, "bold"),
-                     text_color="#1565C0", anchor="center",
-                     justify="center").pack(fill="x", padx=16, pady=(16, 2))
-        if addr:
-            ctk.CTkLabel(card, text=addr, font=("Segoe UI", 12),
-                         text_color="#78909C", anchor="center",
-                         justify="center").pack(fill="x", padx=16)
-        sub_info = []
-        if phone:
-            sub_info.append(f"📞 {phone}")
-        if gst:
-            sub_info.append(f"GST: {gst}")
-        if sub_info:
-            ctk.CTkLabel(card, text="  |  ".join(sub_info),
-                         font=("Segoe UI", 11), text_color="#90A4AE",
-                         anchor="center", justify="center"
-                         ).pack(fill="x", padx=16, pady=(0, 4))
-
-        add_sep("═", "#1565C0", pady=(6, 6))
-
-        # ── Bill info ────────────────────────────────────────
-        add_line(ljr(f"Bill: {bill['bill_number']}", str(bill.get('bill_date',''))[:10]),
-                 MONO_B, "#263238", pady=(2, 0))
-        add_line(ljr(f"Customer: {bill.get('customer_name','Walk-in')[:18]}",
-                     bill.get('payment_mode', 'Cash')),
-                 MONO, "#546E7A", pady=(0, 2))
-
-        add_sep("─", "#CFD8DC", pady=(4, 4))
-
-        # ── Column headers ───────────────────────────────────
-        hdr = f"{'Item':<{W-22}} {'Qty':>3} {'Rate':>6} {'Disc':>5} {'Amt':>5}"
-        add_line(hdr, MONO_B, "#37474F", pady=(2, 2))
-        add_sep("─", "#CFD8DC", pady=(0, 2))
-
-        # ── Items ────────────────────────────────────────────
-        for it in items:
-            name = str(it.get("product_name", ""))[:W - 22]
-            qty  = f"{it.get('quantity', 0):.0f}"
-            rate = f"{it.get('unit_price', 0):.0f}"
-            disc = f"{it.get('discount', 0):.0f}"
-            amt  = f"{it.get('line_total', 0):.2f}"
-            line = f"{name:<{W-22}} {qty:>3} {rate:>6} {disc:>5} {amt:>5}"
-            add_line(line, MONO, "#37474F", pady=(1, 1))
-
-        add_sep("─", "#CFD8DC", pady=(4, 2))
-
-        # ── Subtotal / Discount ──────────────────────────────
-        add_line(ljr("Subtotal:", f"₹ {bill['subtotal']:,.2f}"),
-                 MONO, "#546E7A", pady=(2, 0))
-        if bill.get("discount", 0):
-            add_line(ljr("Discount:", f"- ₹ {bill['discount']:,.2f}"),
-                     MONO, "#E65100", pady=(0, 0))
-
-        # ── Grand Total — highlighted ────────────────────────
-        tot_frame = ctk.CTkFrame(card, fg_color="#E3F2FD", corner_radius=6)
-        tot_frame.pack(fill="x", padx=12, pady=(6, 4))
-        ctk.CTkLabel(tot_frame,
-                     text=ljr("  GRAND TOTAL:", f"₹ {bill['grand_total']:,.2f}  "),
-                     font=MONO_L, text_color="#0D47A1", anchor="w",
-                     justify="left").pack(fill="x", padx=4, pady=6)
-
-        # ── Paid / Change ────────────────────────────────────
-        add_line(ljr("Amount Paid:", f"₹ {bill['amount_paid']:,.2f}"),
-                 MONO, "#2E7D32", pady=(4, 0))
-        add_line(ljr("Change Due:", f"₹ {bill['change_due']:,.2f}"),
-                 MONO, "#2E7D32", pady=(0, 4))
-
-        add_sep("═", "#1565C0", pady=(4, 6))
-
-        # ── Footer ───────────────────────────────────────────
-        ctk.CTkLabel(card, text="Thank you for shopping with us! 🙏",
-                     font=("Segoe UI", 13, "bold"), text_color="#43A047",
-                     anchor="center", justify="center"
-                     ).pack(fill="x", padx=16, pady=(0, 4))
-        ctk.CTkLabel(card, text=datetime.now().strftime("%d %b %Y  •  %I:%M %p"),
-                     font=("Segoe UI", 11), text_color="#B0BEC5",
-                     anchor="center", justify="center"
-                     ).pack(fill="x", padx=16, pady=(0, 14))
-
-        # ── Action buttons ───────────────────────────────────
-        btn_row = ctk.CTkFrame(dlg, fg_color="#FFFFFF", corner_radius=0, height=64,
-                               border_width=1, border_color="#E0E0E0")
-        btn_row.pack(fill="x", side="bottom")
-        btn_row.pack_propagate(False)
-        ctk.CTkButton(btn_row, text="🖨️  Thermal Print",
-                      font=FONTS["button"], fg_color=COLORS["btn_primary"],
-                      hover_color="#0D47A1",
-                      height=44, width=170, corner_radius=10,
-                      command=lambda: self._print_receipt(bill, items)
-                     ).pack(side="left", padx=(16, 8), pady=10)
-        ctk.CTkButton(btn_row, text="📄  PDF / A4",
-                      font=FONTS["button"], fg_color=COLORS["btn_purple"],
-                      hover_color="#9B45C7",
-                      height=44, width=150, corner_radius=10,
-                      command=lambda: self.print_pdf_bill(bill, items)
-                     ).pack(side="left", padx=(0, 8), pady=10)
-        ctk.CTkButton(btn_row, text="✅  Done",
-                      font=FONTS["button"], fg_color=COLORS["btn_success"],
-                      hover_color="#1B5E20",
-                      height=44, width=120, corner_radius=10,
-                      command=dlg.destroy
-                     ).pack(side="right", padx=16, pady=10)
-
-    def _get_print_settings(self) -> dict:
-        return {
-            "shop_name"   : self.db.get_setting("shop_name",    "FMCG Grocery Shop"),
-            "shop_address": self.db.get_setting("shop_address", ""),
-            "shop_city"   : self.db.get_setting("shop_city",    ""),
-            "shop_phone"  : self.db.get_setting("shop_phone",   ""),
-            "shop_gst"    : self.db.get_setting("shop_gst",     ""),
-        }
-
-    def print_pdf_bill(self, bill: dict, items: list):
-        """Generate and open an A4 PDF bill."""
-        try:
-            from bill_printer import generate_pdf_bill, open_file
-            import tkinter.filedialog as fd
-            path = fd.asksaveasfilename(
-                defaultextension=".pdf",
-                filetypes=[("PDF file", "*.pdf")],
-                initialfile=f"Bill_{bill['bill_number']}.pdf",
-                title="Save PDF Bill",
-                parent=self.winfo_toplevel(),
-            )
-            if not path:
-                return
-            settings = self._get_print_settings()
-            generate_pdf_bill(bill, items, settings, path)
-            open_file(path)
-            self._set_status(f"📄  PDF saved: {path}")
-            self.db.log_activity(
-                self.current_user["user_id"], "BILL_PDF",
-                f"PDF generated for {bill['bill_number']}"
-            )
-        except Exception as e:
-            messagebox.showerror("PDF Error", str(e),
-                                 parent=self.winfo_toplevel())
-
-
-    def _print_receipt(self, bill: dict, items: list):
-        """Print thermal ESC/POS receipt for the given bill."""
-        from bill_printer import print_thermal
-        settings = self.db.get_all_settings()
-        paper    = settings.get("paper_width", "80mm")
-        ok, info = print_thermal(bill, items, settings, paper_width=paper)
-        if not ok:
-            messagebox.showwarning(
-                "Print Warning",
-                f"Receipt could not be sent to printer.\n\n{info}\n\n"
-                "The bill has been saved successfully.",
-                parent=self.winfo_toplevel()
-            )

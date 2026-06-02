@@ -294,19 +294,31 @@ class BillHistoryScreen(ctk.CTkFrame):
                                  parent=self.winfo_toplevel())
 
     def _reprint_bill(self):
+        """Show receipt popup with Thermal / PDF options — same as after billing."""
         bill_id = self._get_selected_bill_id()
         if not bill_id:
             return
         bill, items = self.db.get_bill_by_id(bill_id)
         if not bill:
             return
+        if bill["status"] == "Void":
+            messagebox.showwarning("Voided Bill",
+                                   "This bill has been voided and cannot be reprinted.",
+                                   parent=self.winfo_toplevel())
+            return
+        # Use billing screen's receipt popup so user can choose Thermal or PDF
         bs = self.app.screens.get("billing")
-        if bs:
-            bs._print_receipt(bill, items)
+        if bs and hasattr(bs, "_show_receipt"):
+            bs._show_receipt(bill_id)
         else:
-            messagebox.showinfo("Reprint",
-                                f"Bill {bill['bill_number']} — Total ₹{bill['grand_total']:.2f}",
-                                parent=self.winfo_toplevel())
+            # Fallback: show simple info
+            messagebox.showinfo(
+                "Reprint",
+                f"Bill {bill['bill_number']}\n"
+                f"Customer: {bill.get('customer_name', 'Walk-in')}\n"
+                f"Total: ₹{bill['grand_total']:,.2f}",
+                parent=self.winfo_toplevel()
+            )
 
     def _void_bill(self):
         bill_id = self._get_selected_bill_id()
@@ -359,18 +371,4 @@ class BillHistoryScreen(ctk.CTkFrame):
                 f"Bill '{bill['bill_number']}' is currently '{bill['status']}'.",
                 parent=self.winfo_toplevel()
             )
-            return
-
-        # Navigate to billing screen and load the draft
-        billing = self.app.screens.get("billing")
-        if billing is None:
-            self.app.navigate_to("billing")
-            billing = self.app.screens.get("billing")
-
-        if billing and hasattr(billing, "load_draft"):
-            billing.load_draft(bill_id, bill, items)
-            self.app.navigate_to("billing")
-        else:
-            messagebox.showerror("Error",
-                                 "Billing screen not available.",
-                                 parent=self.winfo_toplevel())
+        

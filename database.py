@@ -453,6 +453,19 @@ class Database:
             conn.execute("UPDATE products SET is_active=0 WHERE product_id=?", (product_id,))
             conn.commit()
 
+    def delete_product(self, product_id: int) -> tuple:
+        """Hard delete. Returns (ok, message). Falls back to deactivate if used in bills."""
+        with self.get_conn() as conn:
+            used = conn.execute(
+                "SELECT COUNT(*) FROM bill_items WHERE product_id=?", (product_id,)
+            ).fetchone()[0]
+            if used:
+                return False, f"Product used in {used} bill(s). Deactivating instead."
+            conn.execute("DELETE FROM purchase_items WHERE product_id=?", (product_id,))
+            conn.execute("DELETE FROM products WHERE product_id=?", (product_id,))
+            conn.commit()
+            return True, "Product deleted."
+
     def adjust_stock(self, product_id: int, qty_change: float):
         """Positive = add stock, Negative = reduce stock."""
         with self.get_conn() as conn:
@@ -788,6 +801,18 @@ class Database:
             )
             conn.commit()
 
+    def delete_supplier(self, supplier_id: int) -> tuple:
+        """Hard delete. Returns (ok, message). Falls back to deactivate if has purchases."""
+        with self.get_conn() as conn:
+            used = conn.execute(
+                "SELECT COUNT(*) FROM purchase_entries WHERE supplier_id=?", (supplier_id,)
+            ).fetchone()[0]
+            if used:
+                return False, f"Supplier has {used} purchase record(s). Deactivating instead."
+            conn.execute("DELETE FROM suppliers WHERE supplier_id=?", (supplier_id,))
+            conn.commit()
+            return True, "Supplier deleted."
+
     # ─── Phase 2: Purchase / GRN ──────────────────────────────
 
     def next_grn_number(self) -> str:
@@ -816,13 +841,14 @@ class Database:
             )
             purchase_id = cur.lastrowid
             for item in items:
+                prod_id = item.get("product_id")
                 conn.execute(
                     """INSERT INTO purchase_items
                        (purchase_id, product_id, product_name, unit, quantity, unit_price, line_total)
                        VALUES (?,?,?,?,?,?,?)""",
                     (
                         purchase_id,
-                        item["product_id"],
+                        prod_id,
                         item["product_name"],
                         item["unit"],
                         item["quantity"],
@@ -830,16 +856,16 @@ class Database:
                         item["line_total"],
                     )
                 )
-                # Increase stock
-                conn.execute(
-                    "UPDATE products SET current_stock = current_stock + ? WHERE product_id=?",
-                    (item["quantity"], item["product_id"])
-                )
-                # Update purchase price
-                conn.execute(
-                    "UPDATE products SET purchase_price=? WHERE product_id=?",
-                    (item["unit_price"], item["product_id"])
-                )
+                # Only update stock and price if product is in master (GRN-3)
+                if prod_id is not None:
+                    conn.execute(
+                        "UPDATE products SET current_stock = current_stock + ? WHERE product_id=?",
+                        (item["quantity"], prod_id)
+                    )
+                    conn.execute(
+                        "UPDATE products SET purchase_price=? WHERE product_id=?",
+                        (item["unit_price"], prod_id)
+                    )
             conn.commit()
         self.log_activity(user_id, "PURCHASE_SAVED",
                           f"GRN {grn_number} saved. Total: ₹{purchase_data['total_amount']:.2f}")
@@ -975,6 +1001,19 @@ class Database:
                 "UPDATE customers SET is_active=0 WHERE customer_id=?", (customer_id,)
             )
             conn.commit()
+
+    def delete_customer(self, customer_id: int) -> tuple:
+        """Hard delete. Returns (ok, message). Falls back to deactivate if has bills."""
+        with self.get_conn() as conn:
+            used = conn.execute(
+                "SELECT COUNT(*) FROM bills WHERE customer_id=?", (customer_id,)
+            ).fetchone()[0]
+            if used:
+                return False, f"Customer has {used} bill(s). Deactivating instead."
+            conn.execute("DELETE FROM customer_transactions WHERE customer_id=?", (customer_id,))
+            conn.execute("DELETE FROM customers WHERE customer_id=?", (customer_id,))
+            conn.commit()
+            return True, "Customer deleted."
 
     # --- Phase 3: Reports ---
 
