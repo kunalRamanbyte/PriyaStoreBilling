@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import date
 from config import COLORS, FONTS
+from ui_utils import place_popup
 
 
 class CustomerScreen(ctk.CTkFrame):
@@ -181,7 +182,7 @@ class CustomerScreen(ctk.CTkFrame):
     def _open_form(self, customer):
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title("Edit Customer" if customer else "Add New Customer")
-        dlg.geometry("480x400")
+        place_popup(dlg, 480, 400)
         dlg.resizable(False, False)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
@@ -255,7 +256,7 @@ class CustomerScreen(ctk.CTkFrame):
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title(f"Ledger — {cust['name']}")
-        dlg.geometry("700x540")
+        place_popup(dlg, 700, 540)
         dlg.resizable(True, True)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
@@ -342,7 +343,7 @@ class CustomerScreen(ctk.CTkFrame):
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         title = "💳  Record Payment" if txn_type == "Payment" else "📝  Add Udhaar (Credit)"
         dlg.title(title)
-        dlg.geometry("440x380")
+        place_popup(dlg, 440, 380)
         dlg.resizable(False, False)
         dlg.grab_set()
         dlg.attributes("-topmost", True)

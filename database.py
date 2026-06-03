@@ -6,6 +6,7 @@ Uses raw sqlite3 (no ORM) for simplicity and speed.
 import sqlite3
 import hashlib
 import os
+from contextlib import contextmanager
 from datetime import datetime, date
 from config import DB_PATH
 
@@ -18,12 +19,24 @@ class Database:
     def __init__(self):
         self.db_path = DB_PATH
 
+    @contextmanager
     def get_conn(self):
+        """Yield a connection, commit on success / rollback on error, and
+        ALWAYS close it. Used as `with self.get_conn() as conn:` everywhere —
+        the close() guarantees file handles are released and WAL checkpoints
+        promptly instead of waiting on garbage collection."""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row          # rows as dicts
         conn.execute("PRAGMA journal_mode=WAL")  # power-cut safe
         conn.execute("PRAGMA foreign_keys=ON")
-        return conn
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     # ─── Schema Setup ─────────────────────────────────────────
 
@@ -190,6 +203,7 @@ class Database:
             for migration in [
                 "ALTER TABLE customers ADD COLUMN is_active INTEGER DEFAULT 1",
                 "ALTER TABLE products  ADD COLUMN expiry_date TEXT",
+                "ALTER TABLE bills     ADD COLUMN udhaar_adjustment REAL DEFAULT 0",
             ]:
                 try:
                     conn.execute(migration)
@@ -202,6 +216,7 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_bills_date     ON bills(bill_date)",
                 "CREATE INDEX IF NOT EXISTS idx_bills_status   ON bills(status)",
                 "CREATE INDEX IF NOT EXISTS idx_bill_items_bid ON bill_items(bill_id)",
+                "CREATE INDEX IF NOT EXISTS idx_bill_items_pid ON bill_items(product_id)",
                 "CREATE INDEX IF NOT EXISTS idx_products_name  ON products(name)",
                 "CREATE INDEX IF NOT EXISTS idx_products_code  ON products(product_code)",
                 "CREATE INDEX IF NOT EXISTS idx_products_cat   ON products(category_id)",
@@ -416,7 +431,7 @@ class Database:
             like = f"%{query}%"
             rows = conn.execute(
                 """SELECT p.product_id, p.product_code, p.name, p.unit,
-                          p.selling_price, p.current_stock,
+                          p.selling_price, p.purchase_price, p.current_stock,
                           c.name AS category_name, c.colour_code
                    FROM products p
                    LEFT JOIN categories c ON p.category_id=c.category_id
@@ -509,11 +524,13 @@ class Database:
             pfx = conn.execute("SELECT value FROM settings WHERE key='bill_prefix'").fetchone()
             prefix = pfx["value"] if pfx else "BILL"
             bill_number = self._claim_number(conn, "next_bill_no", prefix)
+            udhaar_adj = float(bill_data.get("udhaar_adjustment") or 0)
             cur = conn.execute(
                 """INSERT INTO bills
                    (bill_number, customer_id, customer_name, subtotal, discount,
-                    grand_total, payment_mode, amount_paid, change_due, status, created_by)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    grand_total, payment_mode, amount_paid, change_due, status,
+                    udhaar_adjustment, created_by)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     bill_number,
                     bill_data.get("customer_id"),
@@ -525,6 +542,7 @@ class Database:
                     bill_data["amount_paid"],
                     bill_data["change_due"],
                     "Active",
+                    udhaar_adj,
                     user_id,
                 )
             )
@@ -564,6 +582,20 @@ class Database:
                 conn.execute(
                     "UPDATE customers SET credit_balance = credit_balance + ? WHERE customer_id=?",
                     (bill_data["grand_total"], bill_data["customer_id"])
+                )
+
+            # Clear previous udhaar if collected with this bill
+            if udhaar_adj > 0 and bill_data.get("customer_id"):
+                conn.execute(
+                    """INSERT INTO customer_transactions
+                       (customer_id, txn_type, amount, reference, notes, created_by)
+                       VALUES (?,?,?,?,?,?)""",
+                    (bill_data["customer_id"], "Payment", udhaar_adj,
+                     bill_number, "Udhaar collected with bill", user_id)
+                )
+                conn.execute(
+                    "UPDATE customers SET credit_balance = MAX(0, credit_balance - ?) WHERE customer_id=?",
+                    (udhaar_adj, bill_data["customer_id"])
                 )
 
             conn.commit()
@@ -679,6 +711,20 @@ class Database:
                        VALUES (?,?,?,?,?,?)""",
                     (bill["customer_id"], "Payment", bill["grand_total"],
                      bill["bill_number"], "Auto-reversed: bill voided", user_id)
+                )
+            # Reverse any udhaar_adjustment that was collected with this bill
+            udhaar_adj = float(bill.get("udhaar_adjustment") or 0)
+            if udhaar_adj > 0 and bill.get("customer_id"):
+                conn.execute(
+                    "UPDATE customers SET credit_balance = credit_balance + ? WHERE customer_id=?",
+                    (udhaar_adj, bill["customer_id"])
+                )
+                conn.execute(
+                    """INSERT INTO customer_transactions
+                       (customer_id, txn_type, amount, reference, notes, created_by)
+                       VALUES (?,?,?,?,?,?)""",
+                    (bill["customer_id"], "Credit", udhaar_adj,
+                     bill["bill_number"], "Auto-reversed: udhaar collection voided", user_id)
                 )
             conn.commit()
         self.log_activity(user_id, "BILL_VOID", f"Bill {bill['bill_number']} voided. Reason: {reason}")

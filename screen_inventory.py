@@ -7,6 +7,7 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
 from config import COLORS, FONTS
+from ui_utils import place_popup
 
 
 class InventoryScreen(ctk.CTkFrame):
@@ -219,7 +220,7 @@ class InventoryScreen(ctk.CTkFrame):
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title("Adjust Stock")
-        dlg.geometry("500x480")
+        place_popup(dlg, 500, 480)
         dlg.resizable(False, False)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
@@ -322,7 +323,7 @@ class InventoryScreen(ctk.CTkFrame):
     def _show_adj_history(self):
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title("Stock Adjustment History")
-        dlg.geometry("860x520")
+        place_popup(dlg, 860, 520)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
 

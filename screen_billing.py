@@ -6,9 +6,10 @@ Large fonts, colorful, designed for 60+ age users.
 
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox
 from datetime import datetime
 from config import COLORS, FONTS, PAYMENT_MODES
+from ui_utils import place_popup
 
 
 class BillingScreen(ctk.CTkFrame):
@@ -62,6 +63,15 @@ class BillingScreen(ctk.CTkFrame):
             title_box, text="Bright Billing Dashboard",
             font=("Segoe UI", 11), text_color="#64748B"
         ).pack(anchor="w")
+
+        self.clock_label = ctk.CTkLabel(
+            top,
+            text="",
+            font=("Segoe UI", 12),
+            text_color="#475569",
+        )
+        self.clock_label.grid(row=0, column=1, padx=8, sticky="e")
+        self._update_clock()
 
         _user_name = self.current_user.get("name") or self.current_user.get("username", "User")
         _user_role = (self.current_user.get("role") or "").title()
@@ -117,6 +127,18 @@ class BillingScreen(ctk.CTkFrame):
         self.customer_entry.pack(side="left", fill="x", expand=False, padx=(0, 8))
         self.customer_entry.bind("<KeyRelease>", self._on_customer_search)
         self.customer_entry.bind("<Down>", lambda e: self._focus_cust_popup())
+
+        ctk.CTkButton(
+            self.context_left,
+            text="+ New",
+            font=("Segoe UI", 11, "bold"),
+            fg_color="#10B981",
+            hover_color="#059669",
+            height=42,
+            width=72,
+            corner_radius=14,
+            command=self._add_new_customer_dialog,
+        ).pack(side="left", padx=(0, 8))
 
         # Walk-in indicator — shown when no saved customer is linked
         self.walkin_badge = self._make_chip(
@@ -251,7 +273,19 @@ class BillingScreen(ctk.CTkFrame):
         row("Subtotal :", "lbl_subtotal")
         row("Discount (₹) :", "lbl_discount", "#EF4444")
 
-        ctk.CTkFrame(panel, fg_color="#E9D5FF", height=2).pack(fill="x", padx=10, pady=4)
+        # Udhaar row — hidden until a customer with pending udhaar is selected
+        udhaar_row = ctk.CTkFrame(panel, fg_color="#FFF7ED", corner_radius=12,
+                                  border_width=1, border_color="#FED7AA")
+        udhaar_row.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(udhaar_row, text="⚠️  Prev. Udhaar :", font=_font_lbl,
+                     text_color="#C2410C", anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
+        self.lbl_udhaar_adj = ctk.CTkLabel(udhaar_row, text="₹ 0.00",
+                                           font=_font_val, text_color="#C2410C", anchor="e")
+        self.lbl_udhaar_adj.grid(row=0, column=1, sticky="e", padx=10, pady=6)
+        self.udhaar_row_frame = udhaar_row   # shown/hidden dynamically; do NOT pack yet
+
+        self._totals_divider = ctk.CTkFrame(panel, fg_color="#E9D5FF", height=2)
+        self._totals_divider.pack(fill="x", padx=10, pady=4)
 
         gt_frame = ctk.CTkFrame(panel, fg_color="#B91CFF", corner_radius=14)
         gt_frame.pack(fill="x", padx=10, pady=3)
@@ -731,6 +765,68 @@ class BillingScreen(ctk.CTkFrame):
         except Exception:
             pass
 
+    def _add_new_customer_dialog(self):
+        """Open a small dialog to create a new customer and auto-select them."""
+        dlg = ctk.CTkToplevel(self.winfo_toplevel())
+        dlg.title("Add New Customer")
+        place_popup(dlg, 380, 280)
+        dlg.resizable(False, False)
+        dlg.grab_set()
+        dlg.attributes("-topmost", True)
+
+        ctk.CTkLabel(dlg, text="Add New Customer",
+                     font=FONTS["subheading"], text_color=COLORS["btn_primary"]
+                     ).pack(pady=(18, 10), padx=20, anchor="w")
+
+        def field(parent, label, placeholder=""):
+            f = ctk.CTkFrame(parent, fg_color="transparent")
+            f.pack(fill="x", padx=20, pady=4)
+            ctk.CTkLabel(f, text=label, font=FONTS["body"],
+                         text_color=COLORS["text_dark"], width=90, anchor="w").pack(side="left")
+            var = tk.StringVar()
+            ctk.CTkEntry(f, textvariable=var, placeholder_text=placeholder,
+                         font=FONTS["body"], height=36, width=200,
+                         border_color=COLORS["border_focus"],
+                         fg_color=COLORS["bg_input"]).pack(side="left", padx=(6, 0))
+            return var
+
+        name_var    = field(dlg, "Name *",    "Full name")
+        phone_var   = field(dlg, "Phone",     "Mobile number")
+        address_var = field(dlg, "Address",   "Shop / area")
+
+        def save():
+            name = name_var.get().strip()
+            if not name:
+                messagebox.showerror("Required", "Customer name is required.", parent=dlg)
+                return
+            try:
+                cid = self.db.add_customer({
+                    "name":    name,
+                    "phone":   phone_var.get().strip(),
+                    "address": address_var.get().strip(),
+                })
+                dlg.destroy()
+                # Auto-select the newly created customer
+                self.customer_entry.delete(0, "end")
+                self.customer_entry.insert(0, name)
+                self._selected_customer_id   = cid
+                self._selected_customer_name = name
+                self._pending_udhaar         = 0.0
+                self._update_walkin_badge()
+                self._set_status(f"✅  New customer '{name}' added and selected.")
+            except Exception as e:
+                messagebox.showerror("Error", str(e), parent=dlg)
+
+        btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
+        btn_row.pack(fill="x", padx=20, pady=12)
+        ctk.CTkButton(btn_row, text="✅  Save Customer", font=FONTS["button"],
+                      fg_color=COLORS["btn_success"], height=42,
+                      command=save).pack(side="left", fill="x", expand=True, padx=(0, 6))
+        ctk.CTkButton(btn_row, text="Cancel", font=FONTS["button"],
+                      fg_color=COLORS["btn_secondary"], height=42,
+                      command=dlg.destroy).pack(side="left", fill="x", expand=True)
+        dlg.bind("<Return>", lambda e: save())
+
     def _clear_selected_customer(self):
         self._selected_customer_id = None
         self._selected_customer_name = None
@@ -788,11 +884,13 @@ class BillingScreen(ctk.CTkFrame):
         _row_colors = COLORS["ROW_COLORS"]
         for i, item in enumerate(self.cart, 1):
             tag = f"row{(i-1) % len(_row_colors)}"
+            qty_disp = (f"{item['quantity']:.3f}" if item["unit"] == "kg"
+                        else f"{item['quantity']:.2f}")
             self.cart_tree.insert("", "end", iid=str(i-1), values=(
                 i,
                 item["product_name"],
                 item["unit"],
-                f"{item['quantity']:.2f}",
+                qty_disp,
                 f"{item['unit_price']:.2f}",
                 f"{item['discount']:.2f}",
                 f"{item['line_total']:.2f}",
@@ -811,7 +909,7 @@ class BillingScreen(ctk.CTkFrame):
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title(f"Edit: {item['product_name']}")
-        dlg.geometry("380x300")
+        place_popup(dlg, 380, 340)
         dlg.resizable(False, False)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
@@ -832,13 +930,25 @@ class BillingScreen(ctk.CTkFrame):
                         ).pack(side="right")
             return var
 
-        qty_var   = field(dlg, f"Quantity ({item['unit']}):", item["quantity"])
+        is_kg = item["unit"] == "kg"
+        if is_kg:
+            kg_int = int(item["quantity"])
+            gm_int = round((item["quantity"] - kg_int) * 1000)
+            kg_var = field(dlg, "Kilograms:",       kg_int)
+            gm_var = field(dlg, "Grams (0–999):",   gm_int)
+            qty_var = None
+        else:
+            qty_var = field(dlg, f"Quantity ({item['unit']}):", item["quantity"])
+            kg_var = gm_var = None
         price_var = field(dlg, "Unit Price (₹):",            item["unit_price"])
         disc_var  = field(dlg, "Item Discount (₹):",         item["discount"])
 
         def apply_edit():
             try:
-                qty   = float(qty_var.get())
+                if is_kg:
+                    qty = float(kg_var.get() or 0) + float(gm_var.get() or 0) / 1000
+                else:
+                    qty = float(qty_var.get())
                 price = float(price_var.get())
                 disc  = float(disc_var.get())
                 if qty <= 0:
@@ -897,6 +1007,7 @@ class BillingScreen(ctk.CTkFrame):
         self.cash_var.set("0")
         self.customer_entry.delete(0, "end")
         self.payment_mode_var.set("Cash")
+        self._on_payment_mode_change("Cash")
         self._refresh_cart_tree()
         self._recalculate()
         self._refresh_bill_number()
@@ -912,11 +1023,21 @@ class BillingScreen(ctk.CTkFrame):
             discount = float(self.discount_var.get() or 0)
         except ValueError:
             discount = 0
-        discount   = min(discount, subtotal)
-        grand_total = max(0, round(subtotal - discount, 2))
+        discount    = min(discount, subtotal)
+        bill_total  = max(0, round(subtotal - discount, 2))
+        udhaar      = self._pending_udhaar
+        grand_total = round(bill_total + udhaar, 2)
 
         self.lbl_subtotal.configure(text=f"₹ {subtotal:,.2f}")
         self.lbl_discount.configure(text=f"₹ {discount:,.2f}")
+
+        if udhaar > 0:
+            self.lbl_udhaar_adj.configure(text=f"₹ {udhaar:,.2f}")
+            self.udhaar_row_frame.pack(fill="x", padx=12, pady=3,
+                                       before=self._totals_divider)
+        else:
+            self.udhaar_row_frame.pack_forget()
+
         self.lbl_grand_total.configure(text=f"₹  {grand_total:,.2f}")
 
         self._calc_change()
@@ -929,7 +1050,7 @@ class BillingScreen(ctk.CTkFrame):
             cash = grand = 0
         change = max(0, round(cash - grand, 2))
         self.lbl_change.configure(text=f"₹  {change:,.2f}",
-                                   text_color=COLORS["btn_success"] if change >= 0 else COLORS["btn_danger"])
+                                   text_color="white")
 
     def _on_payment_mode_change(self, mode):
         if mode == "Cash":
@@ -947,13 +1068,15 @@ class BillingScreen(ctk.CTkFrame):
             discount = float(self.discount_var.get() or 0)
         except ValueError:
             discount = 0
-        discount    = min(discount, subtotal)
-        grand_total = max(0, round(subtotal - discount, 2))
+        discount         = min(discount, subtotal)
+        bill_total       = max(0, round(subtotal - discount, 2))
+        udhaar_adj       = self._pending_udhaar
+        total_to_collect = round(bill_total + udhaar_adj, 2)
         try:
             amount_paid = float(self.cash_var.get() or 0)
         except ValueError:
-            amount_paid = grand_total
-        change_due  = max(0, round(amount_paid - grand_total, 2))
+            amount_paid = total_to_collect
+        change_due  = max(0, round(amount_paid - total_to_collect, 2))
         mode        = self.payment_mode_var.get()
         customer_name = self.customer_entry.get().strip() or "Walk-in Customer"
         customer_id = (
@@ -963,19 +1086,52 @@ class BillingScreen(ctk.CTkFrame):
         )
 
         return {
-            "customer_id"  : customer_id,
-            "customer_name": customer_name,
-            "subtotal"     : subtotal,
-            "discount"     : discount,
-            "grand_total"  : grand_total,
-            "payment_mode" : mode,
-            "amount_paid"  : amount_paid if mode == "Cash" else grand_total,
-            "change_due"   : change_due,
+            "customer_id"      : customer_id,
+            "customer_name"    : customer_name,
+            "subtotal"         : subtotal,
+            "discount"         : discount,
+            "grand_total"      : bill_total,         # items total only (no udhaar inflation)
+            "udhaar_adjustment": udhaar_adj,
+            "payment_mode"     : mode,
+            "amount_paid"      : amount_paid if mode == "Cash" else total_to_collect,
+            "change_due"       : change_due,
         }
 
     # ─────────────────────────────────────────────────────────────
     # Bill actions
     # ─────────────────────────────────────────────────────────────
+    def _check_stock(self) -> bool:
+        """Warn if any cart line exceeds the live stock on hand.
+
+        Returns True to proceed with the sale, False to abort. Stock is
+        re-read from the DB at save time (not the cached search results) so a
+        bill held earlier or a concurrent GRN is reflected. The operator can
+        still confirm an oversell — this only prevents silent negative stock.
+        """
+        shortfalls = []
+        for item in self.cart:
+            pid = item.get("product_id")
+            if pid is None:
+                continue
+            prod = self.db.get_product_by_id(pid)
+            if not prod:
+                continue
+            on_hand = float(prod.get("current_stock") or 0)
+            if float(item["quantity"]) > on_hand:
+                shortfalls.append(
+                    f"  • {item['product_name']}: need {item['quantity']}, "
+                    f"in stock {on_hand:g}"
+                )
+        if not shortfalls:
+            return True
+        return messagebox.askyesno(
+            "Insufficient Stock",
+            "These items exceed available stock:\n\n"
+            + "\n".join(shortfalls)
+            + "\n\nSelling them will make stock go negative.\nSave the bill anyway?",
+            parent=self.winfo_toplevel(),
+        )
+
     def _save_and_print(self):
         if not self.cart:
             messagebox.showwarning("Empty Cart",
@@ -983,8 +1139,12 @@ class BillingScreen(ctk.CTkFrame):
                                    parent=self.winfo_toplevel())
             return
 
+        if not self._check_stock():
+            return
+
         bill_data = self._get_bill_data()
         is_walk_in = not bill_data.get("customer_id")
+        total_to_collect = round(bill_data["grand_total"] + bill_data.get("udhaar_adjustment", 0), 2)
 
         # Cash mode: if walk-in and cash field untouched (0), assume exact payment
         mode = self.payment_mode_var.get()
@@ -995,14 +1155,14 @@ class BillingScreen(ctk.CTkFrame):
                 paid = 0
             if paid == 0 and is_walk_in:
                 # Walk-in exact cash — no prompt needed
-                bill_data["amount_paid"] = bill_data["grand_total"]
+                bill_data["amount_paid"] = total_to_collect
                 bill_data["change_due"]  = 0.0
-            elif paid < bill_data["grand_total"]:
+            elif paid < total_to_collect:
                 if is_walk_in:
                     # Walk-in underpayment — can't save as credit without a customer
                     messagebox.showwarning(
                         "Underpayment",
-                        f"Cash received ₹{paid:.2f} is less than total ₹{bill_data['grand_total']:.2f}.\n\n"
+                        f"Cash received ₹{paid:.2f} is less than total ₹{total_to_collect:.2f}.\n\n"
                         f"Please enter the correct cash amount, or select a saved customer to save as credit.",
                         parent=self.winfo_toplevel()
                     )
@@ -1011,7 +1171,7 @@ class BillingScreen(ctk.CTkFrame):
                 else:
                     if not messagebox.askyesno(
                         "Underpayment",
-                        f"Cash received ₹{paid:.2f} is less than total ₹{bill_data['grand_total']:.2f}.\n"
+                        f"Cash received ₹{paid:.2f} is less than total ₹{total_to_collect:.2f}.\n"
                         f"Save as credit (Udhaar) for {bill_data['customer_name']}?",
                         parent=self.winfo_toplevel()
                     ):
@@ -1070,6 +1230,14 @@ class BillingScreen(ctk.CTkFrame):
     # ─────────────────────────────────────────────────────────────
     # Status bar
     # ─────────────────────────────────────────────────────────────
+    def _update_clock(self):
+        try:
+            now = datetime.now().strftime("%d %b %Y  •  %I:%M:%S %p")
+            self.clock_label.configure(text=now)
+            self.after(1000, self._update_clock)
+        except Exception:
+            pass
+
     def _set_status(self, text: str):
         """Update the status bar message."""
         try:
@@ -1108,6 +1276,7 @@ class BillingScreen(ctk.CTkFrame):
             "shop_city"   : self.db.get_setting("shop_city",     ""),
             "shop_phone"  : self.db.get_setting("shop_phone",    ""),
             "shop_gst"    : self.db.get_setting("shop_gst",      ""),
+            "cashier"     : self.current_user.get("username",    ""),
         }
 
         raw_dt = str(bill.get("bill_date", "") or "")
@@ -1123,7 +1292,7 @@ class BillingScreen(ctk.CTkFrame):
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title("Bill Receipt")
-        dlg.geometry("500x640")
+        place_popup(dlg, 500, 640)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
 
@@ -1200,12 +1369,18 @@ class BillingScreen(ctk.CTkFrame):
         tot_row("Subtotal:", f"\u20b9 {bill['subtotal']:,.2f}")
         if bill.get("discount"):
             tot_row("Discount:", f"\u2212 \u20b9 {bill['discount']:,.2f}", color="#EF4444")
+        udhaar_adj = float(bill.get("udhaar_adjustment") or 0)
+        if udhaar_adj > 0:
+            tot_row("Bill Total:", f"\u20b9 {bill['grand_total']:,.2f}")
+            tot_row(f"\u26a0\ufe0f  Prev. Udhaar Cleared:", f"+ \u20b9 {udhaar_adj:,.2f}", color="#C2410C")
 
+        total_display = round(bill['grand_total'] + udhaar_adj, 2)
         gt = ctk.CTkFrame(scroll, fg_color="#DBEAFE", corner_radius=10)
         gt.pack(fill="x", padx=24, pady=(6, 6))
-        ctk.CTkLabel(gt, text="GRAND TOTAL:", font=("Segoe UI", 14, "bold"),
+        ctk.CTkLabel(gt, text="TOTAL TO COLLECT:" if udhaar_adj > 0 else "GRAND TOTAL:",
+                     font=("Segoe UI", 14, "bold"),
                      text_color=BLUE, anchor="w").pack(side="left", padx=14, pady=10)
-        ctk.CTkLabel(gt, text=f"\u20b9 {bill['grand_total']:,.2f}",
+        ctk.CTkLabel(gt, text=f"\u20b9 {total_display:,.2f}",
                      font=("Segoe UI Semibold", 16, "bold"), text_color=BLUE,
                      anchor="e").pack(side="right", padx=14, pady=10)
 

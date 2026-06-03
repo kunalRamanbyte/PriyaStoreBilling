@@ -11,6 +11,7 @@ from datetime import date, timedelta
 import os
 
 from config import COLORS, FONTS
+from ui_utils import place_popup
 
 # ── Report catalogue ──────────────────────────────────────────
 REPORTS = [
@@ -229,6 +230,7 @@ class ReportScreen(ctk.CTkFrame):
         self.tree.grid(row=0, column=0, sticky="nsew", padx=(4,0), pady=4)
         vsb.grid(row=0, column=1, sticky="ns",  pady=4)
         hsb.grid(row=1, column=0, sticky="ew",  padx=(4,0))
+        self.tree.bind("<Double-1>", self._on_tree_drilldown)
 
     def _select_report(self, rpt: dict):
         """Called when user clicks a report button on the left panel."""
@@ -344,7 +346,7 @@ class ReportScreen(ctk.CTkFrame):
             else:
                 tag = "alt" if i % 2 == 0 else ""
 
-            self.tree.insert("", "end", values=vals, tags=(tag,))
+            self.tree.insert("", "end", iid=str(i), values=vals, tags=(tag,))
 
             if summary_col:
                 try:
@@ -565,3 +567,85 @@ class ReportScreen(ctk.CTkFrame):
         except Exception as e:
             messagebox.showerror("PDF Error", str(e),
                                  parent=self.winfo_toplevel())
+
+    # ── Drill-down ────────────────────────────────────────────
+    def _on_tree_drilldown(self, event=None):
+        if not self._active_key or not self._report_data:
+            return
+        sel = self.tree.selection()
+        if not sel:
+            return
+        idx = int(sel[0])
+        row_data = self._report_data[idx]
+        if self._active_key == "daily_sales":
+            self._show_daily_sales_detail(str(row_data.get("date", "")))
+
+    def _show_daily_sales_detail(self, date_str: str):
+        if not date_str:
+            return
+        bills = self.db.get_bills(date_from=date_str, date_to=date_str, status="Active")
+
+        dlg = ctk.CTkToplevel(self.winfo_toplevel())
+        dlg.title(f"Bills — {date_str}")
+        place_popup(dlg, 840, 520, self.winfo_toplevel())
+        dlg.grab_set()
+        dlg.attributes("-topmost", True)
+
+        # Header
+        hdr = ctk.CTkFrame(dlg, fg_color=COLORS["btn_primary"], corner_radius=0, height=58)
+        hdr.pack(fill="x")
+        hdr.pack_propagate(False)
+        ctk.CTkLabel(hdr, text=f"📅  Bills for {date_str}",
+                     font=FONTS["subheading"], text_color="white"
+                    ).pack(side="left", padx=20, pady=10)
+        active = [b for b in bills if b.get("status") == "Active"]
+        grand  = sum(float(b.get("grand_total", 0)) for b in active)
+        ctk.CTkLabel(hdr,
+                     text=f"{len(active)} bill(s)   |   Total ₹{grand:,.2f}",
+                     font=FONTS["body_bold"], text_color="#BFDBFE"
+                    ).pack(side="right", padx=20)
+
+        # Table
+        frame = ctk.CTkFrame(dlg, fg_color=COLORS["bg_card"], corner_radius=16)
+        frame.pack(fill="both", expand=True, padx=12, pady=8)
+        frame.grid_rowconfigure(0, weight=1)
+        frame.grid_columnconfigure(0, weight=1)
+
+        cols   = ("bill_no", "time", "customer", "total", "payment", "status")
+        heads  = ("Bill #",  "Time", "Customer", "Total ₹", "Payment Mode", "Status")
+        widths = (110, 75, 220, 110, 140, 80)
+        tree = ttk.Treeview(frame, columns=cols, show="headings",
+                             style="Rpt.Treeview", selectmode="browse")
+        for col, head, w in zip(cols, heads, widths):
+            tree.heading(col, text=head)
+            anch = "e" if col == "total" else "w"
+            tree.column(col, width=w, anchor=anch, minwidth=50)
+
+        vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        tree.grid(row=0, column=0, sticky="nsew", padx=(6, 0), pady=6)
+        vsb.grid(row=0, column=1, sticky="ns", pady=6)
+
+        _row_colors = COLORS["ROW_COLORS"]
+        for i, b in enumerate(bills):
+            raw_dt   = str(b.get("bill_date", ""))
+            time_str = raw_dt[11:16] if len(raw_dt) >= 16 else ""
+            is_void  = b.get("status") == "Void"
+            tag      = "void" if is_void else f"row{i % len(_row_colors)}"
+            tree.insert("", "end", iid=str(b["bill_id"]), values=(
+                b.get("bill_number", ""),
+                time_str,
+                b.get("customer_name", "Walk-in Customer"),
+                f"{b.get('grand_total', 0):,.2f}",
+                b.get("payment_mode", ""),
+                b.get("status", "Active"),
+            ), tags=(tag,))
+
+        tree.tag_configure("void", background=COLORS["badge_void"])
+        for idx, color in enumerate(_row_colors):
+            tree.tag_configure(f"row{idx}", background=color)
+
+        ctk.CTkButton(dlg, text="Close", font=FONTS["button"],
+                      fg_color=COLORS["btn_secondary"], height=44, corner_radius=12,
+                      command=dlg.destroy
+                     ).pack(padx=20, pady=(0, 12))

@@ -20,6 +20,24 @@ Core packages: `customtkinter>=5.2.0`, `Pillow>=10.0.0`, `openpyxl>=3.1.0`, `rep
 
 Optional (thermal printer): `python-escpos`, `pywin32`
 
+## Running Tests
+
+```bash
+python verify_screens.py
+```
+
+This is the only test suite. It instantiates every screen with the real DB, calls `on_show()`, and checks that treeview rows are coloured with `ROW_COLORS` tags. It runs headless (no window appears). Exit code is 0 on all pass, 1 on any failure.
+
+To test a single screen in isolation, replicate the `FakeApp` stub from `verify_screens.py`:
+
+```python
+class FakeApp:
+    screens = {}
+    current_role = "admin"
+    def navigate_to(self, *a, **kw): pass
+    def rebuild_screen(self, *a, **kw): pass
+```
+
 ## Building the Executable
 
 ```bash
@@ -28,7 +46,7 @@ python run_build.py
 
 This runs PyInstaller with `PriyaStore.spec`, then copies `billing_data.db` and creates the `backups/` directory in `dist/PriyaStore/`. Output lands in `dist/PriyaStore/`.
 
-Alternatively, run PyInstaller directly:
+Alternatively:
 ```bash
 pyinstaller PriyaStore.spec --noconfirm
 ```
@@ -44,9 +62,13 @@ pyinstaller PriyaStore.spec --noconfirm
 ### Screen Construction Contract
 
 Every screen (e.g. `screen_billing.py`) follows the same pattern:
-- Constructor: build all widgets once
+- Constructor: build all widgets once; receives `(parent, db, current_user, app)` where `current_user` is `{"user_id": int, "username": str, "role": str}`
 - `on_show()`: reload data from DB and refresh the UI
-- Call `self.app.navigate_to(...)` or `self.app.rebuild_screen(...)` to cross-navigate
+- Use `self.app.navigate_to(key)` to switch screens (calls `on_show()` on the target). Use `self.app.rebuild_screen(key)` only when the screen must be fully re-instantiated (constructor re-runs), e.g. after a setting changes widget layout.
+
+### Popup / Dialog Pattern
+
+Every `CTkToplevel` dialog **must** call `place_popup(dlg, logical_w, logical_h, parent)` from `ui_utils.py` right after creation instead of calling `dlg.geometry()` directly. This corrects for widget-scaling vs window-scaling mismatch on high-DPI displays, clamps to the screen, and centres over the parent window.
 
 ### Database Layer (`database.py`)
 
@@ -61,6 +83,19 @@ DB path: `billing_data.db` next to the script (or next to the `.exe` when frozen
 
 **Tables:** `users`, `categories`, `customers`, `products`, `bills`, `bill_items`, `settings`, `activity_log`, `suppliers`, `purchase_entries`, `purchase_items`, `stock_adjustments`, `customer_transactions`, `supplier_payments`
 
+### Row Coloring Pattern (all treeviews)
+
+Every treeview uses a rotating 6-colour pastel palette defined as `COLORS["ROW_COLORS"]` in `config.py`. The pattern is:
+
+1. After inserting each row, tag it with `f"row{i % 6}"` where `i` is the row index.
+2. After populating the tree, configure each tag's background:
+   ```python
+   for i, color in enumerate(COLORS["ROW_COLORS"]):
+       tree.tag_configure(f"row{i}", background=color)
+   ```
+
+Special rows (low-stock, void bills, etc.) use override tags like `"low_stock"`, `"void"`, `"draft"` which are configured separately and take precedence. `verify_screens.py` checks that this pattern is correctly applied on every screen — any new treeview must follow it or the test will fail.
+
 ### Activity Logging
 
 Call `db.log_activity(user_id, action, details)` after every meaningful state change. Standard action strings (used by `screen_activity_log.py` for colour-coding): `LOGIN`, `LOGOUT`, `BILL_SAVED`, `BILL_VOIDED`, `GRN_SAVED`, `PRODUCT_*`, `USER_*`.
@@ -68,7 +103,7 @@ Call `db.log_activity(user_id, action, details)` after every meaningful state ch
 ### Config & Styling
 
 - **`config.py`** — single source of truth for `COLORS`, `FONTS`, `RADII`, `APP_TITLE`, `SHOP_NAME`, `WINDOW_WIDTH/HEIGHT`, `SIDEBAR_WIDTH`, `UNITS`, `PAYMENT_MODES`, `SHORTCUTS`. Never hardcode colors or font sizes in screen files.
-- **`styles.py`** — `setup_ttk_styles()` registers every named `ttk.Treeview` and `TScrollbar` style once at startup. Each screen references its pre-registered style by name (e.g. `"Bill.Treeview"`). Never create a new `ttk.Style()` inside a screen.
+- **`styles.py`** — `setup_ttk_styles()` registers every named `ttk.Treeview` and `TScrollbar` style once at startup. Each screen references its pre-registered style by name (e.g. `"Bill.Treeview"`). Never create a new `ttk.Style()` inside a screen. Style names are the short prefix form: `Dash`, `Bill`, `Prod`, `Inv`, `Sup`, `Cust`, `Rpt`, `Purch`, `User`, `Log`, `Cat`, `Cart`.
 - **`config.resource_path(*parts)`** — use this for any asset path (icons, images) so it works both in source and PyInstaller builds.
 
 ### Role-Based Access
@@ -91,6 +126,7 @@ The NAV list in `main.py:_build_sidebar` is the authoritative mapping of screen 
 - Font sizes: `FONTS["body"]=16`, `FONTS["heading"]=27`. Keep large for 60+ users.
 - Sidebar: deep navy gradient (`#1E3A8A` → `#0F172A`), drawn with a `tk.Canvas` gradient loop.
 - Cards: white with `COLORS["glass_border"]` borders — glassmorphism aesthetic.
-- Tables: all use `ttk.Treeview` with 48px row height. Always use the screen-specific named style.
+- Tables: all use `ttk.Treeview` with 48px row height. Always use the screen-specific named style and the ROW_COLORS tagging pattern described above.
 - Shop name is always "Priya Store" — enforced on every startup via `db.set_setting("shop_name", "Priya Store")`.
 - Billing screen keyboard shortcuts: `F2` search product, `F8` hold bill, `F10` print & save, `Del` remove item, `Esc` clear cart.
+- Responsive window: scales from 1280×720 (floor) to 4K via `_compute_fit()`. Widget scaling is set once via `ctk.set_widget_scaling()` — never call it again after startup.

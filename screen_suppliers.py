@@ -7,6 +7,7 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
 from config import COLORS, FONTS
+from ui_utils import place_popup
 
 
 class SupplierScreen(ctk.CTkFrame):
@@ -152,7 +153,7 @@ class SupplierScreen(ctk.CTkFrame):
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         title = "Edit Supplier" if supplier else "Add New Supplier"
         dlg.title(title)
-        dlg.geometry("520x580")
+        place_popup(dlg, 520, 580)
         dlg.resizable(False, True)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
@@ -268,7 +269,7 @@ class SupplierScreen(ctk.CTkFrame):
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title(f"Record Payment — {sup['name']}")
-        dlg.geometry("540x480")
+        place_popup(dlg, 540, 480)
         dlg.resizable(False, False)
         dlg.grab_set()
         dlg.attributes("-topmost", True)

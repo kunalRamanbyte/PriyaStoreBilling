@@ -166,13 +166,18 @@ def generate_pdf_bill(bill: dict, items: list, settings: dict,
     subtotal    = bill.get("subtotal",    0)
     discount    = bill.get("discount",    0)
     grand_total = bill.get("grand_total", 0)
+    udhaar_adj  = float(bill.get("udhaar_adjustment") or 0)
+    total_collect = round(grand_total + udhaar_adj, 2)
     amount_paid = bill.get("amount_paid", 0)
     change_due  = bill.get("change_due",  0)
+    balance_due = max(0, round(total_collect - amount_paid, 2))
 
     tot_lbl = ParagraphStyle("tl", fontSize=10, fontName="Helvetica",     textColor=BLACK, alignment=TA_RIGHT)
     tot_val = ParagraphStyle("tv", fontSize=10, fontName="Helvetica-Bold", textColor=BLACK, alignment=TA_RIGHT)
     gt_lbl  = ParagraphStyle("gl", fontSize=13, fontName="Helvetica-Bold", textColor=DBLUE, alignment=TA_RIGHT)
     gt_val  = ParagraphStyle("gv", fontSize=13, fontName="Helvetica-Bold", textColor=GREEN, alignment=TA_RIGHT)
+    warn_val = ParagraphStyle("wv", fontSize=10, fontName="Helvetica-Bold",
+                               textColor=colors.HexColor("#C2410C"), alignment=TA_RIGHT)
 
     totals_data = [
         [Paragraph("Subtotal:", tot_lbl), Paragraph(f"₹ {subtotal:,.2f}", tot_val)],
@@ -181,17 +186,38 @@ def generate_pdf_bill(bill: dict, items: list, settings: dict,
         totals_data.append(
             [Paragraph("Discount:", tot_lbl), Paragraph(f"- ₹ {discount:,.2f}", tot_val)]
         )
-    totals_data += [
-        [Paragraph("<b>GRAND TOTAL:</b>", gt_lbl), Paragraph(f"<b>₹ {grand_total:,.2f}</b>", gt_val)],
-        [Paragraph("Amount Paid:", tot_lbl),        Paragraph(f"₹ {amount_paid:,.2f}", tot_val)],
-        [Paragraph("Change Due:", tot_lbl),         Paragraph(f"₹ {change_due:,.2f}", tot_val)],
-    ]
-    gt_row = len(totals_data) - 3   # index of the GRAND TOTAL row
+    if udhaar_adj > 0:
+        totals_data.append(
+            [Paragraph("Prev. Udhaar:", tot_lbl), Paragraph(f"+ ₹ {udhaar_adj:,.2f}", warn_val)]
+        )
+    totals_data.append(
+        [Paragraph("<b>GRAND TOTAL:</b>", gt_lbl), Paragraph(f"<b>₹ {total_collect:,.2f}</b>", gt_val)]
+    )
+    totals_data.append(
+        [Paragraph("Amount Paid:", tot_lbl), Paragraph(f"₹ {amount_paid:,.2f}", tot_val)]
+    )
+    if change_due > 0:
+        totals_data.append(
+            [Paragraph("Change Due:", tot_lbl), Paragraph(f"₹ {change_due:,.2f}", tot_val)]
+        )
+    if balance_due > 0:
+        totals_data.append(
+            [Paragraph("<b>Balance Due:</b>", tot_lbl), Paragraph(f"<b>₹ {balance_due:,.2f}</b>", warn_val)]
+        )
+    if bill.get("payment_mode") == "Credit (Udhaar)":
+        credit_lbl = ParagraphStyle("cl", fontSize=11, fontName="Helvetica-Bold",
+                                     textColor=colors.HexColor("#DC2626"), alignment=TA_CENTER)
+        totals_data.append(
+            [Paragraph("", tot_lbl), Paragraph("** CREDIT SALE (UDHAAR) **", credit_lbl)]
+        )
+
+    gt_row_idx = next(i for i, row in enumerate(totals_data)
+                      if "GRAND TOTAL" in row[0].text)
     tot_tbl = Table(totals_data, colWidths=[130*mm, 46*mm])
     tot_tbl.setStyle(TableStyle([
-        ("LINEABOVE",     (0, gt_row), (-1, gt_row), 1.2, BLUE),
-        ("LINEBELOW",     (0, gt_row), (-1, gt_row), 1.2, BLUE),
-        ("BACKGROUND",    (0, gt_row), (-1, gt_row), colors.HexColor("#E3F2FD")),
+        ("LINEABOVE",     (0, gt_row_idx), (-1, gt_row_idx), 1.2, BLUE),
+        ("LINEBELOW",     (0, gt_row_idx), (-1, gt_row_idx), 1.2, BLUE),
+        ("BACKGROUND",    (0, gt_row_idx), (-1, gt_row_idx), colors.HexColor("#E3F2FD")),
         ("TOPPADDING",    (0,0), (-1,-1), 4),
         ("BOTTOMPADDING", (0,0), (-1,-1), 4),
         ("RIGHTPADDING",  (0,0), (-1,-1), 4),
@@ -213,83 +239,167 @@ def generate_pdf_bill(bill: dict, items: list, settings: dict,
 
 def _build_receipt_lines(bill: dict, items: list, settings: dict,
                           width: int = 48) -> list:
-    """Build list of plain-text receipt lines for the given paper width."""
-    shop_name  = settings.get("shop_name",    "FMCG Shop")
+    """Build list of plain-text receipt lines for the given paper width.
+
+    Layout inspired by the reference thermal receipt:
+      Shop name (centered, uppercase)
+      Address, City, Pincode (centered)
+      Contact: phone (centered)
+      ────────────────────────────────────
+      Name: Customer   (M: phone)
+      Adr: address
+      ────────────────────────────────────
+      Date: DD/MM/YY   Mode   Time
+      Cashier: xxx     Bill No.: xxx
+      ────────────────────────────────────
+      Item         Qty.  Price  Amount
+      ────────────────────────────────────
+      ...items...
+      ────────────────────────────────────
+      Total Qty: N    Sub Total  xxx.xx
+      Discount:                 -xxx.xx
+      Prev. Udhaar:             +xxx.xx
+      ====================================
+           Grand Total  ₹xxx.xx
+      ====================================
+      Amount Paid:              xxx.xx
+      Balance Due:              xxx.xx
+      ────────────────────────────────────
+          Thanks & Visit Again
+    """
+    shop_name  = settings.get("shop_name",    "Priya Store")
     shop_addr  = settings.get("shop_address", "")
+    shop_city  = settings.get("shop_city",    "")
     shop_phone = settings.get("shop_phone",   "")
     shop_gst   = settings.get("shop_gst",     "")
+    cashier    = settings.get("cashier",      "")
 
-    def center(s): return s[:width].center(width)
+    def center(s): return str(s)[:width].center(width)
     def ljr(left, right):
-        left  = str(left)[:width - len(str(right)) - 1]
-        return left + " " * (width - len(left) - len(str(right))) + str(right)
+        l, r = str(left), str(right)
+        l = l[:width - len(r) - 1]
+        return l + " " * (width - len(l) - len(r)) + r
 
-    sep  = "-" * width
-    dsep = "=" * width
+    sep  = "─" * width
+    dsep = "═" * width
 
-    lines = [
-        dsep,
-        center(shop_name.upper()),
-    ]
-    if shop_addr:
-        lines.append(center(shop_addr))
+    lines = []
+
+    # ── Shop header (centered) ──
+    lines.append("")
+    lines.append(center(shop_name.upper()))
+    addr = ", ".join(filter(None, [shop_addr, shop_city]))
+    if addr:
+        lines.append(center(addr))
     if shop_phone:
-        lines.append(center(shop_phone))
+        lines.append(center(f"Contact: {shop_phone}"))
     if shop_gst:
         lines.append(center(f"GST: {shop_gst}"))
-    lines.append(center("--- TAX INVOICE ---"))
-    lines.append(dsep)
-
-    # Bill info
-    lines.append(ljr(f"Bill: {bill['bill_number']}", str(bill.get('bill_date',''))[:10]))
-    lines.append(ljr(f"Cust: {bill.get('customer_name','Walk-in')[:20]}", bill.get('payment_mode','Cash')))
     lines.append(sep)
 
-    # Column header — adapt columns to paper width
-    if width >= 48:
-        # 80mm: #(3) Name(20) Qty(4) Rate(7) Disc(5) Amt(7) = 48 with spaces
-        hdr = f"{'#':>3} {'Item':<{width-28}} {'Qty':>4} {'Rate':>7} {'Disc':>5} {'Amt':>7}"
+    # ── Customer info block ──
+    cust = bill.get("customer_name", "Walk-in Customer")
+    cust_phone = bill.get("customer_phone", "")
+    cust_addr  = bill.get("customer_address", "")
+    if cust_phone:
+        lines.append(f"Name: {cust}  (M: {cust_phone})")
     else:
-        # 58mm: #(3) Name(10) Qty(3) Rate(5) Amt(7) = ~32
-        hdr = f"{'#':>2} {'Item':<{width-21}} {'Qty':>3} {'Rate':>5} {'Amt':>7}"
-    lines.append(hdr)
+        lines.append(f"Name: {cust}")
+    if cust_addr:
+        lines.append(f"Adr: {cust_addr}")
     lines.append(sep)
 
-    # Items
-    for idx, it in enumerate(items, 1):
-        name = str(it.get("product_name",""))
-        qty  = f"{it.get('quantity',0):.0f}"
-        rate = f"{it.get('unit_price',0):.0f}"
-        disc = f"{it.get('discount',0):.0f}"
-        amt  = f"{it.get('line_total',0):.2f}"
+    # ── Date / Time / Cashier / Bill No ──
+    raw_dt    = str(bill.get("bill_date", ""))
+    date_disp = raw_dt[:10] if len(raw_dt) >= 10 else ""
+    time_disp = raw_dt[11:16] if len(raw_dt) >= 16 else ""
+    # Try to format date as DD/MM/YY
+    try:
+        _dt = datetime.strptime(raw_dt[:19], "%Y-%m-%d %H:%M:%S")
+        date_disp = _dt.strftime("%d/%m/%y")
+        time_disp = _dt.strftime("%H:%M")
+    except Exception:
+        pass
 
+    mode = bill.get("payment_mode", "Cash")
+    # Line 1: Date + Mode + Time
+    lines.append(ljr(f"Date: {date_disp}    {mode}", time_disp))
+    # Line 2: Cashier + Bill No
+    lines.append(ljr(f"Cashier: {cashier}", f"Bill No.: {bill['bill_number']}"))
+    lines.append(sep)
+
+    # ── Column header ──
+    if width >= 48:
+        # Wide: Item (variable) | Qty (5) | Price (8) | Amount (8) = 21 fixed
+        nm = width - 23
+        lines.append(f"{'Item':<{nm}}  {'Qty.':<5}{'Price':>8} {'Amount':>8}")
+    else:
+        # Narrow: Item | Qty | Amt
+        nm = width - 13
+        lines.append(f"{'Item':<{nm}} {'Qty':>3} {'Amt':>7}")
+    lines.append(sep)
+
+    # ── Items ──
+    total_qty = 0
+    for it in items:
+        name = str(it.get("product_name", ""))
+        qty  = float(it.get("quantity", 0))
+        rate = float(it.get("unit_price", 0))
+        amt  = float(it.get("line_total", 0))
+        total_qty += qty
         if width >= 48:
-            max_name = width - 28
-            name = name[:max_name]
-            lines.append(f"{idx:>3} {name:<{max_name}} {qty:>4} {rate:>7} {disc:>5} {amt:>7}")
+            # If item name is too long, print on two lines
+            if len(name) > nm:
+                lines.append(name)
+                lines.append(f"{'':<{nm}}  {qty:<5.0f}{rate:>8.2f} {amt:>8.2f}")
+            else:
+                lines.append(f"{name:<{nm}}  {qty:<5.0f}{rate:>8.2f} {amt:>8.2f}")
         else:
-            max_name = width - 21
-            name = name[:max_name]
-            lines.append(f"{idx:>2} {name:<{max_name}} {qty:>3} {rate:>5} {amt:>7}")
+            name = name[:nm]
+            lines.append(f"{name:<{nm}} {qty:>3.0f} {amt:>7.2f}")
 
     lines.append(sep)
 
-    # Totals
-    lines.append(ljr("Subtotal:",    f"Rs.{bill.get('subtotal',0):>8.2f}"))
-    if bill.get("discount", 0):
-        lines.append(ljr("Discount:",  f" - {bill.get('discount',0):>8.2f}"))
-    lines.append(dsep)
-    lines.append(ljr("GRAND TOTAL:", f"Rs.{bill.get('grand_total',0):>8.2f}"))
-    lines.append(dsep)
-    lines.append(ljr("Amount Paid:", f"Rs.{bill.get('amount_paid',0):>8.2f}"))
-    lines.append(ljr("Change Due:",  f"Rs.{bill.get('change_due',0):>8.2f}"))
-    lines.append(sep)
+    # ── Totals ──
+    subtotal = float(bill.get("subtotal", 0))
+    discount = float(bill.get("discount", 0))
+    udhaar   = float(bill.get("udhaar_adjustment") or 0)
+    grand    = float(bill.get("grand_total", 0))
+    paid     = float(bill.get("amount_paid", 0))
+    change   = float(bill.get("change_due", 0))
+    total_collect = grand + udhaar
 
-    # Footer
-    lines.append(center("Thank you! Come again"))
-    lines.append(center(datetime.now().strftime("%d %b %Y  %I:%M %p")))
+    lines.append(ljr(f"Total Qty: {total_qty:.0f}", f"Sub Total  {subtotal:>8.2f}"))
+    if discount:
+        lines.append(ljr("Discount:", f"  -{discount:>8.2f}"))
+    if udhaar > 0:
+        lines.append(ljr("Prev. Udhaar:", f"  +{udhaar:>8.2f}"))
     lines.append("")
-    lines.append("")  # paper feed
+    lines.append(dsep)
+    lines.append(center(f"Grand Total  Rs.{total_collect:,.2f}"))
+    lines.append(dsep)
+    lines.append("")
+
+    # Payment info
+    lines.append(ljr("Amount Paid:", f"Rs.{paid:>8.2f}"))
+    balance_due = max(0, round(total_collect - paid, 2))
+    if change > 0:
+        lines.append(ljr("Change Due:", f"Rs.{change:>8.2f}"))
+    if balance_due > 0:
+        lines.append(ljr("Balance Due:", f"Rs.{balance_due:>8.2f}"))
+
+    # Show udhaar credit status if bill is credit mode
+    if bill.get("payment_mode") == "Credit (Udhaar)":
+        lines.append("")
+        lines.append(center("** CREDIT SALE (UDHAAR) **"))
+
+    lines.append(sep)
+
+    # ── Footer ──
+    lines.append("")
+    lines.append(center("Thanks & Visit Again"))
+    lines.append("")
+    lines.append("")
 
     return lines
 
@@ -313,98 +423,146 @@ def print_thermal(bill: dict, items: list, settings: dict,
         p = Win32Raw(default)
         p.open()
 
-        shop_name  = settings.get("shop_name",    "FMCG Shop")
-        shop_addr  = settings.get("shop_address",  "")
-        shop_phone = settings.get("shop_phone",    "")
-        shop_gst   = settings.get("shop_gst",      "")
-        sep        = "-" * char_width
-        eq_sep     = "=" * char_width
-        is_wide    = char_width >= 48   # 80mm paper
+        shop_name  = settings.get("shop_name",    "Priya Store")
+        shop_addr  = settings.get("shop_address", "")
+        shop_city  = settings.get("shop_city",    "")
+        shop_phone = settings.get("shop_phone",   "")
+        shop_gst   = settings.get("shop_gst",     "")
+        cashier    = settings.get("cashier",      "")
+        sep        = "─" * char_width
+        eq_sep     = "═" * char_width
+        is_wide    = char_width >= 48
 
         def ljr(left, right):
-            left  = str(left)[:char_width - len(str(right)) - 1]
-            return left + " " * (char_width - len(left) - len(str(right))) + str(right)
+            l, r = str(left), str(right)
+            l = l[:char_width - len(r) - 1]
+            return l + " " * (char_width - len(l) - len(r)) + r
 
-        # ── Shop Header — bold, double-size, centered ──
+        # ── Shop header — double-size bold shop name ──
         p.set(align="center", bold=True, width=2, height=2)
-        p.text(shop_name + "\n")
-
+        p.text(shop_name.upper() + "\n")
         p.set(align="center", bold=False, width=1, height=1)
-        if shop_addr:
-            p.text(shop_addr + "\n")
+        addr = ", ".join(filter(None, [shop_addr, shop_city]))
+        if addr:
+            p.text(addr + "\n")
         if shop_phone:
-            p.text(shop_phone + "\n")
+            p.text(f"Contact: {shop_phone}\n")
         if shop_gst:
-            p.text("GST: " + shop_gst + "\n")
-
-        p.set(align="center", bold=True, width=1, height=1)
-        p.text("--- TAX INVOICE ---\n")
-
-        p.set(align="left", bold=False, width=1, height=1)
-        p.text(eq_sep + "\n")
-
-        # ── Bill info — bold bill number ──
-        p.set(align="left", bold=True, width=1, height=1)
-        p.text(ljr("Bill: " + bill["bill_number"],
-                    str(bill.get("bill_date", ""))[:10]) + "\n")
-        p.set(align="left", bold=False, width=1, height=1)
-        p.text(ljr("Cust: " + bill.get("customer_name", "Walk-in")[:20],
-                    bill.get("payment_mode", "Cash")) + "\n")
+            p.text(f"GST: {shop_gst}\n")
         p.text(sep + "\n")
 
-        # ── Column header — bold, with numbering ──
+        # ── Customer info block ──
+        p.set(align="left", bold=False, width=1, height=1)
+        cust = bill.get("customer_name", "Walk-in Customer")
+        cust_phone = bill.get("customer_phone", "")
+        cust_addr  = bill.get("customer_address", "")
+        if cust_phone:
+            p.text(f"Name: {cust}  (M: {cust_phone})\n")
+        else:
+            p.text(f"Name: {cust}\n")
+        if cust_addr:
+            p.text(f"Adr: {cust_addr}\n")
+        p.text(sep + "\n")
+
+        # ── Date / Time / Cashier / Bill No ──
+        raw_dt    = str(bill.get("bill_date", ""))
+        date_disp = raw_dt[:10] if len(raw_dt) >= 10 else ""
+        time_disp = raw_dt[11:16] if len(raw_dt) >= 16 else ""
+        try:
+            _dt = datetime.strptime(raw_dt[:19], "%Y-%m-%d %H:%M:%S")
+            date_disp = _dt.strftime("%d/%m/%y")
+            time_disp = _dt.strftime("%H:%M")
+        except Exception:
+            pass
+
+        mode = bill.get("payment_mode", "Cash")
+        p.set(align="left", bold=False, width=1, height=1)
+        p.text(ljr(f"Date: {date_disp}    {mode}", time_disp) + "\n")
+        p.set(align="left", bold=True, width=1, height=1)
+        p.text(ljr(f"Cashier: {cashier}", f"Bill No.: {bill['bill_number']}") + "\n")
+        p.text(sep + "\n")
+
+        # ── Column header ──
         p.set(align="left", bold=True, width=1, height=1)
         if is_wide:
-            hdr = f"{'#':>3} {'Item':<{char_width-28}} {'Qty':>4} {'Rate':>7} {'Disc':>5} {'Amt':>7}"
+            nm  = char_width - 23
+            hdr = f"{'Item':<{nm}}  {'Qty.':<5}{'Price':>8} {'Amount':>8}"
         else:
-            hdr = f"{'#':>2} {'Item':<{char_width-21}} {'Qty':>3} {'Rate':>5} {'Amt':>7}"
+            nm  = char_width - 13
+            hdr = f"{'Item':<{nm}} {'Qty':>3} {'Amt':>7}"
         p.text(hdr + "\n")
         p.text(sep + "\n")
 
-        # ── Items — normal, numbered ──
+        # ── Items ──
         p.set(align="left", bold=False, width=1, height=1)
-        for idx, it in enumerate(items, 1):
+        total_qty = 0
+        for it in items:
             name = str(it.get("product_name", ""))
-            qty  = f"{it.get('quantity', 0):.0f}"
-            rate = f"{it.get('unit_price', 0):.0f}"
-            disc = f"{it.get('discount', 0):.0f}"
-            amt  = f"{it.get('line_total', 0):.2f}"
-
+            qty  = float(it.get("quantity", 0))
+            rate = float(it.get("unit_price", 0))
+            amt  = float(it.get("line_total", 0))
+            total_qty += qty
             if is_wide:
-                max_name = char_width - 28
-                name = name[:max_name]
-                p.text(f"{idx:>3} {name:<{max_name}} {qty:>4} {rate:>7} {disc:>5} {amt:>7}\n")
+                if len(name) > nm:
+                    p.text(name + "\n")
+                    p.text(f"{'':<{nm}}  {qty:<5.0f}{rate:>8.2f} {amt:>8.2f}\n")
+                else:
+                    p.text(f"{name:<{nm}}  {qty:<5.0f}{rate:>8.2f} {amt:>8.2f}\n")
             else:
-                max_name = char_width - 21
-                name = name[:max_name]
-                p.text(f"{idx:>2} {name:<{max_name}} {qty:>3} {rate:>5} {amt:>7}\n")
-
+                name = name[:nm]
+                p.text(f"{name:<{nm}} {qty:>3.0f} {amt:>7.2f}\n")
         p.text(sep + "\n")
 
-        # ── Totals ──
+        # ── Subtotal / discount / udhaar ──
+        subtotal = float(bill.get("subtotal", 0))
+        discount = float(bill.get("discount", 0))
+        udhaar   = float(bill.get("udhaar_adjustment") or 0)
+        grand    = float(bill.get("grand_total", 0))
+        paid     = float(bill.get("amount_paid", 0))
+        change   = float(bill.get("change_due", 0))
+        total_collect = grand + udhaar
+
         p.set(align="left", bold=False, width=1, height=1)
-        p.text(ljr("Subtotal:", f"Rs.{bill.get('subtotal', 0):>8.2f}") + "\n")
-        if bill.get("discount", 0):
-            p.text(ljr("Discount:", f" - {bill.get('discount', 0):>8.2f}") + "\n")
+        p.text(ljr(f"Total Qty: {total_qty:.0f}", f"Sub Total  {subtotal:>8.2f}") + "\n")
+        if discount:
+            p.text(ljr("Discount:", f"  -{discount:>8.2f}") + "\n")
+        if udhaar > 0:
+            p.text(ljr("Prev. Udhaar:", f"  +{udhaar:>8.2f}") + "\n")
 
-        # Grand total — bold + double height, sandwiched between double lines
+        # ── Grand total — bold + double height, centered ──
+        p.text("\n")
         p.text(eq_sep + "\n")
-        p.set(align="left", bold=True, width=1, height=2)
-        p.text(ljr("GRAND TOTAL:", f"Rs.{bill.get('grand_total', 0):>8.2f}") + "\n")
+        p.set(align="center", bold=True, width=2, height=2)
+        p.text(f"Grand Total  Rs.{total_collect:,.2f}\n")
         p.set(align="left", bold=False, width=1, height=1)
         p.text(eq_sep + "\n")
+        p.text("\n")
 
-        p.text(ljr("Amount Paid:", f"Rs.{bill.get('amount_paid', 0):>8.2f}") + "\n")
-        p.text(ljr("Change Due:",  f"Rs.{bill.get('change_due', 0):>8.2f}") + "\n")
+        # ── Payment info ──
+        p.text(ljr("Amount Paid:", f"Rs.{paid:>8.2f}") + "\n")
+        balance_due = max(0, round(total_collect - paid, 2))
+        if change > 0:
+            p.text(ljr("Change Due:", f"Rs.{change:>8.2f}") + "\n")
+        if balance_due > 0:
+            p.set(align="left", bold=True, width=1, height=1)
+            p.text(ljr("Balance Due:", f"Rs.{balance_due:>8.2f}") + "\n")
+            p.set(align="left", bold=False, width=1, height=1)
 
+        # ── Credit sale indicator ──
+        if bill.get("payment_mode") == "Credit (Udhaar)":
+            p.text("\n")
+            p.set(align="center", bold=True, width=1, height=1)
+            p.text("** CREDIT SALE (UDHAAR) **\n")
+
+        p.set(align="left", bold=False, width=1, height=1)
         p.text(sep + "\n")
 
-        # ── Footer — centered ──
+        # ── Footer ──
+        p.text("\n")
         p.set(align="center", bold=True, width=1, height=1)
-        p.text("Thank you! Come again\n")
+        p.text("Thanks & Visit Again\n")
         p.set(align="center", bold=False, width=1, height=1)
-        p.text(datetime.now().strftime("%d %b %Y  %I:%M %p") + "\n")
-        p.text("\n\n\n")   # paper feed
+        p.text("\n\n\n")
 
         p.cut()
         p.close()
@@ -423,7 +581,7 @@ def print_thermal(bill: dict, items: list, settings: dict,
         default = win32print.GetDefaultPrinter()
         tmp = tempfile.NamedTemporaryFile(
             suffix=".txt", delete=False, mode="w",
-            encoding="cp1252", errors="replace"
+            encoding="utf-8", errors="replace"
         )
         tmp.write(txt)
         tmp.close()
@@ -433,3 +591,4 @@ def print_thermal(bill: dict, items: list, settings: dict,
         return True, default
     except Exception as e:
         return False, f"Plain-text fallback failed: {e}"
+

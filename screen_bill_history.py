@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from datetime import date, timedelta
 from config import COLORS, FONTS
+from ui_utils import place_popup
 
 
 class BillHistoryScreen(ctk.CTkFrame):
@@ -214,7 +215,7 @@ class BillHistoryScreen(ctk.CTkFrame):
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title(f"Bill — {bill['bill_number']}")
-        dlg.geometry("520x600")
+        place_popup(dlg, 520, 600)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
 
@@ -276,10 +277,9 @@ class BillHistoryScreen(ctk.CTkFrame):
                       command=dlg.destroy).pack(side="left")
 
     def _pdf_bill(self, bill: dict, items: list):
-        """Generate PDF for a bill from History."""
+        """Generate PDF for a bill and auto-open it."""
         try:
             from bill_printer import generate_pdf_bill, open_file
-            import tkinter.filedialog as fd
             settings = {
                 "shop_name"   : self.db.get_setting("shop_name",    ""),
                 "shop_address": self.db.get_setting("shop_address",  ""),
@@ -287,23 +287,14 @@ class BillHistoryScreen(ctk.CTkFrame):
                 "shop_phone"  : self.db.get_setting("shop_phone",    ""),
                 "shop_gst"    : self.db.get_setting("shop_gst",      ""),
             }
-            path = fd.asksaveasfilename(
-                defaultextension=".pdf",
-                filetypes=[("PDF file", "*.pdf")],
-                initialfile=f"Bill_{bill['bill_number']}.pdf",
-                title="Save PDF Bill",
-                parent=self.winfo_toplevel(),
-            )
-            if not path:
-                return
-            generate_pdf_bill(bill, items, settings, path)
+            path = generate_pdf_bill(bill, items, settings)
             open_file(path)
         except Exception as e:
             messagebox.showerror("PDF Error", str(e),
                                  parent=self.winfo_toplevel())
 
     def _reprint_bill(self):
-        """Show receipt popup with Thermal / PDF options — same as after billing."""
+        """Reprint selected bill as PDF — auto-opens without save dialog."""
         bill_id = self._get_selected_bill_id()
         if not bill_id:
             return
@@ -315,19 +306,7 @@ class BillHistoryScreen(ctk.CTkFrame):
                                    "This bill has been voided and cannot be reprinted.",
                                    parent=self.winfo_toplevel())
             return
-        # Use billing screen's receipt popup so user can choose Thermal or PDF
-        bs = self.app.screens.get("billing")
-        if bs and hasattr(bs, "_show_receipt"):
-            bs._show_receipt(bill_id)
-        else:
-            # Fallback: show simple info
-            messagebox.showinfo(
-                "Reprint",
-                f"Bill {bill['bill_number']}\n"
-                f"Customer: {bill.get('customer_name', 'Walk-in')}\n"
-                f"Total: ₹{bill['grand_total']:,.2f}",
-                parent=self.winfo_toplevel()
-            )
+        self._pdf_bill(bill, items)
 
     def _void_bill(self):
         bill_id = self._get_selected_bill_id()

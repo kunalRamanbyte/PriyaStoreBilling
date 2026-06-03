@@ -5,7 +5,7 @@ Add, edit, colour-code product categories.
 
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import ttk, messagebox, colorchooser
+from tkinter import messagebox, colorchooser
 from config import COLORS, FONTS, CAT_COLORS
 
 
@@ -135,13 +135,30 @@ class CategoryScreen(ctk.CTkFrame):
             ctk.CTkLabel(self.cat_cards_frame, text="No categories yet.\nAdd one using the form →",
                          font=FONTS["body"], text_color=COLORS["text_muted"],
                          justify="center").pack(pady=40)
-            return
+        else:
+            for cat in cats:
+                self._make_cat_card(cat)
 
-        for cat in cats:
-            self._make_cat_card(cat)
+        self.cat_cards_frame.update_idletasks()
+        self.list_frame._parent_canvas.yview_moveto(0)
+
+    @staticmethod
+    def _safe_color(value):
+        """Return a usable colour. Falls back to the default slate when the
+        stored colour_code is missing or not a valid hex code (e.g. legacy/bad
+        rows where a note got saved in the colour field) — otherwise passing it
+        to a widget's fg_color raises TclError and aborts the whole list build."""
+        default = COLORS["cat_default"]
+        if not value or not isinstance(value, str):
+            return default
+        v = value.strip()
+        if (len(v) in (4, 7) and v.startswith("#")
+                and all(ch in "0123456789abcdefABCDEF" for ch in v[1:])):
+            return v
+        return default
 
     def _make_cat_card(self, cat):
-        color = cat.get("colour_code", "#607D8B")
+        color = self._safe_color(cat.get("colour_code"))
         card = ctk.CTkFrame(self.cat_cards_frame, fg_color=COLORS["bg_card"],
                              corner_radius=16, height=60)
         card.pack(fill="x", pady=4)
@@ -202,6 +219,8 @@ class CategoryScreen(ctk.CTkFrame):
 
         if self._editing_id:
             self.db.update_category(self._editing_id, name, color)
+            self._reset_form()
+            self._load_categories()
             messagebox.showinfo("Saved", f"Category '{name}' updated.",
                                 parent=self.winfo_toplevel())
         else:
@@ -209,11 +228,10 @@ class CategoryScreen(ctk.CTkFrame):
             if not ok:
                 self.err_lbl.configure(text="⚠  Category name already exists.")
                 return
+            self._reset_form()
+            self._load_categories()
             messagebox.showinfo("Added", f"Category '{name}' added.",
                                 parent=self.winfo_toplevel())
-
-        self._reset_form()
-        self._load_categories()
 
     def _edit_category(self, cat):
         self._editing_id = cat["category_id"]

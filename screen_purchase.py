@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import date
 from config import COLORS, FONTS
+from ui_utils import place_popup
 
 
 class PurchaseScreen(ctk.CTkFrame):
@@ -338,7 +339,7 @@ class PurchaseScreen(ctk.CTkFrame):
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title("Add Item" if new else "Edit Item")
-        dlg.geometry("420x360")
+        place_popup(dlg, 420, 360)
         dlg.resizable(False, False)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
@@ -503,6 +504,149 @@ class PurchaseScreen(ctk.CTkFrame):
         self.prod_search_var.set("")
 
     # ─────────────────────────────────────────────────────────────
+    # GRN PDF
+    # ─────────────────────────────────────────────────────────────
+    def _print_grn_pdf(self, purchase: dict, items: list, parent_dlg=None):
+        from tkinter import filedialog
+        parent = parent_dlg or self.winfo_toplevel()
+        path = filedialog.asksaveasfilename(
+            defaultextension=".pdf",
+            filetypes=[("PDF file", "*.pdf")],
+            initialfile=f"GRN_{purchase.get('grn_number', 'receipt')}.pdf",
+            title="Save GRN PDF",
+            parent=parent,
+        )
+        if not path:
+            return
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.units import mm
+            from reportlab.lib import colors
+            from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
+                                             Paragraph, Spacer)
+            from reportlab.lib.styles import ParagraphStyle
+            from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+            import os
+
+            BLUE  = colors.HexColor(COLORS["btn_primary"])
+            GREEN = colors.HexColor(COLORS["btn_success"])
+            WHITE = colors.white
+            LGRAY = colors.HexColor("#F5F7FF")
+            DARK  = colors.HexColor("#0F172A")
+            MUTED = colors.HexColor("#64748B")
+
+            doc = SimpleDocTemplate(
+                path, pagesize=A4,
+                leftMargin=18*mm, rightMargin=18*mm,
+                topMargin=14*mm, bottomMargin=14*mm,
+            )
+
+            h1  = ParagraphStyle("h1",  fontSize=16, fontName="Helvetica-Bold",
+                                  textColor=BLUE, alignment=TA_CENTER, spaceAfter=3)
+            sub = ParagraphStyle("sub", fontSize=10, fontName="Helvetica",
+                                  textColor=MUTED, alignment=TA_CENTER, spaceAfter=6)
+            lbl = ParagraphStyle("lbl", fontSize=9,  fontName="Helvetica-Bold", textColor=DARK)
+            val = ParagraphStyle("val", fontSize=9,  fontName="Helvetica",      textColor=DARK)
+            th  = ParagraphStyle("th",  fontSize=9,  fontName="Helvetica-Bold", textColor=WHITE)
+            td  = ParagraphStyle("td",  fontSize=9,  fontName="Helvetica",      textColor=DARK)
+            tr  = ParagraphStyle("tr",  fontSize=9,  fontName="Helvetica",      textColor=DARK,
+                                  alignment=TA_RIGHT)
+
+            shop = self.db.get_setting("shop_name", "Priya Store")
+            grn_date = str(purchase.get("purchase_date", ""))[:10]
+
+            story = [
+                Paragraph(shop, h1),
+                Paragraph("Goods Received Note (GRN)", sub),
+                Spacer(1, 3*mm),
+            ]
+
+            # Meta block
+            meta_rows = [
+                [Paragraph("GRN Number:", lbl), Paragraph(str(purchase.get("grn_number", "")), val),
+                 Paragraph("Date:", lbl),        Paragraph(grn_date, val)],
+                [Paragraph("Supplier:", lbl),    Paragraph(str(purchase.get("supplier_name", "—")), val),
+                 Paragraph("Notes:", lbl),        Paragraph(str(purchase.get("notes", "") or "—"), val)],
+            ]
+            meta_tbl = Table(meta_rows, colWidths=[28*mm, 62*mm, 22*mm, 62*mm])
+            meta_tbl.setStyle(TableStyle([
+                ("TOPPADDING",    (0,0), (-1,-1), 3),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+            ]))
+            story += [meta_tbl, Spacer(1, 4*mm)]
+
+            # Items table header
+            col_w = [10*mm, 72*mm, 18*mm, 20*mm, 28*mm, 28*mm]
+            tbl_data = [[
+                Paragraph("#",            th),
+                Paragraph("Product Name", th),
+                Paragraph("Unit",         th),
+                Paragraph("Qty",          th),
+                Paragraph("Price (Rs.)",  th),
+                Paragraph("Total (Rs.)",  th),
+            ]]
+            for i, it in enumerate(items, 1):
+                tbl_data.append([
+                    Paragraph(str(i),                              td),
+                    Paragraph(str(it.get("product_name", "")),     td),
+                    Paragraph(str(it.get("unit", "")),             td),
+                    Paragraph(f"{it.get('quantity', 0):.2f}",      tr),
+                    Paragraph(f"{it.get('unit_price', 0):.2f}",    tr),
+                    Paragraph(f"{it.get('line_total', 0):.2f}",    tr),
+                ])
+
+            items_tbl = Table(tbl_data, colWidths=col_w, repeatRows=1)
+            items_tbl.setStyle(TableStyle([
+                ("BACKGROUND",    (0, 0), (-1, 0), BLUE),
+                ("ROWBACKGROUNDS",(0, 1), (-1,-1), [WHITE, LGRAY]),
+                ("GRID",          (0, 0), (-1,-1), 0.3, colors.HexColor(COLORS["border"])),
+                ("TOPPADDING",    (0, 0), (-1,-1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1,-1), 4),
+                ("LEFTPADDING",   (0, 0), (-1,-1), 5),
+                ("RIGHTPADDING",  (0, 0), (-1,-1), 5),
+            ]))
+            story += [items_tbl, Spacer(1, 3*mm)]
+
+            # Grand total row
+            grand = purchase.get("total_amount", 0)
+            gt_lbl = ParagraphStyle("gl", fontSize=10, fontName="Helvetica-Bold",
+                                     textColor=BLUE, alignment=TA_RIGHT)
+            gt_val = ParagraphStyle("gv", fontSize=10, fontName="Helvetica-Bold",
+                                     textColor=GREEN, alignment=TA_RIGHT)
+            tot_tbl = Table(
+                [[Paragraph(""), Paragraph(""), Paragraph(""),
+                  Paragraph(""),
+                  Paragraph("GRAND TOTAL", gt_lbl),
+                  Paragraph(f"Rs. {grand:,.2f}", gt_val)]],
+                colWidths=col_w,
+            )
+            tot_tbl.setStyle(TableStyle([
+                ("TOPPADDING",    (0,0), (-1,-1), 4),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+            ]))
+            story += [tot_tbl, Spacer(1, 5*mm)]
+
+            note = ParagraphStyle("note", fontSize=9, fontName="Helvetica-Oblique",
+                                   textColor=GREEN)
+            story.append(Paragraph("Stock has been updated for all items in this GRN.", note))
+
+            doc.build(story)
+            messagebox.showinfo("PDF Saved", f"GRN saved to:\n{path}", parent=parent)
+            try:
+                os.startfile(path)
+            except Exception:
+                pass
+
+        except ImportError:
+            messagebox.showerror(
+                "Missing Library",
+                "reportlab is required.\nRun:  pip install reportlab",
+                parent=parent,
+            )
+        except Exception as e:
+            messagebox.showerror("PDF Error", str(e), parent=parent)
+
+    # ─────────────────────────────────────────────────────────────
     # GRN Receipt popup
     # ─────────────────────────────────────────────────────────────
     def _show_grn_receipt(self, purchase_id):
@@ -512,7 +656,7 @@ class PurchaseScreen(ctk.CTkFrame):
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title("GRN Saved ✅")
-        dlg.geometry("520x520")
+        place_popup(dlg, 520, 520)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
 
@@ -556,11 +700,18 @@ class PurchaseScreen(ctk.CTkFrame):
                      font=FONTS["body_bold"], text_color=COLORS["btn_success"]
                     ).pack(pady=(0, 16), padx=24)
 
-        ctk.CTkButton(dlg, text="Close",
+        btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
+        btn_row.pack(fill="x", padx=24, pady=16)
+        ctk.CTkButton(btn_row, text="📄  Print PDF",
+                      font=FONTS["button"], fg_color=COLORS["btn_purple"],
+                      height=48, corner_radius=16,
+                      command=lambda: self._print_grn_pdf(p, items, dlg)
+                     ).pack(side="left", fill="x", expand=True, padx=(0, 8))
+        ctk.CTkButton(btn_row, text="Close",
                       font=FONTS["button"], fg_color=COLORS["btn_primary"],
                       height=48, corner_radius=16,
                       command=dlg.destroy
-                     ).pack(fill="x", padx=24, pady=16)
+                     ).pack(side="left", fill="x", expand=True)
 
     # ─────────────────────────────────────────────────────────────
     # GRN History
@@ -568,7 +719,7 @@ class PurchaseScreen(ctk.CTkFrame):
     def _show_grn_history(self):
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title("GRN History")
-        dlg.geometry("900x560")
+        place_popup(dlg, 900, 560)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
 

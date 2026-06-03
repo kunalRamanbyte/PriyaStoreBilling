@@ -14,6 +14,7 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
 from config import COLORS, FONTS
+from ui_utils import place_popup
 
 ROLE_LABELS = {
     "admin"        : "Admin",
@@ -197,7 +198,7 @@ class UserScreen(ctk.CTkFrame):
         is_edit = user is not None
         dlg = ctk.CTkToplevel(self)
         dlg.title("Edit User" if is_edit else "Add New User")
-        dlg.geometry("480x480")
+        place_popup(dlg, 480, 480)
         dlg.resizable(False, False)
         dlg.grab_set()
         dlg.configure(fg_color=COLORS["bg_main"])
@@ -306,7 +307,7 @@ class UserScreen(ctk.CTkFrame):
 
         dlg = ctk.CTkToplevel(self)
         dlg.title("Change Password")
-        dlg.geometry("420x300")
+        place_popup(dlg, 420, 300)
         dlg.resizable(False, False)
         dlg.grab_set()
         dlg.configure(fg_color=COLORS["bg_main"])

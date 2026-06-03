@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import date
 from config import COLORS, FONTS, UNITS
+from ui_utils import place_popup
 
 
 class ProductScreen(ctk.CTkFrame):
@@ -227,7 +228,7 @@ class ProductScreen(ctk.CTkFrame):
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         title = "Edit Product" if product else "Add New Product"
         dlg.title(title)
-        dlg.geometry("540x640")
+        place_popup(dlg, 540, 640)
         dlg.resizable(False, True)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
