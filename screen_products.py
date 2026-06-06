@@ -10,6 +10,7 @@ from datetime import date
 from config import COLORS, FONTS, UNITS
 from ui_utils import place_popup, open_date_picker
 from lang import t
+from webcam_scanner import WebcamScanner
 
 
 class ProductScreen(ctk.CTkFrame):
@@ -199,11 +200,11 @@ class ProductScreen(ctk.CTkFrame):
                 ("✅ " + t("Active", L)) if p["is_active"] else ("❌ " + t("Deactivate", L)),
             ), tags=tags)
 
-        self.tree.tag_configure("expired",  background=COLORS["row_expired"])
-        self.tree.tag_configure("expiring", background=COLORS["row_expiring"])
-        self.tree.tag_configure("low",      background=COLORS["tbl_low_stock"])
+        self.tree.tag_configure("expired",  background=COLORS["row_expired"], foreground=COLORS["text_dark"])
+        self.tree.tag_configure("expiring", background=COLORS["row_expiring"], foreground=COLORS["text_dark"])
+        self.tree.tag_configure("low",      background=COLORS["tbl_low_stock"], foreground=COLORS["text_dark"])
         for idx, color in enumerate(COLORS["ROW_COLORS"]):
-            self.tree.tag_configure(f"row{idx}", background=color)
+            self.tree.tag_configure(f"row{idx}", background=color, foreground=COLORS["text_dark"])
         self.count_label.configure(text=t("product(s)", L).format(n=len(prods)))
 
     def _get_selected_product_id(self):
@@ -252,19 +253,28 @@ class ProductScreen(ctk.CTkFrame):
 
         entries = {}
 
-        def field(label, key, default="", placeholder="", wide=False):
+        def field(label, key, default="", placeholder="", wide=False, show_scan=False):
             f = ctk.CTkFrame(scroll, fg_color="transparent")
             f.pack(fill="x", padx=24, pady=5)
             ctk.CTkLabel(f, text=label, font=FONTS["label_form"],
                          text_color=COLORS["text_dark"],
                          width=165, anchor="w").pack(side="left")
             var = tk.StringVar(value=str(default) if default not in (None, "") else "")
+            entry_width = 290 if wide else (160 if show_scan else 220)
             entry = ctk.CTkEntry(f, textvariable=var,
                                  placeholder_text=placeholder,
                                  font=FONTS["input"], height=40,
                                  border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"],
-                                 width=290 if wide else 220)
+                                 width=entry_width)
             entry.pack(side="left")
+            if show_scan:
+                scan_btn = ctk.CTkButton(
+                    f, text="📷", font=("Segoe UI", 16),
+                    width=50, height=40, corner_radius=10,
+                    fg_color=COLORS.get("btn_primary", "#3B82F6"), hover_color="#2563EB",
+                    command=lambda: WebcamScanner(dlg, self.app, callback=lambda val: var.set(val))
+                )
+                scan_btn.pack(side="left", padx=(6, 0))
             entries[key] = var
             return var
 
@@ -278,13 +288,13 @@ class ProductScreen(ctk.CTkFrame):
             ctk.CTkOptionMenu(f, variable=var, values=values,
                               font=FONTS["input"], height=40, width=220,
                               fg_color=COLORS["btn_primary"], button_color="#005BBE"
-                             ).pack(side="left")
+                              ).pack(side="left")
             entries[key] = var
 
         p = product or {}
 
         field(t("Product Name *", L),      "name",          p.get("name",""),        "e.g. Aashirvaad Atta 5kg", wide=True)
-        field(t("Product Code", L),        "product_code",  p.get("product_code",""),"Auto-generated if blank")
+        field(t("Product Code", L),        "product_code",  p.get("product_code",""),"Auto-generated if blank", show_scan=True)
         dropdown(t("Category *", L),       "category",      c_names,                 p.get("category_name", c_names[0] if c_names else ""))
         field(t("Brand", L),               "brand",         p.get("brand",""),       t("Optional", L))
         dropdown(t("Unit *", L),           "unit",          UNITS,                   p.get("unit","piece"))

@@ -333,8 +333,14 @@ class ReportScreen(ctk.CTkFrame):
         cols = [c[0] for c in rpt["cols"]]
         self.tree.configure(columns=cols)
         for key, head, w in rpt["cols"]:
-            self.tree.heading(key, text=t(head, L))
-            self.tree.column(key, width=w, minwidth=50)
+            # Align columns and headings consistently: right-align numeric/currency, center-align codes/dates, left-align text
+            anch = "w"
+            if any(term in key for term in ["total", "sales", "revenue", "price", "cost", "margin", "profit", "amount", "due", "balance", "value", "val", "disc", "rate"]):
+                anch = "e"
+            elif any(term in key for term in ["qty", "count", "bills", "items", "rank", "age", "phone", "date", "grn", "code", "status", "unit", "txn", "created", "at", "time", "sold", "stock", "reorder", "shortage"]):
+                anch = "center"
+            self.tree.heading(key, text=t(head, L), anchor=anch)
+            self.tree.column(key, width=w, anchor=anch, minwidth=50)
 
         # Row colouring for certain reports
         danger_keys  = {"out_of_stock", "Out of Stock"}
@@ -631,8 +637,8 @@ class ReportScreen(ctk.CTkFrame):
         tree = ttk.Treeview(frame, columns=cols, show="headings",
                              style="Rpt.Treeview", selectmode="browse")
         for col, head, w in zip(cols, heads, widths):
-            tree.heading(col, text=head)
-            anch = "e" if col == "total" else "w"
+            anch = "center" if col in ("bill_no", "time", "status") else ("e" if col == "total" else "w")
+            tree.heading(col, text=head, anchor=anch)
             tree.column(col, width=w, anchor=anch, minwidth=50)
 
         vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)

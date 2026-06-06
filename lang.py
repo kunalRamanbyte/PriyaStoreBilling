@@ -716,6 +716,32 @@ T = {
         "বর্তমান স্টক ({stock}) এর বেশি সরানো যাবে না।",
         "वर्तमान स्टॉक ({stock}) से अधिक नहीं हटा सकते।"
     ],
+    "Scan": ["📷 Scan", "📷 স্ক্যান", "📷 स्कैन"],
+    "Align QR/Barcode within camera frame": [
+        "Align QR/Barcode within camera frame",
+        "QR/বারকোড ক্যামেরার ফ্রেমে রাখুন",
+        "QR/बारकोड को कैमरे के फ्रेम में रखें"
+    ],
+    "Initializing Camera...": [
+        "Initializing Camera...",
+        "ক্যামেরা চালু হচ্ছে...",
+        "कैमरा शुरू हो रहा है..."
+    ],
+    "Camera Error": [
+        "Camera Error",
+        "ক্যামেরা এরর",
+        "कैमरा एरर"
+    ],
+    "Webcam Scanner": [
+        "Webcam Scanner",
+        "ওয়েবক্যাম স্ক্যানার",
+        "वेबकैम स्कैनर"
+    ],
+    "No product found for code": [
+        "No product found for code '{code}'",
+        "কোড '{code}' এর জন্য কোনো প্রোডাক্ট পাওয়া যায়নি",
+        "कोड '{code}' के लिए कोई प्रोडक्ट नहीं मिला"
+    ],
 }
 
 # ── Internal index map ─────────────────────────────────────────────

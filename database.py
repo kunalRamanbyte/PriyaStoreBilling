@@ -454,6 +454,18 @@ class Database:
             ).fetchone()
             return dict(row) if row else None
 
+    def get_product_by_code(self, product_code: str):
+        """Fetch an active product by exact product_code match."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT p.*, c.name AS category_name, c.colour_code
+                   FROM products p
+                   LEFT JOIN categories c ON p.category_id=c.category_id
+                   WHERE p.product_code = ? AND p.is_active = 1""",
+                (product_code,)
+            ).fetchone()
+            return dict(row) if row else None
+
     def add_product(self, data: dict) -> int:
         with self.get_conn() as conn:
             cur = conn.execute(

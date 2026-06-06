@@ -10,6 +10,7 @@ from datetime import date
 from config import COLORS, FONTS, UNITS
 from ui_utils import place_popup, open_date_picker
 from lang import t
+from webcam_scanner import WebcamScanner
 
 
 class PurchaseScreen(ctk.CTkFrame):
@@ -105,11 +106,24 @@ class PurchaseScreen(ctk.CTkFrame):
         self.prod_entry.bind("<Return>", lambda e: self._search_product())
         self._popup = None
 
+        self.scan_btn = ctk.CTkButton(
+            sbar,
+            text=t("Scan", L),
+            font=FONTS["button"],
+            fg_color=COLORS["btn_primary"],
+            hover_color="#005BBE",
+            height=42,
+            width=90,
+            corner_radius=10,
+            command=self._open_webcam_scanner
+        )
+        self.scan_btn.grid(row=0, column=1, padx=(0, 10), pady=8)
+
         ctk.CTkButton(sbar, text=t("Add New Item", L),
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
                       height=42, width=160, corner_radius=10,
                       command=self._open_new_product_form
-                     ).grid(row=0, column=1, padx=(0, 16), pady=8)
+                     ).grid(row=0, column=2, padx=(0, 16), pady=8)
 
         # Cart table
         tbl_frame = ctk.CTkFrame(left, fg_color=COLORS["bg_card"], corner_radius=16)
@@ -229,6 +243,36 @@ class PurchaseScreen(ctk.CTkFrame):
         self._supplier_map = {s["name"]: s["supplier_id"] for s in sups}
         self.supplier_menu.configure(values=names)
 
+    def _open_webcam_scanner(self):
+        WebcamScanner(self, self.app, callback=self._on_webcam_scanned)
+
+    def _on_webcam_scanned(self, code):
+        if not code:
+            return
+        product = self.db.get_product_by_code(code)
+        if product:
+            self._add_product_to_cart(product)
+        else:
+            # Product not found in system — give options
+            choice = messagebox.askyesno(
+                "Product Not Found",
+                f"No product found for code '{code}'\n\n"
+                "Click YES to add it to the Product Master first.\n"
+                "Click NO to add it as a one-time manual GRN entry.",
+                parent=self.winfo_toplevel()
+            )
+            if choice:
+                self.app.navigate_to("products")
+                if "products" in self.app.screens:
+                    self.app.screens["products"]._open_add_form()
+                    # Pre-fill product code field if the form is open
+                    # We will implement this prefill check in screen_products.py if needed, 
+                    # but since they just navigated there, they can click Scan there too.
+            else:
+                # Allow manual entry without product master (GRN-3)
+                temp = {"product_id": None, "name": code, "unit": "piece", "purchase_price": 0}
+                self._edit_item_dialog(temp, new=True)
+
     # ─────────────────────────────────────────────────────────────
     # Product search popup
     # ─────────────────────────────────────────────────────────────
@@ -287,6 +331,13 @@ class PurchaseScreen(ctk.CTkFrame):
         q = self.prod_search_var.get().strip()
         if not q:
             return
+
+        # Check exact code match first (for barcode scanners)
+        product = self.db.get_product_by_code(q)
+        if product:
+            self._add_product_to_cart(product)
+            return
+
         results = self.db.search_products_billing(q)
         if len(results) == 1:
             self._add_product_to_cart(results[0])
@@ -522,7 +573,7 @@ class PurchaseScreen(ctk.CTkFrame):
         scroll = ctk.CTkScrollableFrame(dlg, fg_color=COLORS["bg_main"])
         scroll.pack(fill="both", expand=True)
 
-        ctk.CTkLabel(scroll, text="➕  " + t("Add New Product", L),
+        ctk.CTkLabel(scroll, text="\u2795  " + t("Add New Product", L),
                      font=FONTS["heading"], text_color=COLORS["btn_primary"]
                     ).pack(pady=(16, 10), padx=24, anchor="w")
 
@@ -532,19 +583,28 @@ class PurchaseScreen(ctk.CTkFrame):
 
         entries = {}
 
-        def field(label, key, default="", placeholder="", wide=False):
+        def field(label, key, default="", placeholder="", wide=False, show_scan=False):
             f = ctk.CTkFrame(scroll, fg_color="transparent")
             f.pack(fill="x", padx=24, pady=5)
             ctk.CTkLabel(f, text=label, font=FONTS["label_form"],
                           text_color=COLORS["text_dark"],
                           width=165, anchor="w").pack(side="left")
             var = tk.StringVar(value=str(default) if default not in (None, "") else "")
-            ctk.CTkEntry(f, textvariable=var,
-                          placeholder_text=placeholder,
-                          font=FONTS["input"], height=40,
-                          border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"],
-                          width=290 if wide else 220
-                         ).pack(side="left")
+            entry_width = 290 if wide else (160 if show_scan else 220)
+            entry = ctk.CTkEntry(f, textvariable=var,
+                                  placeholder_text=placeholder,
+                                  font=FONTS["input"], height=40,
+                                  border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"],
+                                  width=entry_width)
+            entry.pack(side="left")
+            if show_scan:
+                scan_btn = ctk.CTkButton(
+                    f, text="\U0001f4f7", font=("Segoe UI", 16),
+                    width=50, height=40, corner_radius=10,
+                    fg_color=COLORS.get("btn_primary", "#3B82F6"), hover_color="#2563EB",
+                    command=lambda: WebcamScanner(dlg, self.app, callback=lambda val: var.set(val))
+                )
+                scan_btn.pack(side="left", padx=(6, 0))
             entries[key] = var
             return var
 
@@ -562,7 +622,7 @@ class PurchaseScreen(ctk.CTkFrame):
             entries[key] = var
 
         field(t("Product Name *", L),       "name",           "",  t("e.g. Aashirvaad Atta 5kg", L), wide=True)
-        field(t("Product Code", L),         "product_code",   "",  t("Auto-generated if blank", L))
+        field(t("Product Code", L),         "product_code",   "",  t("Auto-generated if blank", L), show_scan=True)
         dropdown(t("Category *", L),        "category",       c_names,
                  c_names[0] if c_names else "")
         field(t("Brand", L),                "brand",          "",  t("Optional", L))

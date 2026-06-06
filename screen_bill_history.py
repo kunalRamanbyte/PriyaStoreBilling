@@ -197,9 +197,9 @@ class BillHistoryScreen(ctk.CTkFrame):
                 b["status"],
             ), tags=(tag,))
         self.tree.tag_configure("void",  background=COLORS["row_void"], foreground=COLORS["fg_void"])
-        self.tree.tag_configure("draft", background=COLORS["row_draft"])
+        self.tree.tag_configure("draft", background=COLORS["row_draft"], foreground=COLORS["text_dark"])
         for idx, color in enumerate(_row_colors):
-            self.tree.tag_configure(f"row{idx}", background=color)
+            self.tree.tag_configure(f"row{idx}", background=color, foreground=COLORS["text_dark"])
 
     def _get_selected_bill_id(self):
         sel = self.tree.selection()

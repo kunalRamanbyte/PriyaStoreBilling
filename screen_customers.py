@@ -96,9 +96,10 @@ class CustomerScreen(ctk.CTkFrame):
         widths = (240, 160, 260, 160, 100)
         self.tree = ttk.Treeview(tbl, columns=cols, show="headings",
                                   style="Cust.Treeview", selectmode="browse")
+        stretch_cols = {"name", "address"}
         for col, head, w in zip(cols, heads, widths):
             self.tree.heading(col, text=head)
-            self.tree.column(col, width=w, minwidth=50, stretch=False)  # CUST-2 fix
+            self.tree.column(col, width=w, minwidth=50, stretch=(col in stretch_cols))  # CUST-2 fix
         vsb = ttk.Scrollbar(tbl, orient="vertical",   command=self.tree.yview)
         hsb = ttk.Scrollbar(tbl, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)

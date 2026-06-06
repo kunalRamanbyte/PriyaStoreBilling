@@ -11,6 +11,7 @@ from datetime import datetime
 from config import COLORS, FONTS, PAYMENT_MODES
 from ui_utils import place_popup
 from lang import t
+from webcam_scanner import WebcamScanner
 
 
 class BillingScreen(ctk.CTkFrame):
@@ -104,14 +105,6 @@ class BillingScreen(ctk.CTkFrame):
         self.context_left = ctk.CTkFrame(self.context_frame, fg_color="transparent")
         self.context_left.grid(row=0, column=0, sticky="w")
 
-        self.section_chip = self._make_chip(
-            self.context_left, t("New Bill", self.app.current_lang),
-            COLORS.get("bg_chip_new_bill", "#F8E9FF"),
-            COLORS.get("fg_chip_new_bill", "#A21CAF"),
-            44
-        )
-        self.section_chip.pack(side="left", padx=(0, 8))
-
         bill_no = self.db.next_bill_number()
         self.bill_no_label = self._make_chip(
             self.context_left, f"Bill: {bill_no}", "#0EA5E9", "white", 44
@@ -185,6 +178,19 @@ class BillingScreen(ctk.CTkFrame):
             corner_radius=16,
         )
         self.search_entry.grid(row=0, column=0, sticky="ew", padx=12, pady=9)
+
+        self.scan_btn = ctk.CTkButton(
+            search_frame,
+            text=t("Scan", self.app.current_lang),
+            font=("Segoe UI", 13, "bold"),
+            fg_color=COLORS.get("btn_primary", "#3B82F6"),
+            hover_color="#2563EB",
+            width=100,
+            height=44,
+            corner_radius=16,
+            command=self._open_webcam_scanner
+        )
+        self.scan_btn.grid(row=0, column=1, padx=(0, 12), pady=9)
 
         cart_frame = ctk.CTkFrame(
             body,
@@ -516,7 +522,7 @@ class BillingScreen(ctk.CTkFrame):
         root.bind("<Control-n>", lambda e: self._new_bill_shortcut())
         root.bind("<Control-N>", lambda e: self._new_bill_shortcut())
         self.search_entry.bind("<Down>",   lambda e: self._focus_popup())
-        self.search_entry.bind("<Return>", lambda e: self._focus_popup())
+        self.search_entry.bind("<Return>", self._on_search_enter)
 
     def _new_bill_shortcut(self):
         """Ctrl+N — start a fresh bill."""
@@ -586,6 +592,43 @@ class BillingScreen(ctk.CTkFrame):
     def _focus_search(self):
         self.search_entry.focus_set()
         self.search_entry.select_range(0, "end")
+
+    def _on_search_enter(self, event=None):
+        query = self.search_var.get().strip()
+        if not query:
+            return
+        
+        # Exact barcode match
+        product = self.db.get_product_by_code(query)
+        if product:
+            self._close_popup()
+            self._add_to_cart(product)
+            return
+            
+        # Only 1 result in search popup
+        if len(self.search_results) == 1:
+            self._close_popup()
+            self._add_to_cart(self.search_results[0])
+            return
+            
+        self._focus_popup()
+
+    def _open_webcam_scanner(self):
+        WebcamScanner(self, self.app, callback=self._on_webcam_scanned)
+
+    def _on_webcam_scanned(self, code):
+        if not code:
+            return
+        product = self.db.get_product_by_code(code)
+        if product:
+            self._add_to_cart(product)
+            self._set_status(f"✅ Scanned and added: {product['name']}")
+        else:
+            messagebox.showwarning(
+                t("Warning", self.app.current_lang),
+                t("No product found for code", self.app.current_lang).format(code=code),
+                parent=self.winfo_toplevel()
+            )
 
     def _on_search_change(self, *_):
         query = self.search_var.get().strip()
@@ -943,7 +986,7 @@ class BillingScreen(ctk.CTkFrame):
             ), tags=(tag,))
 
         for idx, color in enumerate(_row_colors):
-            self.cart_tree.tag_configure(f"row{idx}", background=color)
+            self.cart_tree.tag_configure(f"row{idx}", background=color, foreground=COLORS["text_dark"])
 
     # ─────────────────────────────────────────────────────────────
     # Inline cell editing (Qty / Price) — click a cell to type
