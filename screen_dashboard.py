@@ -83,15 +83,15 @@ class DashboardScreen(ctk.CTkFrame):
             ).pack(side="left", fill="x", expand=True, padx=6)
 
         # ── Expiry Alert Panel ───────────────────────────────
-        self.expiry_frame = ctk.CTkFrame(body, fg_color="#FFF4E6", corner_radius=16)
+        self.expiry_frame = ctk.CTkFrame(body, fg_color=COLORS["bg_expiry_alert"], corner_radius=16)
         # shown/hidden dynamically in _load_data
-
+ 
         expiry_hdr = ctk.CTkFrame(self.expiry_frame, fg_color="transparent")
         expiry_hdr.pack(fill="x", padx=14, pady=(10, 4))
         ctk.CTkLabel(expiry_hdr, text=f"📅  {t('Products Expiring Within 30 Days', L)}",
-                     font=FONTS["subheading"], text_color="#E65100"
-                    ).pack(side="left")
-
+                     font=FONTS["subheading"], text_color=COLORS["fg_expiry_alert"]
+                     ).pack(side="left")
+ 
         # Exp.Treeview style registered globally in styles.py
         exp_cols = ("name", "category", "stock", "expiry_date", "days_left")
         self.exp_tree = ttk.Treeview(
@@ -105,8 +105,8 @@ class DashboardScreen(ctk.CTkFrame):
         ):
             self.exp_tree.heading(col, text=head)
             self.exp_tree.column(col, width=w, anchor="w" if col in ("name","category") else "center")
-        self.exp_tree.tag_configure("expired",  background="#FFEBEE")
-        self.exp_tree.tag_configure("expiring", background="#FFF8E1")
+        self.exp_tree.tag_configure("expired",  background=COLORS["row_expired"])
+        self.exp_tree.tag_configure("expiring", background=COLORS["row_expiring"])
         self.exp_tree.pack(fill="x", padx=10, pady=(0, 10))
 
         # ── Recent Bills table ───────────────────────────────
@@ -217,8 +217,8 @@ class DashboardScreen(ctk.CTkFrame):
                 b["status"],
             ), tags=(tag,))
 
-        self.recent_tree.tag_configure("void",  background="#FFEBEE")
-        self.recent_tree.tag_configure("draft", background="#FFF8E1")
+        self.recent_tree.tag_configure("void",  background=COLORS["row_void"])
+        self.recent_tree.tag_configure("draft", background=COLORS["row_draft"])
 
     def _update_clock(self):
         now = datetime.now().strftime("%A, %d %B %Y   %I:%M %p")

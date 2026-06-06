@@ -104,9 +104,9 @@ class UserScreen(ctk.CTkFrame):
         self.tree.column("Name", anchor="w")
 
         # Row tags
-        self.tree.tag_configure("inactive", background="#EEEEEE",
-                                foreground="#9E9E9E")
-        self.tree.tag_configure("admin_row",  background="#F3E5F5")
+        self.tree.tag_configure("inactive", background=COLORS["row_inactive"],
+                                foreground=COLORS["fg_inactive"])
+        self.tree.tag_configure("admin_row",  background=COLORS["row_admin"])
         self.tree.tag_configure("even",       background=COLORS["tbl_row_alt"])
 
         vsb = ttk.Scrollbar(tbl_frame, orient="vertical",

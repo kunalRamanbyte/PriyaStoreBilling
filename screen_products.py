@@ -198,8 +198,8 @@ class ProductScreen(ctk.CTkFrame):
                 "✅ Active" if p["is_active"] else "❌ Off",
             ), tags=tags)
 
-        self.tree.tag_configure("expired",  background="#FFEBEE")
-        self.tree.tag_configure("expiring", background="#FFF8E1")
+        self.tree.tag_configure("expired",  background=COLORS["row_expired"])
+        self.tree.tag_configure("expiring", background=COLORS["row_expiring"])
         self.tree.tag_configure("low",      background=COLORS["tbl_low_stock"])
         for idx, color in enumerate(COLORS["ROW_COLORS"]):
             self.tree.tag_configure(f"row{idx}", background=color)

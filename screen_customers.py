@@ -107,7 +107,7 @@ class CustomerScreen(ctk.CTkFrame):
         hsb.grid(row=1, column=0, sticky="ew",  padx=(6, 0), pady=(0, 4))
         self.tree.bind("<Double-1>", lambda e: self._open_edit_form())
         self.tree.tag_configure("alt",    background=COLORS["tbl_row_alt"])
-        self.tree.tag_configure("credit", background="#FFF3E0")  # orange tint if has balance
+        self.tree.tag_configure("credit", background=COLORS["row_credit"])  # orange tint if has balance
 
         # ── Action bar ───────────────────────────────────────
         act = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0, height=62)
@@ -311,8 +311,8 @@ class CustomerScreen(ctk.CTkFrame):
         tree.configure(yscrollcommand=vsb.set)
         tree.grid(row=0, column=0, sticky="nsew", padx=(4, 0), pady=4)
         vsb.grid(row=0, column=1, sticky="ns", pady=4)
-        tree.tag_configure("credit",  background="#FFEBEE")
-        tree.tag_configure("payment", background="#E8F5E9")
+        tree.tag_configure("credit",  background=COLORS["row_expired"])
+        tree.tag_configure("payment", background=COLORS["row_payment"])
 
         for i, t_ in enumerate(txns):
             tag = "credit" if t_["txn_type"] == "Credit" else "payment"

@@ -196,8 +196,8 @@ class BillHistoryScreen(ctk.CTkFrame):
                 b["payment_mode"],
                 b["status"],
             ), tags=(tag,))
-        self.tree.tag_configure("void",  background="#FFEBEE", foreground="#CC2200")
-        self.tree.tag_configure("draft", background="#FFF8E1")
+        self.tree.tag_configure("void",  background=COLORS["row_void"], foreground=COLORS["fg_void"])
+        self.tree.tag_configure("draft", background=COLORS["row_draft"])
         for idx, color in enumerate(_row_colors):
             self.tree.tag_configure(f"row{idx}", background=color)
 
@@ -251,7 +251,7 @@ class BillHistoryScreen(ctk.CTkFrame):
                      text_color=COLORS["btn_primary"]).pack(anchor="w", padx=20)
 
         for it in items:
-            f = ctk.CTkFrame(scroll, fg_color="#F5F7FF", corner_radius=6)
+            f = ctk.CTkFrame(scroll, fg_color=COLORS["bg_popup_item"], corner_radius=6)
             f.pack(fill="x", padx=20, pady=2)
             ctk.CTkLabel(f, text=f"{it['product_name']}  ×  {it['quantity']} {it['unit']}",
                          font=FONTS["body"], text_color=COLORS["text_dark"],

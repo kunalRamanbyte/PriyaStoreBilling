@@ -136,8 +136,8 @@ class InventoryScreen(ctk.CTkFrame):
 
         self.tree.bind("<Double-1>", lambda e: self._open_adjustment_dialog())
         self.tree.tag_configure("out",  background=COLORS["tbl_low_stock"])
-        self.tree.tag_configure("low",  background="#FFF9C4")
-        self.tree.tag_configure("ok",   background="#E8F5E9")
+        self.tree.tag_configure("low",  background=COLORS["row_low_stock"])
+        self.tree.tag_configure("ok",   background=COLORS["row_ok"])
         self.tree.tag_configure("alt",  background=COLORS["tbl_row_alt"])
 
     def on_show(self):

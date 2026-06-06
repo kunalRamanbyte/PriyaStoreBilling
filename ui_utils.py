@@ -110,6 +110,16 @@ def open_date_picker(parent, var, title="Select Date"):
     except (ValueError, AttributeError):
         start = date.today()
 
+    from config import COLORS
+    bg_pop = COLORS.get("bg_white", "#FFFFFF")
+    fg_pop = COLORS.get("text_dark", "#000000")
+    bg_input = COLORS.get("bg_input", "#F1F5F9")
+    btn_prim = COLORS.get("btn_primary", "#1D4ED8")
+    btn_succ = COLORS.get("btn_success", "#16A34A")
+    btn_dang = COLORS.get("btn_danger", "#EF4444")
+    btn_sec = COLORS.get("btn_secondary", "#94A3B8")
+    border_col = COLORS.get("border", "#CBD5E1")
+
     cal = Calendar(
         popup,
         selectmode="day",
@@ -118,21 +128,22 @@ def open_date_picker(parent, var, title="Select Date"):
         day=start.day,
         date_pattern="yyyy-mm-dd",
         font=("Segoe UI", 12),
-        background="#1D4ED8",
+        background=btn_prim,
         foreground="white",
-        headersbackground="#1E3A8A",
+        headersbackground=COLORS.get("bg_sidebar", "#1E3A8A"),
         headersforeground="white",
-        selectbackground="#16A34A",
+        selectbackground=btn_succ,
         selectforeground="white",
-        normalbackground="white",
-        normalforeground="#1A1A2E",
-        weekendbackground="#F1F5F9",
-        weekendforeground="#1A1A2E",
-        bordercolor="#CBD5E1",
+        normalbackground=bg_pop,
+        normalforeground=fg_pop,
+        weekendbackground=bg_input,
+        weekendforeground=fg_pop,
+        bordercolor=border_col,
     )
     cal.pack(padx=10, pady=10)
 
-    btn_frame = tk.Frame(popup, bg="#F8FAFC")
+    popup.configure(bg=bg_pop)
+    btn_frame = tk.Frame(popup, bg=bg_pop)
     btn_frame.pack(fill="x", padx=10, pady=(0, 10))
 
     def confirm():
@@ -144,15 +155,15 @@ def open_date_picker(parent, var, title="Select Date"):
         popup.destroy()
 
     tk.Button(btn_frame, text="✅  Select", font=("Segoe UI", 11, "bold"),
-              bg="#16A34A", fg="white", relief="flat", padx=16, pady=6,
+              bg=btn_succ, fg="white", relief="flat", padx=16, pady=6,
               cursor="hand2", command=confirm
              ).pack(side="left", padx=(0, 6))
     tk.Button(btn_frame, text="🗑  Clear", font=("Segoe UI", 11),
-              bg="#EF4444", fg="white", relief="flat", padx=16, pady=6,
+              bg=btn_dang, fg="white", relief="flat", padx=16, pady=6,
               cursor="hand2", command=clear
              ).pack(side="left", padx=(0, 6))
     tk.Button(btn_frame, text="Cancel", font=("Segoe UI", 11),
-              bg="#94A3B8", fg="white", relief="flat", padx=16, pady=6,
+              bg=btn_sec, fg="white", relief="flat", padx=16, pady=6,
               cursor="hand2", command=popup.destroy
              ).pack(side="left")
 

@@ -138,6 +138,23 @@ LIGHT_COLORS = {
         "#E0F7FA",   # Light Teal
         "#FCE4EC",   # Light Pink
     ],
+
+    # ── Table row alert/tag colors (Light) ───────────────────
+    "row_expired"     : "#FFEBEE",
+    "row_expiring"    : "#FFF8E1",
+    "row_low_stock"   : "#FFF9C4",
+    "row_ok"          : "#E8F5E9",
+    "row_credit"      : "#FFF3E0",
+    "row_payment"     : "#E8F5E9",
+    "row_void"        : "#FFEBEE",
+    "row_draft"       : "#FFF8E1",
+    "row_inactive"    : "#EEEEEE",
+    "row_admin"       : "#F3E5F5",
+    "fg_inactive"     : "#9E9E9E",
+    "fg_void"         : "#CC2200",
+    "bg_expiry_alert" : "#FFF4E6",
+    "fg_expiry_alert" : "#E65100",
+    "bg_popup_item"   : "#F5F7FF",
 }
 
 DARK_COLORS = {
@@ -229,6 +246,23 @@ DARK_COLORS = {
         "#173A3C",   # Muted Teal
         "#3C1D2A",   # Muted Pink
     ],
+
+    # ── Table row alert/tag colors (Dark) ────────────────────
+    "row_expired"     : "#5F1E24",
+    "row_expiring"    : "#5C4E15",
+    "row_low_stock"   : "#5C5515",
+    "row_ok"          : "#154A28",
+    "row_credit"      : "#5C3E15",
+    "row_payment"     : "#154A28",
+    "row_void"        : "#5F1E24",
+    "row_draft"       : "#5C4E15",
+    "row_inactive"    : "#374151",
+    "row_admin"       : "#3A1E5C",
+    "fg_inactive"     : "#9CA3AF",
+    "fg_void"         : "#F87171",
+    "bg_expiry_alert" : "#3D2100",
+    "fg_expiry_alert" : "#FDBA74",
+    "bg_popup_item"   : "#1E293B",
 }
 
 # The active color map — dynamically populated

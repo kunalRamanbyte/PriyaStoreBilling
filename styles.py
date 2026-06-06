@@ -59,6 +59,7 @@ def setup_ttk_styles(mode="light"):
         "Cat",         # Categories
         "Exp",         # Expiry alert panel (dashboard)
         "Cart",        # POS Cart
+        "Led",         # Customer Ledger
     ]
 
     for name in STYLE_NAMES:
