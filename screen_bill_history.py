@@ -9,6 +9,7 @@ from tkinter import ttk, messagebox, simpledialog
 from datetime import date, timedelta
 from config import COLORS, FONTS
 from ui_utils import place_popup
+from lang import t
 
 
 class BillHistoryScreen(ctk.CTkFrame):
@@ -24,7 +25,8 @@ class BillHistoryScreen(ctk.CTkFrame):
         header = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0, height=70)
         header.pack(fill="x")
         header.pack_propagate(False)
-        ctk.CTkLabel(header, text="📋   Bill History",
+        L = self.app.current_lang
+        ctk.CTkLabel(header, text=f"📋   {t('Bill History', L)}",
                      font=FONTS["heading"], text_color=COLORS["text_dark"]
                     ).pack(side="left", padx=25, pady=15)
 
@@ -33,17 +35,17 @@ class BillHistoryScreen(ctk.CTkFrame):
         fbar.pack(fill="x", pady=(2, 0))
         fbar.pack_propagate(False)
 
-        ctk.CTkLabel(fbar, text="Search:", font=FONTS["body"],
+        ctk.CTkLabel(fbar, text=t("Search", L) + ":", font=FONTS["body"],
                      text_color=COLORS["text_dark"]).pack(side="left", padx=(20, 5), pady=12)
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self._load_bills())
         ctk.CTkEntry(fbar, textvariable=self.search_var,
-                     placeholder_text="Bill no. or customer name",
+                     placeholder_text=t("Bill no. or customer name", L),
                      font=FONTS["input"], width=220, height=40,
                      border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
                     ).pack(side="left", padx=(0, 15), pady=12)
 
-        ctk.CTkLabel(fbar, text="From:", font=FONTS["body"],
+        ctk.CTkLabel(fbar, text=t("From:", L), font=FONTS["body"],
                      text_color=COLORS["text_dark"]).pack(side="left", padx=(0, 4))
         self.from_var = tk.StringVar(value=str(date.today() - timedelta(days=30)))
         ctk.CTkEntry(fbar, textvariable=self.from_var,
@@ -51,7 +53,7 @@ class BillHistoryScreen(ctk.CTkFrame):
                      border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
                     ).pack(side="left", padx=(0, 8))
 
-        ctk.CTkLabel(fbar, text="To:", font=FONTS["body"],
+        ctk.CTkLabel(fbar, text=t("To:", L), font=FONTS["body"],
                      text_color=COLORS["text_dark"]).pack(side="left", padx=(0, 4))
         self.to_var = tk.StringVar(value=str(date.today()))
         ctk.CTkEntry(fbar, textvariable=self.to_var,
@@ -59,19 +61,19 @@ class BillHistoryScreen(ctk.CTkFrame):
                      border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
                     ).pack(side="left", padx=(0, 8))
 
-        ctk.CTkButton(fbar, text="🔍 Filter",
+        ctk.CTkButton(fbar, text=f"🔍 {t('Filter', L)}",
                       font=FONTS["button"], fg_color=COLORS["btn_primary"],
                       height=40, width=100, corner_radius=10,
                       command=self._load_bills
                      ).pack(side="left", padx=(0, 8))
 
-        ctk.CTkButton(fbar, text="Today",
+        ctk.CTkButton(fbar, text=t("Today", L),
                       font=FONTS["small_bold"], fg_color=COLORS["btn_secondary"],
                       height=40, width=70, corner_radius=10,
                       command=self._filter_today
                      ).pack(side="left", padx=(0, 6))
 
-        ctk.CTkButton(fbar, text="All",
+        ctk.CTkButton(fbar, text=t("All", L),
                       font=FONTS["small_bold"], fg_color=COLORS["btn_secondary"],
                       height=40, width=60, corner_radius=10,
                       command=self._filter_all
@@ -94,8 +96,10 @@ class BillHistoryScreen(ctk.CTkFrame):
             tbl_frame, columns=cols, show="headings",
             style="Hist.Treeview", selectmode="browse"
         )
-        heads  = ("Bill No.", "Date & Time", "Customer", "Items", "Subtotal ₹",
-                  "Disc ₹", "Total ₹", "Mode", "Status")
+        heads  = (t("Bill No.", L), t("Date & Time", L), t("Customer", L),
+                  t("Items", L), f"{t('Subtotal', L)} ₹",
+                  f"{t('Discount', L)} ₹", f"{t('Total', L)} ₹",
+                  t("Mode", L), t("Status", L))
         widths = (110, 155, 180, 55, 100, 80, 100, 120, 80)
         for col, head, w in zip(cols, heads, widths):
             self.tree.heading(col, text=head,
@@ -117,17 +121,17 @@ class BillHistoryScreen(ctk.CTkFrame):
         act_bar.pack(fill="x")
         act_bar.pack_propagate(False)
 
-        ctk.CTkButton(act_bar, text="👁️  View Bill",
+        ctk.CTkButton(act_bar, text=t("View Bill", L),
                       font=FONTS["button"], fg_color=COLORS["btn_primary"],
                       height=44, width=140, corner_radius=10,
                       command=self._view_bill
                      ).pack(side="left", padx=(20,8), pady=8)
-        ctk.CTkButton(act_bar, text="🖨️  Reprint",
+        ctk.CTkButton(act_bar, text=t("Reprint", L),
                       font=FONTS["button"], fg_color="#0277BD",
                       height=44, width=120, corner_radius=10,
                       command=self._reprint_bill
                      ).pack(side="left", padx=(0,8), pady=8)
-        ctk.CTkButton(act_bar, text="▶️  Resume Draft",
+        ctk.CTkButton(act_bar, text=t("Resume Draft", L),
                       font=FONTS["button"], fg_color=COLORS["btn_warning"],
                       hover_color="#CC7700",
                       height=44, width=160, corner_radius=10,
@@ -135,7 +139,7 @@ class BillHistoryScreen(ctk.CTkFrame):
                      ).pack(side="left", padx=(0,8), pady=8)
 
         if self.current_user["role"] == "admin":
-            ctk.CTkButton(act_bar, text="❌  Void Bill",
+            ctk.CTkButton(act_bar, text=t("Void Bill", L),
                           font=FONTS["button"], fg_color=COLORS["btn_danger"],
                           height=44, width=120, corner_radius=10,
                           command=self._void_bill

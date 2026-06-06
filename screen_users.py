@@ -15,6 +15,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from config import COLORS, FONTS
 from ui_utils import place_popup
+from lang import t
 
 ROLE_LABELS = {
     "admin"        : "Admin",
@@ -55,16 +56,18 @@ class UserScreen(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
+        L = self.app.current_lang
+
         # ── Header ──
         hdr = ctk.CTkFrame(self, fg_color=COLORS["bg_card"],
                            corner_radius=16, height=70)
         hdr.grid(row=0, column=0, sticky="ew", padx=20, pady=(18, 0))
         hdr.grid_propagate(False)
-        ctk.CTkLabel(hdr, text="👥   User Management",
+        ctk.CTkLabel(hdr, text=t("User Management", L),
                      font=FONTS["subheading"],
                      text_color=COLORS["text_dark"]).pack(side="left", padx=24, pady=18)
         ctk.CTkButton(
-            hdr, text="➕  Add User",
+            hdr, text=t("Add User", L),
             font=FONTS["button"],
             fg_color=COLORS["btn_success"],
             hover_color="#28A745",
@@ -72,7 +75,7 @@ class UserScreen(ctk.CTkFrame):
             command=self._open_add,
         ).pack(side="right", padx=18)
         ctk.CTkCheckBox(
-            hdr, text="Show Inactive",
+            hdr, text=t("Show Inactive", L),
             font=FONTS["body"],
             text_color=COLORS["text_dark"],
             variable=self._show_all,
@@ -96,7 +99,7 @@ class UserScreen(ctk.CTkFrame):
         )
         # ttk styles applied globally via styles.py
         for col, w in self.COLS:
-            self.tree.heading(col, text=col)
+            self.tree.heading(col, text=t(col, L))
             self.tree.column(col, width=w, minwidth=60, anchor="center")
         self.tree.column("Name", anchor="w")
 
@@ -119,9 +122,9 @@ class UserScreen(ctk.CTkFrame):
         action.grid(row=3, column=0, sticky="ew", padx=20, pady=(8, 16))
         action.pack_propagate(False)
 
-        self._btn_edit   = self._action_btn(action, "✏️  Edit",        COLORS["btn_primary"], self._open_edit)
-        self._btn_pwd    = self._action_btn(action, "🔑  Change Pwd",  COLORS["btn_warning"],  self._change_pwd)
-        self._btn_toggle = self._action_btn(action, "🚫  Deactivate",  COLORS["btn_danger"],   self._toggle_status)
+        self._btn_edit   = self._action_btn(action, t("✏️  Edit", L),        COLORS["btn_primary"], self._open_edit)
+        self._btn_pwd    = self._action_btn(action, t("🔑  Change Pwd", L),  COLORS["btn_warning"],  self._change_pwd)
+        self._btn_toggle = self._action_btn(action, t("🚫  Deactivate", L),  COLORS["btn_danger"],   self._toggle_status)
 
         for btn in (self._btn_edit, self._btn_pwd, self._btn_toggle):
             btn.pack(side="left", padx=8, pady=14)
@@ -136,6 +139,7 @@ class UserScreen(ctk.CTkFrame):
 
     # ─────────────────────────────────────────────────────────
     def _load(self):
+        L = self.app.current_lang
         self.tree.delete(*self.tree.get_children())
         users = self.db.get_users(include_inactive=self._show_all.get())
         for i, u in enumerate(users):
@@ -158,6 +162,7 @@ class UserScreen(ctk.CTkFrame):
         self._set_buttons_state(False)
 
     def _on_select(self, _=None):
+        L = self.app.current_lang
         sel = self.tree.selection()
         if not sel:
             self._selected_id = None
@@ -172,7 +177,7 @@ class UserScreen(ctk.CTkFrame):
         is_self = (self._selected_id == self.current_user["user_id"])
         active = bool(u["is_active"])
         self._btn_toggle.configure(
-            text="🔄  Reactivate" if not active else "🚫  Deactivate",
+            text=t("Reactivate", L) if not active else t("Deactivate", L),
             fg_color=COLORS["btn_success"] if not active else COLORS["btn_danger"],
             state="disabled" if is_self else "normal",
         )
@@ -195,9 +200,10 @@ class UserScreen(ctk.CTkFrame):
 
     def _user_form(self, user):
         """Add or Edit user dialog."""
+        L = self.app.current_lang
         is_edit = user is not None
         dlg = ctk.CTkToplevel(self)
-        dlg.title("Edit User" if is_edit else "Add New User")
+        dlg.title(t("Edit User", L) if is_edit else t("Add New User", L))
         place_popup(dlg, 480, 480)
         dlg.resizable(False, False)
         dlg.grab_set()
@@ -209,17 +215,17 @@ class UserScreen(ctk.CTkFrame):
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
         ctk.CTkLabel(hdr,
-                     text="✏️  Edit User" if is_edit else "➕  Add New User",
+                     text=t("Edit User", L) if is_edit else t("Add New User", L),
                      font=FONTS["subheading"], text_color="white").pack(
-                         side="left", padx=20, pady=14)
+                          side="left", padx=20, pady=14)
 
         body = ctk.CTkFrame(dlg, fg_color=COLORS["bg_main"])
         body.pack(fill="both", expand=True, padx=24, pady=16)
 
         def _lbl(text):
             ctk.CTkLabel(body, text=text, font=FONTS["label_form"],
-                         text_color=COLORS["text_dark"],
-                         anchor="w").pack(fill="x", pady=(10, 2))
+                          text_color=COLORS["text_dark"],
+                          anchor="w").pack(fill="x", pady=(10, 2))
 
         def _ent(ph="", show=""):
             e = ctk.CTkEntry(body, font=FONTS["input"],
@@ -232,11 +238,11 @@ class UserScreen(ctk.CTkFrame):
             e.pack(fill="x")
             return e
 
-        _lbl("Full Name *")
+        _lbl(t("Full Name *", L))
         e_name = _ent("e.g. Priya Sharma")
-        _lbl("Username *")
+        _lbl(t("Username *", L))
         e_user = _ent("e.g. priya")
-        _lbl("Role *")
+        _lbl(t("Role *", L))
         role_var = ctk.StringVar(value=ROLE_LABELS.get(user["role"] if is_edit else "cashier", "Cashier"))
         ctk.CTkOptionMenu(body, values=ROLES, variable=role_var,
                           font=FONTS["body"],
@@ -245,8 +251,8 @@ class UserScreen(ctk.CTkFrame):
                           height=44).pack(fill="x", pady=(4, 0))
 
         if not is_edit:
-            _lbl("Password *")
-            e_pwd = _ent("Min 4 characters", show="*")
+            _lbl(t("Password *", L))
+            e_pwd = _ent(t("Enter at least 4 characters.", L), show="*")
         else:
             e_pwd = None
 
@@ -261,36 +267,36 @@ class UserScreen(ctk.CTkFrame):
             role  = ROLE_BY_LABEL.get(role_var.get(), "cashier")
 
             if not name:
-                messagebox.showwarning("Required", "Name is required.", parent=dlg)
+                messagebox.showwarning(t("Required", L), t("Name is required.", L), parent=dlg)
                 return
             if not is_edit and not uname:
-                messagebox.showwarning("Required", "Username is required.", parent=dlg)
+                messagebox.showwarning(t("Required", L), t("Username is required.", L), parent=dlg)
                 return
 
             if is_edit:
                 self.db.update_user(user["user_id"], name, role)
                 self.db.log_activity(self.current_user["user_id"],
                                      "USER_UPDATED", f"User '{uname}' updated")
-                messagebox.showinfo("Saved", f"User '{name}' updated.", parent=dlg)
+                messagebox.showinfo(t("Saved", L), f"User '{name}' " + t("User updated.", L), parent=dlg)
             else:
                 pwd = e_pwd.get().strip()
                 if len(pwd) < 4:
-                    messagebox.showwarning("Weak Password",
-                                           "Password must be at least 4 characters.",
+                    messagebox.showwarning(t("Weak Password", L),
+                                           t("Enter at least 4 characters.", L),
                                            parent=dlg)
                     return
                 ok, result = self.db.add_user(name, uname, pwd, role)
                 if not ok:
-                    messagebox.showerror("Error", result, parent=dlg)
+                    messagebox.showerror(t("Error", L), result, parent=dlg)
                     return
                 self.db.log_activity(self.current_user["user_id"],
                                      "USER_ADDED", f"New user '{uname}' ({role}) added")
-                messagebox.showinfo("Created", f"User '{name}' created.", parent=dlg)
+                messagebox.showinfo(t("Created", L), f"User '{name}' " + t("User added.", L), parent=dlg)
 
             dlg.destroy()
             self._load()
 
-        ctk.CTkButton(body, text="💾  Save",
+        ctk.CTkButton(body, text=t("Save", L),
                       font=FONTS["button"],
                       fg_color=COLORS["btn_success"],
                       hover_color="#28A745",
@@ -299,6 +305,7 @@ class UserScreen(ctk.CTkFrame):
 
     # ─────────────────────────────────────────────────────────
     def _change_pwd(self):
+        L = self.app.current_lang
         if not self._selected_id:
             return
         u = self.db.get_user_by_id(self._selected_id)
@@ -306,7 +313,7 @@ class UserScreen(ctk.CTkFrame):
             return
 
         dlg = ctk.CTkToplevel(self)
-        dlg.title("Change Password")
+        dlg.title(t("Change Password", L))
         place_popup(dlg, 420, 300)
         dlg.resizable(False, False)
         dlg.grab_set()
@@ -316,14 +323,14 @@ class UserScreen(ctk.CTkFrame):
                            corner_radius=0, height=56)
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
-        ctk.CTkLabel(hdr, text=f"🔑  Change Password — {u['name']}",
+        ctk.CTkLabel(hdr, text=t("Change Password", L) + f" — {u['name']}",
                      font=FONTS["body_bold"], text_color="white").pack(
-                         side="left", padx=20, pady=14)
+                          side="left", padx=20, pady=14)
 
         body = ctk.CTkFrame(dlg, fg_color=COLORS["bg_main"])
         body.pack(fill="both", expand=True, padx=24, pady=16)
 
-        ctk.CTkLabel(body, text="New Password *",
+        ctk.CTkLabel(body, text=t("New Password *", L),
                      font=FONTS["label_form"],
                      text_color=COLORS["text_dark"],
                      anchor="w").pack(fill="x", pady=(8, 2))
@@ -334,7 +341,7 @@ class UserScreen(ctk.CTkFrame):
                              show="*", height=44)
         e_new.pack(fill="x")
 
-        ctk.CTkLabel(body, text="Confirm Password *",
+        ctk.CTkLabel(body, text=t("Confirm Password *", L),
                      font=FONTS["label_form"],
                      text_color=COLORS["text_dark"],
                      anchor="w").pack(fill="x", pady=(12, 2))
@@ -349,19 +356,19 @@ class UserScreen(ctk.CTkFrame):
             p1 = e_new.get().strip()
             p2 = e_confirm.get().strip()
             if len(p1) < 4:
-                messagebox.showwarning("Weak", "Min 4 characters.", parent=dlg)
+                messagebox.showwarning(t("Weak", L), t("Enter at least 4 characters.", L), parent=dlg)
                 return
             if p1 != p2:
-                messagebox.showwarning("Mismatch", "Passwords do not match.", parent=dlg)
+                messagebox.showwarning(t("Mismatch", L), t("Passwords do not match.", L), parent=dlg)
                 return
             self.db.change_password(u["user_id"], p1)
             self.db.log_activity(self.current_user["user_id"],
                                  "PWD_CHANGED",
                                  f"Password changed for '{u['username']}'")
-            messagebox.showinfo("Done", "Password updated!", parent=dlg)
+            messagebox.showinfo(t("Done", L), t("Password changed.", L), parent=dlg)
             dlg.destroy()
 
-        ctk.CTkButton(body, text="🔒  Update Password",
+        ctk.CTkButton(body, text=t("Update Password", L),
                       font=FONTS["button"],
                       fg_color=COLORS["btn_warning"],
                       hover_color="#CC7700",
@@ -370,19 +377,20 @@ class UserScreen(ctk.CTkFrame):
 
     # ─────────────────────────────────────────────────────────
     def _toggle_status(self):
+        L = self.app.current_lang
         if not self._selected_id:
             return
         if self._selected_id == self.current_user["user_id"]:
-            messagebox.showwarning("Not Allowed", "You cannot deactivate yourself.")
+            messagebox.showwarning(t("Warning", L), t("Admin cannot be deactivated.", L))
             return
         u = self.db.get_user_by_id(self._selected_id)
         if not u:
             return
         if u["is_active"]:
+            msg_tpl = "Deactivate user '{name}'?\nThey will not be able to log in."
             if not messagebox.askyesno(
-                    "Deactivate",
-                    f"Deactivate user '{u['name']}'?\n"
-                    "They will not be able to log in."):
+                    t("Deactivate", L),
+                    t(msg_tpl, L).format(name=u['name'])):
                 return
             self.db.deactivate_user(u["user_id"])
             self.db.log_activity(self.current_user["user_id"],

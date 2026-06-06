@@ -9,6 +9,7 @@ from tkinter import ttk, messagebox
 from datetime import date
 from config import COLORS, FONTS, UNITS
 from ui_utils import place_popup, open_date_picker
+from lang import t
 
 
 class ProductScreen(ctk.CTkFrame):
@@ -28,10 +29,11 @@ class ProductScreen(ctk.CTkFrame):
         header = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0, height=70)
         header.grid(row=0, column=0, sticky="ew")
         header.grid_propagate(False)
-        ctk.CTkLabel(header, text="📦   Product Master",
+        L = self.app.current_lang
+        ctk.CTkLabel(header, text=t("Product Master", L),
                      font=FONTS["heading"], text_color=COLORS["text_dark"]
                     ).pack(side="left", padx=25, pady=15)
-        ctk.CTkButton(header, text="➕  Add New Product",
+        ctk.CTkButton(header, text=t("Add New Product", L),
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
                       height=44, corner_radius=10,
                       command=self._open_add_form

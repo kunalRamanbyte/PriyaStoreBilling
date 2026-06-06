@@ -10,6 +10,7 @@ from tkinter import ttk, messagebox
 from datetime import datetime
 from config import COLORS, FONTS, PAYMENT_MODES
 from ui_utils import place_popup
+from lang import t
 
 
 class BillingScreen(ctk.CTkFrame):
@@ -29,6 +30,7 @@ class BillingScreen(ctk.CTkFrame):
         self._pending_udhaar        = 0.0   # BIL-5: outstanding due of selected customer
         self._selected_customer_id  = None  # BIL-5: customer id
         self._selected_customer_name = None
+        self._inline_entry   = None   # active inline-edit Entry widget
         self._build()
         self._bind_keys()
         self.bind("<Configure>", self._on_resize)
@@ -59,8 +61,9 @@ class BillingScreen(ctk.CTkFrame):
             title_box, text="Priya Store",
             font=("Segoe UI Semibold", 15, "bold"), text_color="#F43F8C"
         ).pack(anchor="w")
+        L = self.app.current_lang
         ctk.CTkLabel(
-            title_box, text="Bright Billing Dashboard",
+            title_box, text=t("Bright Billing Dashboard", L),
             font=("Segoe UI", 11), text_color="#64748B"
         ).pack(anchor="w")
 
@@ -102,7 +105,7 @@ class BillingScreen(ctk.CTkFrame):
         self.context_left.grid(row=0, column=0, sticky="w")
 
         self.section_chip = self._make_chip(
-            self.context_left, "New Bill", "#F8E9FF", "#A21CAF", 44
+            self.context_left, t("New Bill", self.app.current_lang), "#F8E9FF", "#A21CAF", 44
         )
         self.section_chip.pack(side="left", padx=(0, 8))
 
@@ -114,7 +117,7 @@ class BillingScreen(ctk.CTkFrame):
 
         self.customer_entry = ctk.CTkEntry(
             self.context_left,
-            placeholder_text="Customer: Search or type customer name...",
+            placeholder_text=t("Customer: Search or type customer name...", self.app.current_lang),
             font=("Segoe UI", 14),
             width=260,
             height=42,
@@ -169,7 +172,7 @@ class BillingScreen(ctk.CTkFrame):
         self.search_entry = ctk.CTkEntry(
             search_frame,
             textvariable=self.search_var,
-            placeholder_text="🔍  Scan barcode or search product…   (F2)",
+            placeholder_text=t("Scan barcode or search product…   (F2)", self.app.current_lang),
             font=("Segoe UI", 15),
             height=44,
             border_width=1,
@@ -211,7 +214,9 @@ class BillingScreen(ctk.CTkFrame):
             parent, columns=cols, show="headings",
             style="Cart.Treeview", selectmode="browse"
         )
-        heads  = ("#", "Product Name", "Unit", "Qty", "Price ₹", "Disc ₹", "Total ₹", "")
+        L = self.app.current_lang
+        heads  = ("#", t("Product Name_col", L), t("Unit", L), t("Qty", L),
+                  t("Price ₹", L), t("Disc ₹", L), t("Total ₹", L), "")
         widths = (40,  200,           65,     65,    85,       75,       90,       50)
         for col, h, w in zip(cols, heads, widths):
             self.cart_tree.heading(col, text=h)
@@ -224,13 +229,14 @@ class BillingScreen(ctk.CTkFrame):
         self.cart_tree.grid(row=0, column=0, sticky="nsew", padx=(6, 0), pady=(6, 6))
         vsb.grid(row=0, column=1, sticky="ns", pady=(6, 6), padx=(0, 4))
 
-        # Double-click to edit qty
-        self.cart_tree.bind("<Double-1>", self._edit_cart_item)
+        # Click Qty/Price to inline-edit; double-click other cols for full dialog
+        self.cart_tree.bind("<Button-1>", self._on_cart_click)
+        self.cart_tree.bind("<Double-1>", self._on_cart_double_click)
         self.cart_tree.bind("<Delete>",   lambda e: self._remove_selected())
 
         # Cart empty label
         self.cart_empty_label = ctk.CTkLabel(
-            parent, text="🛒\n\nCart is empty.\nSearch and add products above.",
+            parent, text=t("Cart is empty.\nSearch and add products above.", self.app.current_lang),
             font=("Segoe UI", 16), text_color="#BDBDBD",
             justify="center"
         )
@@ -255,7 +261,7 @@ class BillingScreen(ctk.CTkFrame):
 
         header = ctk.CTkFrame(panel, fg_color="transparent")
         header.pack(fill="x", padx=12, pady=(10, 2))
-        ctk.CTkLabel(header, text="Summary", font=("Segoe UI", 15, "bold"),
+        ctk.CTkLabel(header, text=t("Summary", self.app.current_lang), font=("Segoe UI", 15, "bold"),
                      text_color="#F43F8C").pack(side="left")
         ctk.CTkFrame(panel, fg_color="#F5D0FE", height=2).pack(fill="x", padx=10)
 
@@ -270,14 +276,14 @@ class BillingScreen(ctk.CTkFrame):
             lbl_w.grid(row=0, column=1, sticky="e", padx=10, pady=6)
             setattr(self, val_attr, lbl_w)
 
-        row("Subtotal :", "lbl_subtotal")
-        row("Discount (₹) :", "lbl_discount", "#EF4444")
+        row(t("Subtotal :", self.app.current_lang), "lbl_subtotal")
+        row(t("Discount (₹) :", self.app.current_lang), "lbl_discount", "#EF4444")
 
         # Udhaar row — hidden until a customer with pending udhaar is selected
         udhaar_row = ctk.CTkFrame(panel, fg_color="#FFF7ED", corner_radius=12,
                                   border_width=1, border_color="#FED7AA")
         udhaar_row.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(udhaar_row, text="⚠️  Prev. Udhaar :", font=_font_lbl,
+        ctk.CTkLabel(udhaar_row, text=t("Prev. Udhaar", self.app.current_lang), font=_font_lbl,
                      text_color="#C2410C", anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
         self.lbl_udhaar_adj = ctk.CTkLabel(udhaar_row, text="₹ 0.00",
                                            font=_font_val, text_color="#C2410C", anchor="e")
@@ -290,7 +296,7 @@ class BillingScreen(ctk.CTkFrame):
         gt_frame = ctk.CTkFrame(panel, fg_color="#B91CFF", corner_radius=14)
         gt_frame.pack(fill="x", padx=10, pady=3)
         gt_frame.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(gt_frame, text="TOTAL",
+        ctk.CTkLabel(gt_frame, text=t("TOTAL", self.app.current_lang),
                      font=("Segoe UI", 13, "bold"),
                      text_color="white").grid(row=0, column=0, padx=10, pady=8, sticky="w")
         self.lbl_grand_total = ctk.CTkLabel(
@@ -303,7 +309,7 @@ class BillingScreen(ctk.CTkFrame):
                               border_color="#FDE68A")
         disc_f.pack(fill="x", padx=12, pady=(6, 3))
         disc_f.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(disc_f, text="Bill Discount (₹):", font=_font_lbl,
+        ctk.CTkLabel(disc_f, text=t("Bill Discount (₹):", self.app.current_lang), font=_font_lbl,
                      text_color=COLORS["text_dark"], anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
         self.discount_var = tk.StringVar(value="0")
         self.discount_var.trace_add("write", lambda *_: self._recalculate())
@@ -318,7 +324,7 @@ class BillingScreen(ctk.CTkFrame):
                             border_color="#E9D5FF")
         pm_f.pack(fill="x", padx=12, pady=3)
         pm_f.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(pm_f, text="Payment Mode", font=_font_lbl,
+        ctk.CTkLabel(pm_f, text=t("Payment Mode", self.app.current_lang), font=_font_lbl,
                      text_color=COLORS["text_dark"], anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
         self.payment_mode_var = tk.StringVar(value="Cash")
         self.payment_mode_menu = ctk.CTkOptionMenu(
@@ -335,7 +341,7 @@ class BillingScreen(ctk.CTkFrame):
                                        border_color="#A7F3D0")
         self.cash_frame.pack(fill="x", padx=12, pady=3)
         self.cash_frame.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(self.cash_frame, text="Cash Received (₹)", font=_font_lbl,
+        ctk.CTkLabel(self.cash_frame, text=t("Cash Received (₹)", self.app.current_lang), font=_font_lbl,
                      text_color=COLORS["text_dark"], anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
         self.cash_var = tk.StringVar(value="0")
         self.cash_var.trace_add("write", lambda *_: self._calc_change())
@@ -349,7 +355,7 @@ class BillingScreen(ctk.CTkFrame):
         change_f = ctk.CTkFrame(panel, fg_color="#14CBA8", corner_radius=12)
         change_f.pack(fill="x", padx=10, pady=(5, 8))
         change_f.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(change_f, text="Change Due :", font=_font_lbl_b,
+        ctk.CTkLabel(change_f, text=t("Change Due :", self.app.current_lang), font=_font_lbl_b,
                      text_color="white", anchor="w").grid(row=0, column=0, padx=10, pady=6, sticky="w")
         self.lbl_change = ctk.CTkLabel(change_f, text="₹  0.00",
                                        font=("Segoe UI Semibold", 16, "bold"), text_color="white",
@@ -362,10 +368,11 @@ class BillingScreen(ctk.CTkFrame):
         btn_panel.grid(row=3, column=0, sticky="ew", padx=(0, 10), pady=(10, 0))
         self.action_panel = btn_panel
 
+        L = self.app.current_lang
         btns = [
-            ("F10 Print & Save", "#10B981", "#059669", self._save_and_print),
-            ("F8 Hold Bill", "#F59E0B", "#D97706", self._hold_bill),
-            ("ESC Clear Cart", "#F43F5E", "#E11D48", self._clear_cart),
+            (t("F10 Print & Save", L), "#10B981", "#059669", self._save_and_print),
+            (t("F8 Hold Bill", L), "#F59E0B", "#D97706", self._hold_bill),
+            (t("ESC Clear Cart", L), "#F43F5E", "#E11D48", self._clear_cart),
         ]
         self.action_buttons = []
         for text, fg, hov, cmd in btns:
@@ -872,6 +879,7 @@ class BillingScreen(ctk.CTkFrame):
         self._set_status(f"✅  Added: {product['name']}")
 
     def _refresh_cart_tree(self):
+        self._cancel_inline_edit()
         self.cart_tree.delete(*self.cart_tree.get_children())
 
         if not self.cart:
@@ -899,6 +907,211 @@ class BillingScreen(ctk.CTkFrame):
 
         for idx, color in enumerate(_row_colors):
             self.cart_tree.tag_configure(f"row{idx}", background=color)
+
+    # ─────────────────────────────────────────────────────────────
+    # Inline cell editing (Qty / Price) — click a cell to type
+    # ─────────────────────────────────────────────────────────────
+    _INLINE_COL_MAP = {"#4": ("qty", "quantity"), "#5": ("price", "unit_price")}
+
+    def _on_cart_click(self, event):
+        """Single-click: inline-edit Qty/Price, or open full dialog for ✏️."""
+        region = self.cart_tree.identify_region(event.x, event.y)
+        col = self.cart_tree.identify_column(event.x)
+        item_iid = self.cart_tree.identify_row(event.y)
+
+        if region != "cell" or not item_iid:
+            if self._inline_entry:
+                self._commit_inline_edit()
+            return
+
+        if col in self._INLINE_COL_MAP:
+            # Already editing this exact cell? keep focus
+            if (self._inline_entry
+                    and getattr(self, "_inline_iid", None) == item_iid
+                    and getattr(self, "_inline_col", None) == col):
+                return
+            if self._inline_entry:
+                self._commit_inline_edit()
+            self.after(10, lambda iid=item_iid, c=col:
+                       self._start_inline_edit(iid, c))
+        elif col == "#8":                               # ✏️ action column
+            if self._inline_entry:
+                self._commit_inline_edit()
+            self.cart_tree.selection_set(item_iid)
+            self.after(10, lambda: self._edit_cart_item(None))
+        else:
+            if self._inline_entry:
+                self._commit_inline_edit()
+
+    def _on_cart_double_click(self, event):
+        """Double-click: full edit dialog (skip for Qty/Price — inline handles those)."""
+        col = self.cart_tree.identify_column(event.x)
+        if col in self._INLINE_COL_MAP:
+            return                                      # inline edit already active
+        self._cancel_inline_edit()
+        self._edit_cart_item(event)
+
+    def _start_inline_edit(self, item_iid, col_id):
+        """Overlay a temporary Entry widget on the clicked Qty or Price cell."""
+        self._cancel_inline_edit()
+
+        tree_col, col_key = self._INLINE_COL_MAP[col_id]
+
+        try:
+            bbox = self.cart_tree.bbox(item_iid, tree_col)
+        except Exception:
+            return
+        if not bbox:
+            return
+
+        x, y, w, h = bbox
+        idx = int(item_iid)
+        if idx >= len(self.cart):
+            return
+
+        current_val = self.cart[idx][col_key]
+
+        entry = tk.Entry(
+            self.cart_tree,
+            font=("Segoe UI", 15),
+            justify="right",
+            bg="#FEFCE8",
+            fg="#1A1A2E",
+            relief="solid",
+            bd=1,
+            highlightthickness=2,
+            highlightcolor="#A855F7",
+            highlightbackground="#E9D5FF",
+            selectbackground="#DDD6FE",
+            selectforeground="#1A1A2E",
+        )
+
+        # Format display value
+        if col_key == "quantity" and self.cart[idx]["unit"] == "kg":
+            display_val = f"{current_val:.3f}"
+        else:
+            display_val = f"{current_val:g}"
+
+        entry.insert(0, display_val)
+        entry.select_range(0, "end")
+        entry.place(x=x, y=y, width=max(w, 70), height=h)
+        entry.focus_set()
+
+        self._inline_entry   = entry
+        self._inline_iid     = item_iid
+        self._inline_col     = col_id
+        self._inline_col_key = col_key
+
+        entry.bind("<Return>",   lambda e: self._commit_inline_edit())
+        entry.bind("<KP_Enter>", lambda e: self._commit_inline_edit())
+        entry.bind("<Escape>",   lambda e: self._cancel_inline_edit())
+
+        def _tab(e):
+            self._commit_and_advance()
+            return "break"
+        entry.bind("<Tab>", _tab)
+
+        # FocusOut — commit only if *this* entry is still active
+        _ref = entry
+        entry.bind("<FocusOut>",
+                    lambda e, ref=_ref: self.after(
+                        50, lambda: self._commit_if_same(ref)))
+
+    def _commit_if_same(self, expected_entry):
+        """Commit only when the active inline entry matches *expected_entry*."""
+        if self._inline_entry is expected_entry:
+            self._commit_inline_edit()
+
+    def _commit_inline_edit(self):
+        """Validate and apply the value from the inline edit Entry."""
+        if not self._inline_entry:
+            return
+
+        entry = self._inline_entry
+        try:
+            new_val = float(entry.get().strip())
+        except (ValueError, AttributeError):
+            self._cancel_inline_edit()
+            return
+
+        idx     = int(self._inline_iid)
+        col_key = self._inline_col_key
+
+        if col_key == "quantity" and new_val <= 0:
+            self._cancel_inline_edit()
+            return
+        if col_key == "unit_price" and new_val < 0:
+            self._cancel_inline_edit()
+            return
+
+        self.cart[idx][col_key]      = new_val
+        self.cart[idx]["line_total"] = round(
+            self.cart[idx]["quantity"] * self.cart[idx]["unit_price"]
+            - self.cart[idx]["discount"], 2
+        )
+
+        self._inline_entry = None
+        try:
+            entry.destroy()
+        except Exception:
+            pass
+
+        self._refresh_cart_tree()
+        self._recalculate()
+
+    def _commit_and_advance(self):
+        """Commit, then move to the next editable cell or the search bar."""
+        if not self._inline_entry:
+            return
+
+        entry   = self._inline_entry
+        iid     = self._inline_iid
+        col     = self._inline_col
+        col_key = self._inline_col_key
+
+        try:
+            new_val = float(entry.get().strip())
+        except (ValueError, AttributeError):
+            self._cancel_inline_edit()
+            return
+
+        idx = int(iid)
+        if col_key == "quantity" and new_val <= 0:
+            self._cancel_inline_edit()
+            return
+        if col_key == "unit_price" and new_val < 0:
+            self._cancel_inline_edit()
+            return
+
+        self.cart[idx][col_key]      = new_val
+        self.cart[idx]["line_total"] = round(
+            self.cart[idx]["quantity"] * self.cart[idx]["unit_price"]
+            - self.cart[idx]["discount"], 2
+        )
+
+        self._inline_entry = None
+        try:
+            entry.destroy()
+        except Exception:
+            pass
+
+        self._refresh_cart_tree()
+        self._recalculate()
+
+        # Advance: qty (#4) → price (#5) of same row; price → search bar
+        if col == "#4":
+            self.after(50, lambda: self._start_inline_edit(str(idx), "#5"))
+        else:
+            self._focus_search()
+
+    def _cancel_inline_edit(self):
+        """Discard the inline edit without saving."""
+        if self._inline_entry:
+            try:
+                self._inline_entry.destroy()
+            except Exception:
+                pass
+            self._inline_entry = None
 
     def _edit_cart_item(self, event):
         sel = self.cart_tree.selection()

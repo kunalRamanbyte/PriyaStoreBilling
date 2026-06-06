@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 from datetime import datetime
 from config import COLORS, FONTS
+from lang import t
 
 
 class DashboardScreen(ctk.CTkFrame):
@@ -25,7 +26,7 @@ class DashboardScreen(ctk.CTkFrame):
         header.pack_propagate(False)
 
         ctk.CTkLabel(
-            header, text="🏠  Dashboard",
+            header, text=f"🏠  {t('Dashboard', self.app.current_lang)}",
             font=FONTS["heading"], text_color=COLORS["text_dark"]
         ).pack(side="left", padx=25, pady=15)
         ctk.CTkFrame(header, fg_color=COLORS["glass_border"],
@@ -46,17 +47,18 @@ class DashboardScreen(ctk.CTkFrame):
         kpi_row = ctk.CTkFrame(body, fg_color="transparent")
         kpi_row.pack(fill="x", pady=(0, 16))
 
-        self.kpi_sales   = self._kpi_card(kpi_row, "💰", "Today's Sales",    "₹ 0.00", COLORS["kpi_blue"])
-        self.kpi_bills   = self._kpi_card(kpi_row, "🧾", "Bills Today",      "0",      COLORS["kpi_green"])
-        self.kpi_low     = self._kpi_card(kpi_row, "⚠️",  "Low Stock Items",  "0",      COLORS["kpi_red"])
-        self.kpi_expiry  = self._kpi_card(kpi_row, "📅", "Expiring (30 days)","0",     COLORS["kpi_orange"])
-        self.kpi_disc    = self._kpi_card(kpi_row, "🏷️", "Discount Given",   "₹ 0.00", COLORS["kpi_purple"])
+        L = self.app.current_lang
+        self.kpi_sales   = self._kpi_card(kpi_row, "💰", t("Today's Sales", L),    "₹ 0.00", COLORS["kpi_blue"])
+        self.kpi_bills   = self._kpi_card(kpi_row, "🧾", t("Bills Today", L),      "0",      COLORS["kpi_green"])
+        self.kpi_low     = self._kpi_card(kpi_row, "⚠️",  t("Low Stock Items", L),  "0",      COLORS["kpi_red"])
+        self.kpi_expiry  = self._kpi_card(kpi_row, "📅", t("Expiring (30 days)", L),"0",     COLORS["kpi_orange"])
+        self.kpi_disc    = self._kpi_card(kpi_row, "🏷️", t("Discount Given", L),   "₹ 0.00", COLORS["kpi_purple"])
 
         for card in (self.kpi_sales, self.kpi_bills, self.kpi_low, self.kpi_expiry, self.kpi_disc):
             card.pack(side="left", fill="x", expand=True, padx=6)
 
         # ── Quick Actions ────────────────────────────────────
-        ctk.CTkLabel(body, text="Quick Actions",
+        ctk.CTkLabel(body, text=t("Quick Actions", L),
                      font=FONTS["subheading"], text_color=COLORS["text_dark"]
                     ).pack(anchor="w", pady=(0, 8))
 
@@ -64,10 +66,10 @@ class DashboardScreen(ctk.CTkFrame):
         qa_row.pack(fill="x", pady=(0, 16))
 
         actions = [
-            ("🧾\nNew Bill",       COLORS["btn_primary"],  COLORS["btn_primary_h"], "billing"),
-            ("📦\nAdd Product",    COLORS["btn_success"],  COLORS["btn_success_h"], "products"),
-            ("📋\nBill History",   COLORS["btn_purple"],   COLORS["btn_purple_h"], "bill_history"),
-            ("🏷️\nCategories",    COLORS["btn_warning"],  COLORS["btn_warning_h"], "categories"),
+            (t("New Bill_qa", L),       COLORS["btn_primary"],  COLORS["btn_primary_h"], "billing"),
+            (t("Add Product_qa", L),    COLORS["btn_success"],  COLORS["btn_success_h"], "products"),
+            (t("Bill History_qa", L),   COLORS["btn_purple"],   COLORS["btn_purple_h"], "bill_history"),
+            (t("Categories_qa", L),    COLORS["btn_warning"],  COLORS["btn_warning_h"], "categories"),
         ]
         for text, fg, hov, screen in actions:
             ctk.CTkButton(
@@ -86,7 +88,7 @@ class DashboardScreen(ctk.CTkFrame):
 
         expiry_hdr = ctk.CTkFrame(self.expiry_frame, fg_color="transparent")
         expiry_hdr.pack(fill="x", padx=14, pady=(10, 4))
-        ctk.CTkLabel(expiry_hdr, text="📅  Products Expiring Within 30 Days",
+        ctk.CTkLabel(expiry_hdr, text=f"📅  {t('Products Expiring Within 30 Days', L)}",
                      font=FONTS["subheading"], text_color="#E65100"
                     ).pack(side="left")
 
@@ -98,7 +100,7 @@ class DashboardScreen(ctk.CTkFrame):
         )
         for col, head, w in zip(
             exp_cols,
-            ("Product Name", "Category", "Stock", "Expiry Date", "Days Left"),
+            (t("Product Name", L), t("Category", L), t("Stock", L), t("Expiry Date", L), t("Days Left", L)),
             (240, 130, 70, 110, 90)
         ):
             self.exp_tree.heading(col, text=head)
@@ -108,7 +110,7 @@ class DashboardScreen(ctk.CTkFrame):
         self.exp_tree.pack(fill="x", padx=10, pady=(0, 10))
 
         # ── Recent Bills table ───────────────────────────────
-        self._recent_bills_label = ctk.CTkLabel(body, text="Recent Bills",
+        self._recent_bills_label = ctk.CTkLabel(body, text=t("Recent Bills", L),
                      font=FONTS["subheading"], text_color=COLORS["text_dark"])
         self._recent_bills_label.pack(anchor="w", pady=(0, 6))
 
@@ -122,7 +124,8 @@ class DashboardScreen(ctk.CTkFrame):
             tbl_frame, columns=cols, show="headings",
             height=10, style="Dash.Treeview", selectmode="browse"
         )
-        heads = ("Bill No.", "Date & Time", "Customer", "Amount (₹)", "Mode", "Status")
+        heads = (t("Bill No.", L), t("Date & Time", L), t("Customer", L),
+                 t("Amount (₹)", L), t("Mode", L), t("Status", L))
         widths = (110, 160, 180, 110, 90, 80)
         for col, head, w in zip(cols, heads, widths):
             self.recent_tree.heading(col, text=head)

@@ -9,6 +9,7 @@ from tkinter import ttk, messagebox
 from datetime import date
 from config import COLORS, FONTS, UNITS
 from ui_utils import place_popup, open_date_picker
+from lang import t
 
 
 class PurchaseScreen(ctk.CTkFrame):
@@ -44,7 +45,8 @@ class PurchaseScreen(ctk.CTkFrame):
         hdr = ctk.CTkFrame(left, fg_color=COLORS["bg_card"], corner_radius=0, height=70)
         hdr.grid(row=0, column=0, sticky="ew")
         hdr.grid_propagate(False)
-        ctk.CTkLabel(hdr, text="🛒   New Purchase / GRN",
+        L = self.app.current_lang
+        ctk.CTkLabel(hdr, text=t("New Purchase / GRN", L),
                      font=FONTS["heading"], text_color=COLORS["text_dark"]
                     ).pack(side="left", padx=25, pady=15)
         # GRN-4: show auto-generated next GRN number

@@ -34,6 +34,7 @@ ctk.set_default_color_theme("blue")
 from config import (COLORS, FONTS, RADII, APP_TITLE, SHOP_NAME,
                     WINDOW_WIDTH, WINDOW_HEIGHT, SIDEBAR_WIDTH, resource_path)
 from database import Database
+from lang import t
 from screen_login import LoginScreen
 from screen_dashboard import DashboardScreen
 from screen_billing import BillingScreen
@@ -61,6 +62,7 @@ class BillingApp(ctk.CTk):
         self.db.set_setting("shop_name", "Priya Store") # Always enforce Priya Store globally
         self.current_user = None
         self.current_role = None
+        self.current_lang = self.db.get_setting("app_language", "English")
         self.screens      = {}
         self.nav_buttons  = {}
 
@@ -174,7 +176,8 @@ class BillingApp(ctk.CTk):
         self.geometry(f"{self._fit_w}x{self._fit_h}+{x}+{y}")
 
     def _on_close(self):
-        if messagebox.askyesno("Exit", "Exit the billing system?"):
+        if messagebox.askyesno(t("Exit", self.current_lang),
+                               t("Exit the billing system?", self.current_lang)):
             self._auto_backup()
             self.destroy()
 
@@ -242,7 +245,8 @@ class BillingApp(ctk.CTk):
         self._build_main_window()
 
     def logout(self):
-        if messagebox.askyesno("Logout", "Are you sure you want to logout?"):
+        if messagebox.askyesno(t("Logout", self.current_lang),
+                               t("Are you sure you want to logout?", self.current_lang)):
             if self.current_user:
                 self.db.log_activity(
                     self.current_user["user_id"], "LOGOUT",
@@ -395,7 +399,7 @@ class BillingApp(ctk.CTk):
                 continue
             btn = ctk.CTkButton(
                 nav_scroll,
-                text=f"          {label}",
+                text=f"          {t(label, self.current_lang)}",
                 font=FONTS["sidebar"],
                 fg_color="transparent",
                 hover_color=COLORS["sidebar_hover"],
@@ -424,7 +428,7 @@ class BillingApp(ctk.CTk):
 
         logout_btn = ctk.CTkButton(
             sidebar,
-            text="          Sign Out",          # Aligned to 10 spaces
+            text=f"          {t('Sign Out', self.current_lang)}",
             font=FONTS["sidebar"],
             fg_color="transparent",
             hover_color=COLORS["btn_danger"],
@@ -512,6 +516,22 @@ class BillingApp(ctk.CTk):
             self.screens[screen_name].destroy()
             del self.screens[screen_name]
         self.navigate_to(screen_name)
+
+    def apply_language(self, lang: str):
+        """Switch UI language: save, rebuild sidebar + current screen."""
+        self.current_lang = lang
+        self.db.set_setting("app_language", lang)
+        # Destroy all cached screens so they rebuild with new language
+        current = getattr(self, "current_screen", "dashboard")
+        for name, scr in list(self.screens.items()):
+            try:
+                scr.destroy()
+            except Exception:
+                pass
+        self.screens = {}
+        self.nav_buttons = {}
+        # Rebuild the entire main window (sidebar + header + content)
+        self._build_main_window()
 
 
 if __name__ == "__main__":

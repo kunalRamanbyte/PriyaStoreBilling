@@ -38,6 +38,7 @@ user = {"user_id": 1, "username": "admin", "role": "admin"}
 class FakeApp:
     screens = {}
     current_role = "admin"
+    current_lang = "English"
     def navigate_to(self, *a, **kw): pass
     def rebuild_screen(self, *a, **kw): pass
 

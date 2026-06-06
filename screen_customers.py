@@ -9,6 +9,7 @@ from tkinter import ttk, messagebox
 from datetime import date
 from config import COLORS, FONTS
 from ui_utils import place_popup
+from lang import t
 
 
 class CustomerScreen(ctk.CTkFrame):
@@ -23,14 +24,16 @@ class CustomerScreen(ctk.CTkFrame):
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
+        L = self.app.current_lang
+
         # ── Header ───────────────────────────────────────────
         hdr = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0, height=70)
         hdr.grid(row=0, column=0, sticky="ew")
         hdr.grid_propagate(False)
-        ctk.CTkLabel(hdr, text="👥   Customers & Udhaar",
+        ctk.CTkLabel(hdr, text=t("Customers & Udhaar", L),
                      font=FONTS["heading"], text_color=COLORS["text_dark"]
                     ).pack(side="left", padx=25, pady=15)
-        ctk.CTkButton(hdr, text="➕  Add New Customer",
+        ctk.CTkButton(hdr, text=t("Add New Customer", L),
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
                       height=44, corner_radius=10,
                       command=lambda: self._open_form(None)
@@ -42,9 +45,9 @@ class CustomerScreen(ctk.CTkFrame):
         for i in range(3):
             kpi_row.grid_columnconfigure(i, weight=1)
 
-        self._kpi_total    = self._make_kpi(kpi_row, "👥  Total Customers", "—", COLORS["btn_primary"], 0)
-        self._kpi_udhaar   = self._make_kpi(kpi_row, "💳  Total Udhaar",    "₹0", COLORS["btn_danger"], 1)
-        self._kpi_credit_n = self._make_kpi(kpi_row, "📋  Credit Accounts", "—", COLORS["btn_warning"], 2)
+        self._kpi_total    = self._make_kpi(kpi_row, t("Total Customers", L), "—", COLORS["btn_primary"], 0)
+        self._kpi_udhaar   = self._make_kpi(kpi_row, t("Total Udhaar", L),    "₹0", COLORS["btn_danger"], 1)
+        self._kpi_credit_n = self._make_kpi(kpi_row, t("Credit Accounts", L), "—", COLORS["btn_warning"], 2)
 
         # ── Body ─────────────────────────────────────────────
         body = ctk.CTkFrame(self, fg_color="transparent")
@@ -62,7 +65,7 @@ class CustomerScreen(ctk.CTkFrame):
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self._load_customers())
         ctk.CTkEntry(sbar, textvariable=self.search_var,
-                     placeholder_text="Search by name or phone…",
+                     placeholder_text=t("Search by name or phone…", L),
                      font=FONTS["input"], height=40,
                      border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
                     ).grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=9)
@@ -89,7 +92,7 @@ class CustomerScreen(ctk.CTkFrame):
             foreground=[("selected", COLORS["text_dark"])])
 
         cols   = ("name", "phone", "address", "balance", "status")
-        heads  = ("Customer Name", "Phone", "Address", "Udhaar Balance", "Status")
+        heads  = (t("Customer Name", L), t("Phone", L), t("Address", L), t("Udhaar Balance", L), t("Status", L))
         widths = (240, 160, 260, 160, 100)
         self.tree = ttk.Treeview(tbl, columns=cols, show="headings",
                                   style="Cust.Treeview", selectmode="browse")
@@ -111,12 +114,12 @@ class CustomerScreen(ctk.CTkFrame):
         act.grid(row=3, column=0, sticky="ew")
         act.grid_propagate(False)
         for txt, color, cmd in [
-            ("✏️  Edit",          COLORS["btn_primary"],   self._open_edit_form),
-            ("📖  View Ledger",   COLORS["btn_purple"],    self._open_ledger),
-            ("🖨️  Print Ledger",  "#0277BD",               self._print_ledger),
-            ("💳  Add Payment",   COLORS["btn_success"],   self._add_payment),
-            ("📝  Add Udhaar",    COLORS["btn_warning"],   self._add_udhaar),
-            ("🗑️  Delete",        COLORS["btn_danger"],    self._delete_customer),
+            (t("✏️  Edit", L),          COLORS["btn_primary"],   self._open_edit_form),
+            (t("📖  View Ledger", L),   COLORS["btn_purple"],    self._open_ledger),
+            (t("🖨️  Print Ledger", L),  "#0277BD",               self._print_ledger),
+            (t("💳  Add Payment", L),   COLORS["btn_success"],   self._add_payment),
+            (t("📝  Add Udhaar", L),    COLORS["btn_warning"],   self._add_udhaar),
+            (t("🗑️  Delete", L),        COLORS["btn_danger"],    self._delete_customer),
         ]:
             ctk.CTkButton(act, text=txt, font=FONTS["button"],
                           fg_color=color, height=44, corner_radius=10,
@@ -143,6 +146,7 @@ class CustomerScreen(ctk.CTkFrame):
         self._kpi_credit_n.configure(text=str(s["credit_accounts"]))
 
     def _load_customers(self):
+        L = self.app.current_lang
         search = self.search_var.get().strip()
         rows   = self.db.get_customers(search=search)
         self.tree.delete(*self.tree.get_children())
@@ -159,13 +163,14 @@ class CustomerScreen(ctk.CTkFrame):
             ), tags=(tag,))
         for idx, color in enumerate(_row_colors):
             self.tree.tag_configure(f"row{idx}", background=color)
-        self.count_lbl.configure(text=f"{len(rows)} customer(s)")
+        self.count_lbl.configure(text=t("{n} customer(s) found", L).format(n=len(rows)))
 
     def _get_selected_id(self):
+        L = self.app.current_lang
         sel = self.tree.selection()
         if not sel:
-            messagebox.showinfo("Select Customer",
-                                "Please select a customer first.",
+            messagebox.showinfo(t("Select Customer", L),
+                                t("Please select a customer first.", L),
                                 parent=self.winfo_toplevel())
             return None
         return int(sel[0])
@@ -180,14 +185,15 @@ class CustomerScreen(ctk.CTkFrame):
             self._open_form(cust)
 
     def _open_form(self, customer):
+        L = self.app.current_lang
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
-        dlg.title("Edit Customer" if customer else "Add New Customer")
+        dlg.title(t("Edit Customer", L) if customer else t("Add New Customer", L))
         place_popup(dlg, 480, 400)
         dlg.resizable(False, False)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
 
-        ctk.CTkLabel(dlg, text=f"{'✏️  Edit' if customer else '➕  Add'} Customer",
+        ctk.CTkLabel(dlg, text=f"{t('Edit', L) if customer else t('Add', L)} " + t("Customer", L),
                      font=FONTS["heading"], text_color=COLORS["btn_primary"]
                     ).pack(pady=(20, 6), padx=24, anchor="w")
         ctk.CTkFrame(dlg, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=24, pady=(0, 14))
@@ -208,9 +214,9 @@ class CustomerScreen(ctk.CTkFrame):
                          width=280).pack(side="left")
             entries[key] = var
 
-        field("Full Name",   "name",    p.get("name",""),    "e.g. Raju Sharma",   required=True)
-        field("Phone",       "phone",   p.get("phone",""),   "e.g. 98765 43210")
-        field("Address",     "address", p.get("address",""), "e.g. Lane 4, Market")
+        field(t("Full Name", L),   "name",    p.get("name",""),    "e.g. Raju Sharma",   required=True)
+        field(t("Phone", L),       "phone",   p.get("phone",""),   "e.g. 98765 43210")
+        field(t("Address", L),     "address", p.get("address",""), "e.g. Lane 4, Market")
 
         err_lbl = ctk.CTkLabel(dlg, text="", font=FONTS["small"], text_color=COLORS["btn_danger"])
         err_lbl.pack(pady=(4, 0), padx=24, anchor="w")
@@ -218,7 +224,7 @@ class CustomerScreen(ctk.CTkFrame):
         def save():
             name = entries["name"].get().strip()
             if not name:
-                err_lbl.configure(text="⚠  Customer name is required.")
+                err_lbl.configure(text="⚠  " + t("Customer name is required.", L))
                 return
             data = {
                 "name":    name,
@@ -227,25 +233,26 @@ class CustomerScreen(ctk.CTkFrame):
             }
             if customer:
                 self.db.update_customer(customer["customer_id"], data)
-                messagebox.showinfo("Saved", f"'{name}' updated.", parent=dlg)
+                messagebox.showinfo(t("Saved", L), f"'{name}' " + t("User updated.", L), parent=dlg)
             else:
                 self.db.add_customer(data)
-                messagebox.showinfo("Added", f"'{name}' added.", parent=dlg)
+                messagebox.showinfo(t("Added", L), f"'{name}' " + t("User added.", L), parent=dlg)
             dlg.destroy()
             self._load_customers()
             self._load_kpis()
 
         btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
         btn_row.pack(fill="x", padx=24, pady=16)
-        ctk.CTkButton(btn_row, text="💾  Save", font=FONTS["button"],
+        ctk.CTkButton(btn_row, text=t("Save", L), font=FONTS["button"],
                       fg_color=COLORS["btn_success"], height=50, corner_radius=16,
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ctk.CTkButton(btn_row, text="Cancel", font=FONTS["button"],
+        ctk.CTkButton(btn_row, text=t("Cancel", L), font=FONTS["button"],
                       fg_color=COLORS["btn_secondary"], height=50, corner_radius=16,
                       command=dlg.destroy).pack(side="left", width=110)
 
     # ── Ledger popup ─────────────────────────────────────────
     def _open_ledger(self):
+        L = self.app.current_lang
         cid = self._get_selected_id()
         if not cid:
             return
@@ -255,7 +262,7 @@ class CustomerScreen(ctk.CTkFrame):
         txns = self.db.get_customer_transactions(cid, limit=200)
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
-        dlg.title(f"Ledger — {cust['name']}")
+        dlg.title(t("Ledger", L) + f" — {cust['name']}")
         place_popup(dlg, 700, 540)
         dlg.resizable(True, True)
         dlg.grab_set()
@@ -266,11 +273,11 @@ class CustomerScreen(ctk.CTkFrame):
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
         bal = cust.get("credit_balance") or 0
-        ctk.CTkLabel(hdr, text=f"📖  {cust['name']}  |  Phone: {cust.get('phone','—')}",
+        ctk.CTkLabel(hdr, text=f"📖  {cust['name']}  |  " + t("Phone", L) + f": {cust.get('phone','—')}",
                      font=FONTS["body_bold"], text_color="white"
                     ).pack(side="left", padx=20, pady=10)
         bal_color = "#FFCDD2" if bal > 0 else "#C8E6C9"
-        ctk.CTkLabel(hdr, text=f"Balance: ₹{bal:,.2f}",
+        ctk.CTkLabel(hdr, text=t("Current Balance", L) + f": ₹{bal:,.2f}",
                      font=FONTS["body_bold"], text_color=bal_color
                     ).pack(side="right", padx=20)
 
@@ -293,7 +300,7 @@ class CustomerScreen(ctk.CTkFrame):
             foreground=[("selected", COLORS["text_dark"])])
 
         cols   = ("date", "type", "amount", "reference", "notes")
-        heads  = ("Date & Time", "Type", "Amount (₹)", "Reference", "Notes")
+        heads  = (t("Date & Time", L), t("Type", L), t("Amount (₹)", L), t("Reference", L), t("Notes", L))
         widths = (180, 110, 130, 160, 160)
         tree = ttk.Treeview(tbl, columns=cols, show="headings",
                              style="Led.Treeview", selectmode="browse")
@@ -307,20 +314,20 @@ class CustomerScreen(ctk.CTkFrame):
         tree.tag_configure("credit",  background="#FFEBEE")
         tree.tag_configure("payment", background="#E8F5E9")
 
-        for i, t in enumerate(txns):
-            tag = "credit" if t["txn_type"] == "Credit" else "payment"
+        for i, t_ in enumerate(txns):
+            tag = "credit" if t_["txn_type"] == "Credit" else "payment"
             tree.insert("", "end", values=(
-                str(t["created_at"])[:16],
-                "🔴 Udhaar" if t["txn_type"] == "Credit" else "🟢 Payment",
-                f"₹{t['amount']:,.2f}",
-                t.get("reference", "") or "",
-                t.get("notes", "") or "",
+                str(t_["created_at"])[:16],
+                "🔴 " + t("Udhaar", L) if t_["txn_type"] == "Credit" else "🟢 " + t("Payment", L),
+                f"₹{t_['amount']:,.2f}",
+                t_.get("reference", "") or "",
+                t_.get("notes", "") or "",
             ), tags=(tag,))
 
         if not txns:
-            tree.insert("", "end", values=("No transactions yet", "", "", "", ""))
+            tree.insert("", "end", values=(t("No transactions yet", L), "", "", "", ""))
 
-        ctk.CTkButton(dlg, text="Close", font=FONTS["button"],
+        ctk.CTkButton(dlg, text=t("Close", L), font=FONTS["button"],
                       fg_color=COLORS["btn_secondary"], height=44, corner_radius=10,
                       command=dlg.destroy).pack(pady=8)
 
@@ -333,6 +340,7 @@ class CustomerScreen(ctk.CTkFrame):
         self._transaction_dialog("Credit")
 
     def _transaction_dialog(self, txn_type: str):
+        L = self.app.current_lang
         cid = self._get_selected_id()
         if not cid:
             return
@@ -341,7 +349,7 @@ class CustomerScreen(ctk.CTkFrame):
             return
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
-        title = "💳  Record Payment" if txn_type == "Payment" else "📝  Add Udhaar (Credit)"
+        title = t("Record Payment", L) if txn_type == "Payment" else t("Add Udhaar (Credit)", L)
         dlg.title(title)
         place_popup(dlg, 440, 380)
         dlg.resizable(False, False)
@@ -349,9 +357,9 @@ class CustomerScreen(ctk.CTkFrame):
         dlg.attributes("-topmost", True)
 
         ctk.CTkLabel(dlg, text=title, font=FONTS["heading"],
-                     text_color=COLORS["btn_primary"] if txn_type == "Payment" else COLORS["btn_warning"]
+                      text_color=COLORS["btn_primary"] if txn_type == "Payment" else COLORS["btn_warning"]
                     ).pack(pady=(20, 4), padx=24, anchor="w")
-        ctk.CTkLabel(dlg, text=f"Customer: {cust['name']}  |  Current Balance: ₹{(cust.get('credit_balance') or 0):,.2f}",
+        ctk.CTkLabel(dlg, text=t("Customer", L) + f": {cust['name']}  |  " + t("Current Balance", L) + f": ₹{(cust.get('credit_balance') or 0):,.2f}",
                      font=FONTS["small"], text_color=COLORS["text_muted"]
                     ).pack(padx=24, anchor="w")
         ctk.CTkFrame(dlg, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=24, pady=(8, 14))
@@ -360,25 +368,25 @@ class CustomerScreen(ctk.CTkFrame):
             f = ctk.CTkFrame(dlg, fg_color="transparent")
             f.pack(fill="x", padx=24, pady=6)
             ctk.CTkLabel(f, text=label, font=FONTS["label_form"],
-                         text_color=COLORS["text_dark"], width=130, anchor="w").pack(side="left")
+                          text_color=COLORS["text_dark"], width=130, anchor="w").pack(side="left")
             return widget_fn(f)
 
         amt_var = tk.StringVar()
-        row("Amount (₹) *", lambda f: ctk.CTkEntry(
+        row(t("Amount (₹) *", L), lambda f: ctk.CTkEntry(
             f, textvariable=amt_var, placeholder_text="e.g. 500",
             font=FONTS["input"], height=44,
             border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"], width=260
         ).pack(side="left"))
 
         ref_var = tk.StringVar()
-        row("Reference", lambda f: ctk.CTkEntry(
+        row(t("Reference", L), lambda f: ctk.CTkEntry(
             f, textvariable=ref_var, placeholder_text="Bill no / note",
             font=FONTS["input"], height=44,
             border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"], width=260
         ).pack(side="left"))
 
         note_var = tk.StringVar()
-        row("Notes", lambda f: ctk.CTkEntry(
+        row(t("Notes", L), lambda f: ctk.CTkEntry(
             f, textvariable=note_var, placeholder_text="Optional note",
             font=FONTS["input"], height=44,
             border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"], width=260
@@ -393,7 +401,7 @@ class CustomerScreen(ctk.CTkFrame):
                 if amount <= 0:
                     raise ValueError
             except ValueError:
-                err_lbl.configure(text="⚠  Enter a valid amount.")
+                err_lbl.configure(text="⚠  " + t("Enter a valid amount.", L))
                 return
             self.db.add_customer_transaction(
                 cid, txn_type, amount,
@@ -402,7 +410,7 @@ class CustomerScreen(ctk.CTkFrame):
                 self.current_user["user_id"]
             )
             verb = "Payment of" if txn_type == "Payment" else "Udhaar of"
-            messagebox.showinfo("Saved", f"{verb} ₹{amount:,.2f} recorded.", parent=dlg)
+            messagebox.showinfo(t("Saved", L), f"{verb} ₹{amount:,.2f} recorded.", parent=dlg)
             dlg.destroy()
             self._load_customers()
             self._load_kpis()
@@ -410,34 +418,34 @@ class CustomerScreen(ctk.CTkFrame):
         btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
         btn_row.pack(fill="x", padx=24, pady=14)
         btn_color = COLORS["btn_success"] if txn_type == "Payment" else COLORS["btn_warning"]
-        ctk.CTkButton(btn_row, text="💾  Save", font=FONTS["button"],
+        ctk.CTkButton(btn_row, text=t("Save", L), font=FONTS["button"],
                       fg_color=btn_color, height=50, corner_radius=16,
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ctk.CTkButton(btn_row, text="Cancel", font=FONTS["button"],
+        ctk.CTkButton(btn_row, text=t("Cancel", L), font=FONTS["button"],
                       fg_color=COLORS["btn_secondary"], height=50, corner_radius=16,
                       command=dlg.destroy).pack(side="left", width=110)
 
     def _delete_customer(self):
         """Permanently delete customer (CUST-1). Deactivates if has bills."""
+        L = self.app.current_lang
         cid = self._get_selected_id()
         if not cid:
             return
         cust = self.db.get_customer_by_id(cid)
         if not cust:
             return
+        msg_template = "Permanently DELETE '{name}'?\n\n⚠️  Cannot be undone.\nIf this customer has billing history they will be deactivated instead."
         if not messagebox.askyesno(
-            "Delete Customer",
-            f"Permanently DELETE '{cust['name']}'?\n\n"
-            "⚠️  Cannot be undone.\n"
-            "If this customer has billing history they will be deactivated instead.",
+            t("Delete Customer", L),
+            t(msg_template, L).format(name=cust['name']),
             parent=self.winfo_toplevel()
         ):
             return
         ok, msg = self.db.delete_customer(cid)
         if ok:
-            messagebox.showinfo("Deleted", msg, parent=self.winfo_toplevel())
+            messagebox.showinfo(t("Deleted", L), msg, parent=self.winfo_toplevel())
         else:
-            messagebox.showwarning("Cannot Delete", msg, parent=self.winfo_toplevel())
+            messagebox.showwarning(t("Cannot Delete", L), msg, parent=self.winfo_toplevel())
             self.db.deactivate_customer(cid)
         self._load_customers()
         self._load_kpis()
@@ -493,13 +501,13 @@ class CustomerScreen(ctk.CTkFrame):
             ]
             hdr_row = [Paragraph(x, t_s) for x in ["Date & Time","Type","Amount ₹","Reference","Notes"]]
             rows = [hdr_row]
-            for t in txns:
+            for t_ in txns:
                 rows.append([
-                    Paragraph(str(t.get("created_at",""))[:16], c_s),
-                    Paragraph(str(t.get("txn_type","")),         c_s),
-                    Paragraph(f"₹{float(t.get('amount',0)):,.2f}", c_s),
-                    Paragraph(str(t.get("reference","") or ""), c_s),
-                    Paragraph(str(t.get("notes","") or ""),     c_s),
+                    Paragraph(str(t_.get("created_at",""))[:16], c_s),
+                    Paragraph(str(t_.get("txn_type","")),         c_s),
+                    Paragraph(f"₹{float(t_.get('amount',0)):,.2f}", c_s),
+                    Paragraph(str(t_.get("reference","") or ""), c_s),
+                    Paragraph(str(t_.get("notes","") or ""),     c_s),
                 ])
             tbl = Table(rows, colWidths=[38*mm,28*mm,28*mm,40*mm,48*mm], repeatRows=1)
             tbl.setStyle(TableStyle([
@@ -527,14 +535,15 @@ class CustomerScreen(ctk.CTkFrame):
             messagebox.showerror("PDF Error", str(e), parent=self.winfo_toplevel())
 
     def _deactivate(self):
+        L = self.app.current_lang
         cid = self._get_selected_id()
         if not cid:
             return
         cust = self.db.get_customer_by_id(cid)
         if not cust:
             return
-        if messagebox.askyesno("Deactivate",
-                               f"Deactivate '{cust['name']}'?",
+        if messagebox.askyesno(t("Deactivate", L),
+                               t("Deactivate", L) + f" '{cust['name']}'?",
                                parent=self.winfo_toplevel()):
             self.db.deactivate_customer(cid)
             self._load_customers()

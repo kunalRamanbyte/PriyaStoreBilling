@@ -7,6 +7,7 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import messagebox, colorchooser
 from config import COLORS, FONTS, CAT_COLORS
+from lang import t
 
 
 class CategoryScreen(ctk.CTkFrame):
@@ -23,7 +24,8 @@ class CategoryScreen(ctk.CTkFrame):
         header = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0, height=70)
         header.pack(fill="x")
         header.pack_propagate(False)
-        ctk.CTkLabel(header, text="🏷️   Category Manager",
+        L = self.app.current_lang
+        ctk.CTkLabel(header, text=t("Category Manager", L),
                      font=FONTS["heading"], text_color=COLORS["text_dark"]
                     ).pack(side="left", padx=25, pady=15)
 
@@ -39,7 +41,7 @@ class CategoryScreen(ctk.CTkFrame):
         list_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
         self.list_frame = list_frame
 
-        ctk.CTkLabel(list_frame, text="All Categories",
+        ctk.CTkLabel(list_frame, text=t("All Categories_list", L),
                      font=FONTS["subheading"], text_color=COLORS["btn_primary"]
                     ).pack(pady=(14, 6), padx=16, anchor="w")
         ctk.CTkFrame(list_frame, fg_color=COLORS["tbl_select"], height=2
@@ -53,13 +55,13 @@ class CategoryScreen(ctk.CTkFrame):
         form_outer.grid(row=0, column=1, sticky="ns")
         form_outer.grid_propagate(False)
 
-        ctk.CTkLabel(form_outer, text="Add / Edit Category",
+        ctk.CTkLabel(form_outer, text=t("Add / Edit Category", L),
                      font=FONTS["subheading"], text_color=COLORS["btn_primary"]
                     ).pack(pady=(20, 8), padx=20, anchor="w")
         ctk.CTkFrame(form_outer, fg_color=COLORS["tbl_select"], height=2
                     ).pack(fill="x", padx=20, pady=(0, 16))
 
-        ctk.CTkLabel(form_outer, text="Category Name *",
+        ctk.CTkLabel(form_outer, text=t("Category Name *", L),
                      font=FONTS["label_form"], text_color=COLORS["text_dark"]
                     ).pack(anchor="w", padx=20)
         self.name_var = tk.StringVar()
@@ -71,7 +73,7 @@ class CategoryScreen(ctk.CTkFrame):
         )
         self.name_entry.pack(fill="x", padx=20, pady=(4, 16))
 
-        ctk.CTkLabel(form_outer, text="Colour Code",
+        ctk.CTkLabel(form_outer, text=t("Colour Code", L),
                      font=FONTS["label_form"], text_color=COLORS["text_dark"]
                     ).pack(anchor="w", padx=20)
 
@@ -96,7 +98,7 @@ class CategoryScreen(ctk.CTkFrame):
         pick_row.pack(fill="x", padx=20, pady=(4, 16))
         ctk.CTkLabel(pick_row, text="Custom:", font=FONTS["small"],
                      text_color=COLORS["text_muted"]).pack(side="left")
-        ctk.CTkButton(pick_row, text="🎨 Pick Colour",
+        ctk.CTkButton(pick_row, text=t("Pick Colour", L),
                       font=FONTS["small_bold"], fg_color="#607D8B",
                       height=32, width=130, corner_radius=10,
                       command=self._pick_custom_color
@@ -111,13 +113,13 @@ class CategoryScreen(ctk.CTkFrame):
         self.err_lbl.pack(pady=(0, 6), padx=20, anchor="w")
 
         # Save button
-        ctk.CTkButton(form_outer, text="💾  Save Category",
+        ctk.CTkButton(form_outer, text=t("Save Category", L),
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
                       height=50, corner_radius=16,
                       command=self._save_category
                      ).pack(fill="x", padx=20, pady=(0, 8))
 
-        ctk.CTkButton(form_outer, text="🔄  Reset / New",
+        ctk.CTkButton(form_outer, text=t("Reset / New", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
                       height=44, corner_radius=16,
                       command=self._reset_form

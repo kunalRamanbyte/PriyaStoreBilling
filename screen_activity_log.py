@@ -10,6 +10,7 @@ Shows every logged system event:
   • User changes
   • Settings saved
   • Backup events
+  • Pwd changes
 
 Live search, row count, and CSV export.
 """
@@ -19,6 +20,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import csv
 from config import COLORS, FONTS
+from lang import t
 
 ACTION_COLORS = {
     "LOGIN"           : "#E8F5E9",
@@ -68,16 +70,18 @@ class ActivityLogScreen(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
 
+        L = self.app.current_lang
+
         # ── Header ──
         hdr = ctk.CTkFrame(self, fg_color=COLORS["bg_card"],
                            corner_radius=16, height=70)
         hdr.grid(row=0, column=0, sticky="ew", padx=20, pady=(18, 0))
         hdr.grid_propagate(False)
-        ctk.CTkLabel(hdr, text="📋   Activity Log",
+        ctk.CTkLabel(hdr, text=t("Activity Log_heading", L),
                      font=FONTS["subheading"],
                      text_color=COLORS["text_dark"]).pack(side="left", padx=24, pady=18)
         ctk.CTkButton(
-            hdr, text="📥  Export CSV",
+            hdr, text=t("Export CSV", L),
             font=FONTS["button"],
             fg_color=COLORS["btn_purple"],
             hover_color="#9B45C7",
@@ -94,7 +98,7 @@ class ActivityLogScreen(ctk.CTkFrame):
 
         ctk.CTkLabel(search_bar, text="🔍",
                      font=("Segoe UI", 20)).grid(
-                         row=0, column=0, padx=(16, 4), pady=10)
+                          row=0, column=0, padx=(16, 4), pady=10)
         ctk.CTkEntry(
             search_bar,
             textvariable=self._search_var,
@@ -102,12 +106,12 @@ class ActivityLogScreen(ctk.CTkFrame):
             fg_color=COLORS["bg_input"],
             border_color=COLORS["border"],
             text_color=COLORS["text_dark"],
-            placeholder_text="Search by user, action, or details...",
+            placeholder_text=t("Search by user, action, or details...", L),
             height=40,
         ).grid(row=0, column=1, sticky="ew", padx=(0, 12), pady=10)
 
         self._count_label = ctk.CTkLabel(
-            search_bar, text="0 records",
+            search_bar, text="",
             font=FONTS["small_bold"],
             text_color=COLORS["text_muted"])
         self._count_label.grid(row=0, column=2, padx=12)
@@ -130,7 +134,7 @@ class ActivityLogScreen(ctk.CTkFrame):
         )
         # ttk styles applied globally via styles.py
         for col, w in self.COLS:
-            self.tree.heading(col, text=col)
+            self.tree.heading(col, text=t(col, L))
             self.tree.column(col, width=w, minwidth=60,
                              anchor="w" if col == "Details" else "center")
 
@@ -151,7 +155,7 @@ class ActivityLogScreen(ctk.CTkFrame):
         pg.pack_propagate(False)
 
         self._btn_prev = ctk.CTkButton(
-            pg, text="◀  Previous", font=FONTS["button"],
+            pg, text=t("Previous", L), font=FONTS["button"],
             fg_color=COLORS["btn_secondary"],
             hover_color="#263238",
             height=40, width=140,
@@ -159,12 +163,12 @@ class ActivityLogScreen(ctk.CTkFrame):
         self._btn_prev.pack(side="left", padx=12, pady=8)
 
         self._page_label = ctk.CTkLabel(
-            pg, text="Page 1", font=FONTS["body_bold"],
+            pg, text="", font=FONTS["body_bold"],
             text_color=COLORS["text_dark"])
         self._page_label.pack(side="left", padx=16)
 
         self._btn_next = ctk.CTkButton(
-            pg, text="Next  ▶", font=FONTS["button"],
+            pg, text=t("Next", L), font=FONTS["button"],
             fg_color=COLORS["btn_primary"],
             hover_color="#005BBE",
             height=40, width=140,
@@ -179,6 +183,7 @@ class ActivityLogScreen(ctk.CTkFrame):
         self._load()
 
     def _load(self):
+        L = self.app.current_lang
         search = self._search_var.get().strip()
         self._total = self.db.get_activity_log_count(search)
         rows = self.db.get_activity_log(
@@ -212,11 +217,11 @@ class ActivityLogScreen(ctk.CTkFrame):
 
         # Update counters
         self._count_label.configure(
-            text=f"{self._total} record{'s' if self._total != 1 else ''}")
+            text=f"{self._total} " + t("records", L))
 
         page     = self._offset // self.PAGE_SIZE + 1
         total_pg = max(1, (self._total + self.PAGE_SIZE - 1) // self.PAGE_SIZE)
-        self._page_label.configure(text=f"Page {page} / {total_pg}")
+        self._page_label.configure(text=t("Page", L) + f" {page} / {total_pg}")
         self._btn_prev.configure(
             state="normal" if self._offset > 0 else "disabled")
         self._btn_next.configure(
@@ -233,11 +238,12 @@ class ActivityLogScreen(ctk.CTkFrame):
 
     # ─────────────────────────────────────────────────────────
     def _export_csv(self):
+        L = self.app.current_lang
         path = filedialog.asksaveasfilename(
             defaultextension=".csv",
             filetypes=[("CSV file", "*.csv")],
             initialfile="activity_log",
-            title="Export Activity Log",
+            title=t("Export CSV", L),
         )
         if not path:
             return
@@ -265,10 +271,10 @@ class ActivityLogScreen(ctk.CTkFrame):
                         r.get("action", ""),
                         r.get("details", ""),
                     ])
-            messagebox.showinfo("Exported",
-                                f"✅  Activity log exported!\n{path}")
+            messagebox.showinfo(t("Exported", L),
+                                t("Saved to:", L) + f"\n{path}")
         except Exception as e:
-            messagebox.showerror("Export Failed", str(e))
+            messagebox.showerror(t("Error", L), str(e))
 
     def on_show(self):
         self._offset = 0

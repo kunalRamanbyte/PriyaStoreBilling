@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from config import COLORS, FONTS
 from ui_utils import place_popup
+from lang import t
 
 
 class InventoryScreen(ctk.CTkFrame):
@@ -27,10 +28,11 @@ class InventoryScreen(ctk.CTkFrame):
         header.grid(row=0, column=0, sticky="ew")
         header.pack_propagate(False)
         header.grid_propagate(False)
-        ctk.CTkLabel(header, text="📊   Inventory Manager",
+        L = self.app.current_lang
+        ctk.CTkLabel(header, text=t("Inventory Overview", L),
                      font=FONTS["heading"], text_color=COLORS["text_dark"]
                     ).pack(side="left", padx=25, pady=15)
-        ctk.CTkButton(header, text="🔧  Adjust Stock",
+        ctk.CTkButton(header, text=t("Adjust Stock", L),
                       font=FONTS["button"], fg_color=COLORS["btn_warning"],
                       height=44, corner_radius=10,
                       command=self._open_adjustment_dialog
