@@ -49,7 +49,7 @@ class BillingScreen(ctk.CTkFrame):
         self._build_status_bar()
 
     def _build_top_bar(self):
-        top = ctk.CTkFrame(self, fg_color="#FDFBFF", corner_radius=0, height=58)
+        top = ctk.CTkFrame(self, fg_color=COLORS.get("bg_header", "#FDFBFF"), corner_radius=0, height=58)
         top.grid(row=0, column=0, sticky="ew")
         top.grid_propagate(False)
         top.grid_columnconfigure(1, weight=1)
@@ -71,7 +71,7 @@ class BillingScreen(ctk.CTkFrame):
             top,
             text="",
             font=("Segoe UI", 12),
-            text_color="#475569",
+            text_color=COLORS.get("text_muted", "#475569"),
         )
         self.clock_label.grid(row=0, column=1, padx=8, sticky="e")
         self._update_clock()
@@ -105,7 +105,10 @@ class BillingScreen(ctk.CTkFrame):
         self.context_left.grid(row=0, column=0, sticky="w")
 
         self.section_chip = self._make_chip(
-            self.context_left, t("New Bill", self.app.current_lang), "#F8E9FF", "#A21CAF", 44
+            self.context_left, t("New Bill", self.app.current_lang),
+            COLORS.get("bg_chip_new_bill", "#F8E9FF"),
+            COLORS.get("fg_chip_new_bill", "#A21CAF"),
+            44
         )
         self.section_chip.pack(side="left", padx=(0, 8))
 
@@ -122,8 +125,8 @@ class BillingScreen(ctk.CTkFrame):
             width=260,
             height=42,
             border_width=1,
-            border_color="#99F6E4",
-            fg_color="#F8FFFE",
+            border_color=COLORS.get("border_customer_entry", "#99F6E4"),
+            fg_color=COLORS.get("bg_customer_entry", "#F8FFFE"),
             text_color=COLORS["text_dark"],
             corner_radius=14,
         )
@@ -156,11 +159,11 @@ class BillingScreen(ctk.CTkFrame):
 
         search_frame = ctk.CTkFrame(
             body,
-            fg_color="#FFF8FB",
+            fg_color=COLORS.get("bg_summary_panel", "#FFF8FB"),
             corner_radius=18,
             height=62,
             border_width=1,
-            border_color="#E9D5FF",
+            border_color=COLORS.get("border_summary_panel", "#E9D5FF"),
         )
         search_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         search_frame.grid_propagate(False)
@@ -176,19 +179,19 @@ class BillingScreen(ctk.CTkFrame):
             font=("Segoe UI", 15),
             height=44,
             border_width=1,
-            border_color="#E9D5FF",
-            fg_color="#FFFFFF",
-            text_color=COLORS["text_dark"],
+            border_color=COLORS.get("border_summary_card", "#E9D5FF"),
+            fg_color=COLORS.get("bg_summary_card", "#FFFFFF"),
+            text_color=COLORS.get("text_summary_row", "#1A1A2E"),
             corner_radius=16,
         )
         self.search_entry.grid(row=0, column=0, sticky="ew", padx=12, pady=9)
 
         cart_frame = ctk.CTkFrame(
             body,
-            fg_color="#FFFFFF",
+            fg_color=COLORS.get("bg_summary_card", "#FFFFFF"),
             corner_radius=18,
             border_width=1,
-            border_color="#DDD6FE"
+            border_color=COLORS.get("border_summary_card", "#DDD6FE")
         )
         cart_frame.grid(row=2, column=0, sticky="nsew", padx=(0, 10))
         cart_frame.grid_rowconfigure(0, weight=1)
@@ -244,10 +247,10 @@ class BillingScreen(ctk.CTkFrame):
     def _build_totals_panel(self, parent):
         panel = ctk.CTkFrame(
             parent,
-            fg_color="#FFF4F8",
+            fg_color=COLORS.get("bg_summary_panel", "#FFF4F8"),
             corner_radius=18,
             border_width=1,
-            border_color="#F5D0FE",
+            border_color=COLORS.get("border_summary_panel", "#F5D0FE"),
         )
         panel.grid(row=0, column=0, sticky="nsew", pady=(0, 8))
         panel.grid_columnconfigure(0, weight=1)
@@ -263,11 +266,13 @@ class BillingScreen(ctk.CTkFrame):
         header.pack(fill="x", padx=12, pady=(10, 2))
         ctk.CTkLabel(header, text=t("Summary", self.app.current_lang), font=("Segoe UI", 15, "bold"),
                      text_color="#F43F8C").pack(side="left")
-        ctk.CTkFrame(panel, fg_color="#F5D0FE", height=2).pack(fill="x", padx=10)
+        ctk.CTkFrame(panel, fg_color=COLORS.get("border_summary_panel", "#F5D0FE"), height=2).pack(fill="x", padx=10)
 
-        def row(lbl, val_attr, color="#1A1A2E"):
-            f = ctk.CTkFrame(panel, fg_color="#FFFFFF", corner_radius=12, border_width=1,
-                             border_color="#E9D5FF")
+        def row(lbl, val_attr, color=None):
+            if color is None:
+                color = COLORS.get("text_summary_row", "#1A1A2E")
+            f = ctk.CTkFrame(panel, fg_color=COLORS.get("bg_summary_card", "#FFFFFF"), corner_radius=12, border_width=1,
+                             border_color=COLORS.get("border_summary_card", "#E9D5FF"))
             f.pack(fill="x", padx=12, pady=3)
             f.grid_columnconfigure(1, weight=1)
             ctk.CTkLabel(f, text=lbl, font=_font_lbl, text_color=COLORS["text_muted"],
@@ -280,17 +285,24 @@ class BillingScreen(ctk.CTkFrame):
         row(t("Discount (₹) :", self.app.current_lang), "lbl_discount", "#EF4444")
 
         # Udhaar row — hidden until a customer with pending udhaar is selected
-        udhaar_row = ctk.CTkFrame(panel, fg_color="#FFF7ED", corner_radius=12,
-                                  border_width=1, border_color="#FED7AA")
+        udhaar_row = ctk.CTkFrame(
+            panel,
+            fg_color=COLORS.get("bg_summary_udhaar", "#FFF7ED"),
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS.get("border_summary_udhaar", "#FED7AA")
+        )
         udhaar_row.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(udhaar_row, text=t("Prev. Udhaar", self.app.current_lang), font=_font_lbl,
-                     text_color="#C2410C", anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
-        self.lbl_udhaar_adj = ctk.CTkLabel(udhaar_row, text="₹ 0.00",
-                                           font=_font_val, text_color="#C2410C", anchor="e")
+                     text_color=COLORS.get("text_summary_udhaar", "#C2410C"), anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
+        self.lbl_udhaar_adj = ctk.CTkLabel(
+            udhaar_row, text="₹ 0.00", font=_font_val,
+            text_color=COLORS.get("text_summary_udhaar", "#C2410C"), anchor="e"
+        )
         self.lbl_udhaar_adj.grid(row=0, column=1, sticky="e", padx=10, pady=6)
         self.udhaar_row_frame = udhaar_row   # shown/hidden dynamically; do NOT pack yet
 
-        self._totals_divider = ctk.CTkFrame(panel, fg_color="#E9D5FF", height=2)
+        self._totals_divider = ctk.CTkFrame(panel, fg_color=COLORS.get("border_summary_card", "#E9D5FF"), height=2)
         self._totals_divider.pack(fill="x", padx=10, pady=4)
 
         gt_frame = ctk.CTkFrame(panel, fg_color="#B91CFF", corner_radius=14)
@@ -305,8 +317,13 @@ class BillingScreen(ctk.CTkFrame):
         )
         self.lbl_grand_total.grid(row=0, column=1, padx=10, pady=8, sticky="e")
 
-        disc_f = ctk.CTkFrame(panel, fg_color="#FFFFFF", corner_radius=12, border_width=1,
-                              border_color="#FDE68A")
+        disc_f = ctk.CTkFrame(
+            panel,
+            fg_color=COLORS.get("bg_summary_card", "#FFFFFF"),
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS.get("border_summary_entry", "#FDE68A")
+        )
         disc_f.pack(fill="x", padx=12, pady=(6, 3))
         disc_f.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(disc_f, text=t("Bill Discount (₹):", self.app.current_lang), font=_font_lbl,
@@ -316,12 +333,20 @@ class BillingScreen(ctk.CTkFrame):
         self.discount_entry = ctk.CTkEntry(
             disc_f, textvariable=self.discount_var,
             height=30, width=84, font=_font_entry,
-            border_width=0, fg_color="#FEFCE8", justify="right"
+            border_width=0,
+            fg_color=COLORS.get("fg_summary_entry", "#FEFCE8"),
+            text_color=COLORS.get("text_summary_row", "#1A1A2E"),
+            justify="right"
         )
         self.discount_entry.grid(row=0, column=1, sticky="e", padx=(8, 10), pady=6)
 
-        pm_f = ctk.CTkFrame(panel, fg_color="#FFFFFF", corner_radius=12, border_width=1,
-                            border_color="#E9D5FF")
+        pm_f = ctk.CTkFrame(
+            panel,
+            fg_color=COLORS.get("bg_summary_card", "#FFFFFF"),
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS.get("border_summary_card", "#E9D5FF")
+        )
         pm_f.pack(fill="x", padx=12, pady=3)
         pm_f.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(pm_f, text=t("Payment Mode", self.app.current_lang), font=_font_lbl,
@@ -331,14 +356,23 @@ class BillingScreen(ctk.CTkFrame):
             pm_f, variable=self.payment_mode_var,
             values=PAYMENT_MODES,
             font=_font_lbl, height=30, width=116, corner_radius=10,
-            fg_color="#FFFFFF", button_color="#FFFFFF", button_hover_color="#F3E8FF",
-            text_color="#7C3AED", dropdown_fg_color="#FFFFFF", dropdown_text_color="#334155",
+            fg_color=COLORS.get("fg_summary_pm_btn", "#FFFFFF"),
+            button_color=COLORS.get("fg_summary_pm_btn", "#FFFFFF"),
+            button_hover_color=COLORS.get("border_summary_card", "#F3E8FF"),
+            text_color=COLORS.get("text_summary_pm_btn", "#7C3AED"),
+            dropdown_fg_color=COLORS.get("dropdown_fg_summary_pm", "#FFFFFF"),
+            dropdown_text_color=COLORS.get("dropdown_text_summary_pm", "#334155"),
             command=self._on_payment_mode_change,
         )
         self.payment_mode_menu.grid(row=0, column=1, sticky="e", padx=(8, 10), pady=6)
 
-        self.cash_frame = ctk.CTkFrame(panel, fg_color="#FFFFFF", corner_radius=12, border_width=1,
-                                       border_color="#A7F3D0")
+        self.cash_frame = ctk.CTkFrame(
+            panel,
+            fg_color=COLORS.get("bg_summary_card", "#FFFFFF"),
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS.get("border_summary_cash", "#A7F3D0")
+        )
         self.cash_frame.pack(fill="x", padx=12, pady=3)
         self.cash_frame.grid_columnconfigure(1, weight=1)
         ctk.CTkLabel(self.cash_frame, text=t("Cash Received (₹)", self.app.current_lang), font=_font_lbl,
@@ -348,7 +382,10 @@ class BillingScreen(ctk.CTkFrame):
         self.cash_entry = ctk.CTkEntry(
             self.cash_frame, textvariable=self.cash_var,
             height=30, width=84, font=_font_entry,
-            border_width=0, fg_color="#ECFDF5", justify="right"
+            border_width=0,
+            fg_color=COLORS.get("bg_summary_cash", "#ECFDF5"),
+            text_color=COLORS.get("text_summary_cash", "#059669"),
+            justify="right"
         )
         self.cash_entry.grid(row=0, column=1, sticky="e", padx=(8, 10), pady=6)
 

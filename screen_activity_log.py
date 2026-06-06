@@ -22,25 +22,41 @@ import csv
 from config import COLORS, FONTS
 from lang import t
 
-ACTION_COLORS = {
-    "LOGIN"           : "#E8F5E9",
-    "LOGOUT"          : "#EEEEEE",
-    "BILL_SAVED"      : COLORS["tbl_select"],
-    "BILL_VOIDED"     : "#FFEBEE",
-    "GRN_SAVED"       : "#E8EAF6",
-    "PRODUCT_"        : "#FFF8E1",
-    "USER_"           : "#F3E5F5",
-    "SETTINGS_SAVED"  : "#E0F7FA",
-    "BACKUP"          : "#E0F7FA",
-    "PWD_CHANGED"     : "#FFF3E0",
-}
-
-
-def _row_color(action: str) -> str:
-    for prefix, color in ACTION_COLORS.items():
-        if action.startswith(prefix):
-            return color
-    return "white"
+def _row_colors(action: str, mode: str = "light") -> tuple[str, str]:
+    if mode.lower() == "dark":
+        ACTION_COLORS_DARK = {
+            "LOGIN"           : ("#143A26", "#F8FAFC"),      # Muted Dark Green
+            "LOGOUT"          : ("#374151", "#F8FAFC"),      # Muted Slate
+            "BILL_SAVED"      : ("#1E293B", "#F8FAFC"),      # Dark Blue-Slate
+            "BILL_VOIDED"     : ("#5F1E24", "#F8FAFC"),      # Muted Dark Red
+            "GRN_SAVED"       : ("#1C2035", "#F8FAFC"),      # Muted Indigo
+            "PRODUCT_"        : ("#5C4E15", "#F8FAFC"),      # Muted Gold
+            "USER_"           : ("#3A1E5C", "#F8FAFC"),      # Muted Dark Purple
+            "SETTINGS_SAVED"  : ("#173A3C", "#F8FAFC"),      # Muted Dark Cyan
+            "BACKUP"          : ("#173A3C", "#F8FAFC"),
+            "PWD_CHANGED"     : ("#3D271A", "#F8FAFC"),      # Muted Dark Orange
+        }
+        for prefix, colors in ACTION_COLORS_DARK.items():
+            if action.startswith(prefix):
+                return colors
+        return ("#1E293B", "#F8FAFC")
+    else:
+        ACTION_COLORS_LIGHT = {
+            "LOGIN"           : ("#E8F5E9", "#1A1A2E"),
+            "LOGOUT"          : ("#EEEEEE", "#1A1A2E"),
+            "BILL_SAVED"      : ("#DBEAFE", "#1A1A2E"),
+            "BILL_VOIDED"     : ("#FFEBEE", "#1A1A2E"),
+            "GRN_SAVED"       : ("#E8EAF6", "#1A1A2E"),
+            "PRODUCT_"        : ("#FFF8E1", "#1A1A2E"),
+            "USER_"           : ("#F3E5F5", "#1A1A2E"),
+            "SETTINGS_SAVED"  : ("#E0F7FA", "#1A1A2E"),
+            "BACKUP"          : ("#E0F7FA", "#1A1A2E"),
+            "PWD_CHANGED"     : ("#FFF3E0", "#1A1A2E"),
+        }
+        for prefix, colors in ACTION_COLORS_LIGHT.items():
+            if action.startswith(prefix):
+                return colors
+        return ("white", "#1A1A2E")
 
 
 class ActivityLogScreen(ctk.CTkFrame):
@@ -196,12 +212,13 @@ class ActivityLogScreen(ctk.CTkFrame):
 
         # Register unique color tags
         seen_tags = set()
+        mode = ctk.get_appearance_mode().lower()
         for r in rows:
             action = str(r.get("action", ""))
-            color  = _row_color(action)
-            tag    = f"clr_{color.replace('#','')}"
+            bg_color, fg_color = _row_colors(action, mode)
+            tag    = f"clr_{bg_color.replace('#','')}_{fg_color.replace('#','')}"
             if tag not in seen_tags:
-                self.tree.tag_configure(tag, background=color)
+                self.tree.tag_configure(tag, background=bg_color, foreground=fg_color)
                 seen_tags.add(tag)
 
             ts = str(r.get("timestamp", ""))[:19].replace("T", "  ")
