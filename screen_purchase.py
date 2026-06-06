@@ -7,8 +7,8 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import date
-from config import COLORS, FONTS
-from ui_utils import place_popup
+from config import COLORS, FONTS, UNITS
+from ui_utils import place_popup, open_date_picker
 
 
 class PurchaseScreen(ctk.CTkFrame):
@@ -89,28 +89,25 @@ class PurchaseScreen(ctk.CTkFrame):
         sbar = ctk.CTkFrame(left, fg_color=COLORS["bg_card"], corner_radius=16, height=58)
         sbar.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 4))
         sbar.grid_propagate(False)
-        sbar.grid_columnconfigure(1, weight=1)
+        sbar.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(sbar, text="🔍  Add Product:",
-                     font=FONTS["body_bold"], text_color=COLORS["text_dark"]
-                    ).grid(row=0, column=0, padx=(16, 8))
         self.prod_search_var = tk.StringVar()
         self.prod_search_var.trace_add("write", self._on_search_change)
         self.prod_entry = ctk.CTkEntry(
             sbar, textvariable=self.prod_search_var,
-            placeholder_text="Type product name to add…",
+            placeholder_text="🔍  Search and select product from existing list…",
             font=FONTS["input"], height=42,
             border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
         )
-        self.prod_entry.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=8)
+        self.prod_entry.grid(row=0, column=0, sticky="ew", padx=(16, 10), pady=8)
         self.prod_entry.bind("<Return>", lambda e: self._search_product())
         self._popup = None
 
-        ctk.CTkButton(sbar, text="➕  Add Item",
+        ctk.CTkButton(sbar, text="➕  Add New Item",
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
-                      height=42, width=130, corner_radius=10,
-                      command=self._search_product
-                     ).grid(row=0, column=2, padx=(0, 16), pady=8)
+                      height=42, width=160, corner_radius=10,
+                      command=self._open_new_product_form
+                     ).grid(row=0, column=1, padx=(0, 16), pady=8)
 
         # Cart table
         tbl_frame = ctk.CTkFrame(left, fg_color=COLORS["bg_card"], corner_radius=16)
@@ -502,6 +499,170 @@ class PurchaseScreen(ctk.CTkFrame):
         self.supplier_var.set("Direct Purchase")
         self.notes_var.set("")
         self.prod_search_var.set("")
+
+    # ─────────────────────────────────────────────────────────────
+    # Add New Product (creates in Product Master + adds to GRN cart)
+    # ─────────────────────────────────────────────────────────────
+    def _open_new_product_form(self):
+        """Open a form to create a brand-new product, save it to the
+        Product Master, and immediately add it to the current GRN cart."""
+        dlg = ctk.CTkToplevel(self.winfo_toplevel())
+        dlg.title("Add New Product")
+        place_popup(dlg, 540, 640)
+        dlg.resizable(False, True)
+        dlg.grab_set()
+        dlg.attributes("-topmost", True)
+
+        scroll = ctk.CTkScrollableFrame(dlg, fg_color=COLORS["bg_main"])
+        scroll.pack(fill="both", expand=True)
+
+        ctk.CTkLabel(scroll, text="➕  Add New Product",
+                     font=FONTS["heading"], text_color=COLORS["btn_primary"]
+                    ).pack(pady=(16, 10), padx=24, anchor="w")
+
+        cats  = self.db.get_categories()
+        c_map = {c["name"]: c["category_id"] for c in cats}
+        c_names = list(c_map.keys())
+
+        entries = {}
+
+        def field(label, key, default="", placeholder="", wide=False):
+            f = ctk.CTkFrame(scroll, fg_color="transparent")
+            f.pack(fill="x", padx=24, pady=5)
+            ctk.CTkLabel(f, text=label, font=FONTS["label_form"],
+                         text_color=COLORS["text_dark"],
+                         width=165, anchor="w").pack(side="left")
+            var = tk.StringVar(value=str(default) if default not in (None, "") else "")
+            ctk.CTkEntry(f, textvariable=var,
+                         placeholder_text=placeholder,
+                         font=FONTS["input"], height=40,
+                         border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"],
+                         width=290 if wide else 220
+                        ).pack(side="left")
+            entries[key] = var
+            return var
+
+        def dropdown(label, key, values, default=""):
+            f = ctk.CTkFrame(scroll, fg_color="transparent")
+            f.pack(fill="x", padx=24, pady=5)
+            ctk.CTkLabel(f, text=label, font=FONTS["label_form"],
+                         text_color=COLORS["text_dark"],
+                         width=165, anchor="w").pack(side="left")
+            var = tk.StringVar(value=default if default else (values[0] if values else ""))
+            ctk.CTkOptionMenu(f, variable=var, values=values,
+                              font=FONTS["input"], height=40, width=220,
+                              fg_color=COLORS["btn_primary"], button_color="#005BBE"
+                             ).pack(side="left")
+            entries[key] = var
+
+        field("Product Name *",       "name",           "",  "e.g. Aashirvaad Atta 5kg", wide=True)
+        field("Product Code",         "product_code",   "",  "Auto-generated if blank")
+        dropdown("Category *",        "category",       c_names,
+                 c_names[0] if c_names else "")
+        field("Brand",                "brand",          "",  "Optional")
+        dropdown("Unit *",            "unit",           UNITS, "piece")
+        field("Selling Price (₹) *",  "selling_price",  "",  "e.g. 45.50")
+        field("Purchase Price (₹)",   "purchase_price", "",  "For margin calc")
+        field("Current Stock",        "current_stock",  "0", "Quantity in hand")
+        field("Reorder Level",        "reorder_level",  "5", "Alert threshold")
+        # Expiry date — entry + calendar button
+        exp_f = ctk.CTkFrame(scroll, fg_color="transparent")
+        exp_f.pack(fill="x", padx=24, pady=5)
+        ctk.CTkLabel(exp_f, text="Expiry Date", font=FONTS["label_form"],
+                     text_color=COLORS["text_dark"],
+                     width=165, anchor="w").pack(side="left")
+        exp_var = tk.StringVar(value="")
+        entries["expiry_date"] = exp_var
+        ctk.CTkEntry(exp_f, textvariable=exp_var,
+                     placeholder_text="Click calendar →",
+                     font=FONTS["input"], height=40, width=170,
+                     border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
+                    ).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(exp_f, text="📅", width=44, height=40,
+                      font=("Segoe UI", 18), corner_radius=10,
+                      fg_color=COLORS["btn_primary"],
+                      command=lambda: open_date_picker(exp_f, exp_var, "Select Expiry Date")
+                     ).pack(side="left")
+
+        err_lbl = ctk.CTkLabel(scroll, text="", font=FONTS["small"],
+                                text_color=COLORS["btn_danger"])
+        err_lbl.pack(pady=(4, 0), padx=24, anchor="w")
+
+        def save():
+            name = entries["name"].get().strip()
+            if not name:
+                err_lbl.configure(text="⚠  Product Name is required.")
+                return
+            try:
+                sell = float(entries["selling_price"].get() or 0)
+                buy  = float(entries["purchase_price"].get() or 0)
+                stk  = float(entries["current_stock"].get() or 0)
+                ror  = float(entries["reorder_level"].get() or 5)
+            except ValueError:
+                err_lbl.configure(text="⚠  Prices and stock must be numbers.")
+                return
+
+            exp_raw = entries["expiry_date"].get().strip()
+            expiry  = None
+            if exp_raw:
+                try:
+                    from datetime import date as _date
+                    _date.fromisoformat(exp_raw)
+                    expiry = exp_raw
+                except ValueError:
+                    err_lbl.configure(text="⚠  Expiry Date must be YYYY-MM-DD (e.g. 2026-12-31).")
+                    return
+
+            cat_name = entries["category"].get()
+            cat_id   = c_map.get(cat_name)
+            code     = entries["product_code"].get().strip()
+
+            data = {
+                "product_code" : code or None,
+                "name"         : name,
+                "category_id"  : cat_id,
+                "brand"        : entries["brand"].get().strip() or None,
+                "unit"         : entries["unit"].get(),
+                "selling_price": sell,
+                "purchase_price": buy,
+                "current_stock": stk,
+                "reorder_level": ror,
+                "expiry_date"  : expiry,
+            }
+
+            # Save to Product Master
+            new_id = self.db.add_product(data)
+
+            # Refresh Products screen if cached
+            if "products" in self.app.screens:
+                self.app.screens["products"]._load_products()
+
+            dlg.destroy()
+            messagebox.showinfo(
+                "Product Added",
+                f"'{name}' has been added to the Product Master.\n\n"
+                "It will now be opened for quantity & price entry.",
+                parent=self.winfo_toplevel()
+            )
+
+            # Auto-add to GRN cart via the item dialog
+            prod = self.db.get_product_by_id(new_id)
+            if prod:
+                self._add_product_to_cart(prod)
+
+        dlg.bind("<Return>", lambda e: save())
+
+        btn_row = ctk.CTkFrame(scroll, fg_color="transparent")
+        btn_row.pack(fill="x", padx=24, pady=12)
+        ctk.CTkButton(btn_row, text="💾  Save & Add to GRN",
+                      font=FONTS["button"], fg_color=COLORS["btn_success"],
+                      height=48, corner_radius=16,
+                      command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
+        ctk.CTkButton(btn_row, text="Cancel",
+                      font=FONTS["button"], fg_color=COLORS["btn_secondary"],
+                      height=48, corner_radius=16,
+                      command=dlg.destroy).pack(side="left", width=100)
+
 
     # ─────────────────────────────────────────────────────────────
     # GRN PDF

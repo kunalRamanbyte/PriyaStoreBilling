@@ -72,3 +72,95 @@ def place_popup(dlg, logical_w: int, logical_h: int, parent=None):
     gx = round(x / window_scale)
     gy = round(y / window_scale)
     dlg.geometry(f"{gw}x{gh}+{gx}+{gy}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Calendar date picker helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+def open_date_picker(parent, var, title="Select Date"):
+    """Open a calendar popup and write the selected date (YYYY-MM-DD) into *var*.
+
+    *parent* — any tkinter widget (used for positioning).
+    *var*    — a tk.StringVar whose value will be set.
+    """
+    import tkinter as tk
+    from datetime import date
+
+    try:
+        from tkcalendar import Calendar
+    except ImportError:
+        from tkinter import messagebox
+        messagebox.showerror(
+            "Missing Library",
+            "tkcalendar is required.\nRun:  pip install tkcalendar",
+            parent=parent.winfo_toplevel(),
+        )
+        return
+
+    popup = tk.Toplevel(parent.winfo_toplevel())
+    popup.title(title)
+    popup.resizable(False, False)
+    popup.grab_set()
+    popup.attributes("-topmost", True)
+
+    # Start date: parse from var, or use today
+    try:
+        start = date.fromisoformat(var.get().strip())
+    except (ValueError, AttributeError):
+        start = date.today()
+
+    cal = Calendar(
+        popup,
+        selectmode="day",
+        year=start.year,
+        month=start.month,
+        day=start.day,
+        date_pattern="yyyy-mm-dd",
+        font=("Segoe UI", 12),
+        background="#1D4ED8",
+        foreground="white",
+        headersbackground="#1E3A8A",
+        headersforeground="white",
+        selectbackground="#16A34A",
+        selectforeground="white",
+        normalbackground="white",
+        normalforeground="#1A1A2E",
+        weekendbackground="#F1F5F9",
+        weekendforeground="#1A1A2E",
+        bordercolor="#CBD5E1",
+    )
+    cal.pack(padx=10, pady=10)
+
+    btn_frame = tk.Frame(popup, bg="#F8FAFC")
+    btn_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+    def confirm():
+        var.set(cal.get_date())
+        popup.destroy()
+
+    def clear():
+        var.set("")
+        popup.destroy()
+
+    tk.Button(btn_frame, text="✅  Select", font=("Segoe UI", 11, "bold"),
+              bg="#16A34A", fg="white", relief="flat", padx=16, pady=6,
+              cursor="hand2", command=confirm
+             ).pack(side="left", padx=(0, 6))
+    tk.Button(btn_frame, text="🗑  Clear", font=("Segoe UI", 11),
+              bg="#EF4444", fg="white", relief="flat", padx=16, pady=6,
+              cursor="hand2", command=clear
+             ).pack(side="left", padx=(0, 6))
+    tk.Button(btn_frame, text="Cancel", font=("Segoe UI", 11),
+              bg="#94A3B8", fg="white", relief="flat", padx=16, pady=6,
+              cursor="hand2", command=popup.destroy
+             ).pack(side="left")
+
+    # Centre over parent
+    popup.update_idletasks()
+    pw = popup.winfo_width()
+    ph = popup.winfo_height()
+    px = parent.winfo_rootx() + parent.winfo_width() // 2 - pw // 2
+    py = parent.winfo_rooty() + parent.winfo_height() // 2 - ph // 2
+    popup.geometry(f"+{max(0, px)}+{max(0, py)}")
+

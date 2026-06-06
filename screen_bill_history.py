@@ -294,7 +294,7 @@ class BillHistoryScreen(ctk.CTkFrame):
                                  parent=self.winfo_toplevel())
 
     def _reprint_bill(self):
-        """Reprint selected bill as PDF — auto-opens without save dialog."""
+        """Reprint selected bill on the thermal printer."""
         bill_id = self._get_selected_bill_id()
         if not bill_id:
             return
@@ -306,7 +306,27 @@ class BillHistoryScreen(ctk.CTkFrame):
                                    "This bill has been voided and cannot be reprinted.",
                                    parent=self.winfo_toplevel())
             return
-        self._pdf_bill(bill, items)
+        try:
+            from bill_printer import print_thermal
+            settings = {
+                "shop_name"   : self.db.get_setting("shop_name",    "Priya Store"),
+                "shop_address": self.db.get_setting("shop_address",  ""),
+                "shop_city"   : self.db.get_setting("shop_city",     ""),
+                "shop_phone"  : self.db.get_setting("shop_phone",    ""),
+                "shop_gst"    : self.db.get_setting("shop_gst",      ""),
+                "cashier"     : self.current_user.get("username",    ""),
+            }
+            paper = self.db.get_setting("thermal_paper_width", "80mm") or "80mm"
+            ok, msg = print_thermal(bill, items, settings, paper)
+            if ok:
+                messagebox.showinfo("Printed", f"Receipt sent to: {msg}",
+                                    parent=self.winfo_toplevel())
+            else:
+                messagebox.showerror("Thermal Print Failed", str(msg),
+                                     parent=self.winfo_toplevel())
+        except Exception as e:
+            messagebox.showerror("Thermal Print Error", str(e),
+                                 parent=self.winfo_toplevel())
 
     def _void_bill(self):
         bill_id = self._get_selected_bill_id()

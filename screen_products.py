@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import date
 from config import COLORS, FONTS, UNITS
-from ui_utils import place_popup
+from ui_utils import place_popup, open_date_picker
 
 
 class ProductScreen(ctk.CTkFrame):
@@ -102,12 +102,13 @@ class ProductScreen(ctk.CTkFrame):
         )
         heads  = ("Code", "Product Name", "Category", "Brand", "Unit",
                   "Sell ₹", "Cost ₹", "Stock", "Reorder", "Expiry Date", "Status")
-        widths = (90, 200, 110, 100, 60, 75, 75, 65, 65, 100, 65)
+        widths = (120, 280, 160, 140, 70, 90, 90, 80, 80, 130, 80)
+        stretch_cols = {"name", "category"}
         for col, head, w in zip(cols, heads, widths):
             self.tree.heading(col, text=head)
             anch = "e" if col in ("sell_price","buy_price","stock","reorder") else "w"
-            # stretch=False keeps fixed column width so horizontal scroll works (PROD-4 fix)
-            self.tree.column(col, width=w, anchor=anch, minwidth=50, stretch=False)
+            self.tree.column(col, width=w, anchor=anch, minwidth=50,
+                             stretch=(col in stretch_cols))
 
         vsb = ttk.Scrollbar(tbl_frame, orient="vertical",   command=self.tree.yview)
         hsb = ttk.Scrollbar(tbl_frame, orient="horizontal", command=self.tree.xview)
@@ -286,7 +287,24 @@ class ProductScreen(ctk.CTkFrame):
         field("Purchase Price (₹)",  "purchase_price",p.get("purchase_price",""),"For margin calc")
         field("Current Stock",       "current_stock", p.get("current_stock",0), "Quantity in hand")
         field("Reorder Level",       "reorder_level", p.get("reorder_level",5),  "Alert threshold")
-        field("Expiry Date",         "expiry_date",   p.get("expiry_date","") or "", "YYYY-MM-DD  (leave blank if N/A)")
+        # Expiry date — entry + calendar button
+        exp_f = ctk.CTkFrame(scroll, fg_color="transparent")
+        exp_f.pack(fill="x", padx=24, pady=5)
+        ctk.CTkLabel(exp_f, text="Expiry Date", font=FONTS["label_form"],
+                     text_color=COLORS["text_dark"],
+                     width=165, anchor="w").pack(side="left")
+        exp_var = tk.StringVar(value=p.get("expiry_date", "") or "")
+        entries["expiry_date"] = exp_var
+        ctk.CTkEntry(exp_f, textvariable=exp_var,
+                     placeholder_text="Click calendar →",
+                     font=FONTS["input"], height=40, width=170,
+                     border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
+                    ).pack(side="left", padx=(0, 6))
+        ctk.CTkButton(exp_f, text="📅", width=44, height=40,
+                      font=("Segoe UI", 18), corner_radius=10,
+                      fg_color=COLORS["btn_primary"],
+                      command=lambda: open_date_picker(exp_f, exp_var, "Select Expiry Date")
+                     ).pack(side="left")
 
         err_lbl = ctk.CTkLabel(scroll, text="", font=FONTS["small"],
                                 text_color=COLORS["btn_danger"])
