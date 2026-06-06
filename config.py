@@ -47,7 +47,7 @@ SIDEBAR_WIDTH = 240
 #  Cards     : Semi-transparent glass white
 #  Accents   : Vivid gradients with Apple system colors
 #
-COLORS = {
+LIGHT_COLORS = {
     # ── Backgrounds ──────────────────────────────────────────
     "bg_main"       : "#EEF2FF",   # Warm blue-tinted off-white
     "bg_sidebar"    : "#1B2A4E",   # Deep gradient blue fallback
@@ -79,6 +79,8 @@ COLORS = {
     "btn_purple_h"  : "#7C3AED",   # Violet 600
 
     # ── Sidebar (dark navy glassmorphism) ────────────────────
+    "sidebar_grad_start": "#1E3A8A", # Royal Blue
+    "sidebar_grad_end"  : "#0F172A", # Navy Blue
     "sidebar_active": "#1E3A5F",   # Active item — deep blue glass
     "sidebar_hover" : "#1E293B",   # Hover — subtle lighten
     "sidebar_text"  : "#E2E8F0",   # Slate 200 — soft white
@@ -137,6 +139,107 @@ COLORS = {
         "#FCE4EC",   # Light Pink
     ],
 }
+
+DARK_COLORS = {
+    # ── Backgrounds ──────────────────────────────────────────
+    "bg_main"       : "#0F172A",   # Slate 900
+    "bg_sidebar"    : "#070A13",   # Very dark navy
+    "bg_header"     : "#1E293B",   # Slate 800
+    "bg_white"      : "#1E293B",
+    "bg_card"       : "#1E293B",   # Slate 800 card
+    "bg_input"      : "#0F172A",   # Slate 900 input
+
+    # ── Text ─────────────────────────────────────────────────
+    "text_dark"     : "#F8FAFC",   # Slate 50 white text
+    "text_light"    : "#FFFFFF",
+    "text_muted"    : "#94A3B8",   # Slate 400 muted text
+    "text_blue"     : "#60A5FA",
+    "text_green"    : "#34D399",
+    "text_red"      : "#F87171",
+
+    # ── Modern Accent Buttons ────────────────────────────────
+    "btn_primary"   : "#2563EB",   # Vibrant Blue
+    "btn_primary_h" : "#1D4ED8",
+    "btn_success"   : "#059669",   # Emerald Green
+    "btn_success_h" : "#047857",
+    "btn_danger"    : "#DC2626",   # Crimson Red
+    "btn_danger_h"  : "#B91C1C",
+    "btn_warning"   : "#D97706",   # Amber
+    "btn_warning_h" : "#B45309",
+    "btn_secondary" : "#475569",   # Slate Grey
+    "btn_secondary_h": "#334155",
+    "btn_purple"    : "#7C3AED",   # Violet Accent
+    "btn_purple_h"  : "#6D28D9",
+
+    # ── Sidebar (dark navy glassmorphism) ────────────────────
+    "sidebar_grad_start": "#0F172A", # Navy
+    "sidebar_grad_end"  : "#070B14", # Vantablack Blue
+    "sidebar_active": "#1E293B",   # Slate 800
+    "sidebar_hover" : "#334155",   # Slate 700
+    "sidebar_text"  : "#F3F4F6",   # Soft white
+    "sidebar_accent": "#93C5FD",   # Soft blue
+    "sidebar_glow"  : "#60A5FA",
+    "sidebar_divider": "#334155",
+
+    # ── Status Badges ────────────────────────────────────────
+    "badge_active"  : "#064E3B",   # Dark green
+    "badge_void"    : "#7F1D1D",   # Dark red
+    "badge_draft"   : "#78350F",   # Dark amber
+    "badge_low"     : "#7F1D1D",
+    "badge_ok"      : "#064E3B",
+
+    # ── Tables ───────────────────────────────────────────────
+    "tbl_header_bg" : "#1E293B",   # Slate 800 header
+    "tbl_header_fg" : "#F8FAFC",
+    "tbl_row_alt"   : "#1E293B",
+    "tbl_select"    : "#374151",   # Soft grey selection
+    "tbl_low_stock" : "#451A1A",   # Muted red row
+
+    # ── KPI Card Colors ──────────────────────────────────────
+    "kpi_blue"      : "#2563EB",
+    "kpi_blue_end"  : "#4F46E5",
+    "kpi_green"     : "#059669",
+    "kpi_green_end" : "#0D9488",
+    "kpi_orange"    : "#D97706",
+    "kpi_orange_end": "#DC2626",
+    "kpi_purple"    : "#7C3AED",
+    "kpi_purple_end": "#DB2777",
+    "kpi_red"       : "#DC2626",
+    "kpi_red_end"   : "#EA580C",
+    "kpi_teal"      : "#0D9488",
+    "kpi_pink"      : "#DB2777",
+    "kpi_yellow"    : "#CA8A04",
+
+    # ── Glass Effect Tokens ──────────────────────────────────
+    "glass_card"    : "#1E293B",
+    "glass_border"  : "#334155",
+    "glass_glow"    : "#1E3A8A",
+
+    # -- Border / Divider --
+    "border"        : "#334155",
+    "border_focus"  : "#60A5FA",
+    "cat_default"   : "#94A3B8",
+
+    # ── Muted dark table colors ──────────────────────────────
+    "ROW_COLORS": [
+        "#1E293B",   # Dark slate
+        "#143A26",   # Muted Green
+        "#2D1D3A",   # Muted Purple
+        "#3D271A",   # Muted Orange
+        "#173A3C",   # Muted Teal
+        "#3C1D2A",   # Muted Pink
+    ],
+}
+
+# The active color map — dynamically populated
+COLORS = dict(LIGHT_COLORS)
+
+def apply_theme_mode(mode: str):
+    """In-place update of COLORS dictionary values to switch themes."""
+    COLORS.clear()
+    source = LIGHT_COLORS if mode.lower() == "light" else DARK_COLORS
+    COLORS.update(source)
+
 
 # --- Category Color Wheel (Modern vibrant) ---
 CAT_COLORS = [

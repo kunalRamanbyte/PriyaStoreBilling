@@ -63,10 +63,17 @@ class BillingApp(ctk.CTk):
         self.current_user = None
         self.current_role = None
         self.current_lang = self.db.get_setting("app_language", "English")
+        self.current_theme = self.db.get_setting("app_theme", "System")
+        
+        # Apply theme setting on startup
+        ctk.set_appearance_mode(self.current_theme)
+        from config import apply_theme_mode
+        apply_theme_mode(ctk.get_appearance_mode().lower())
+
         self.screens      = {}
         self.nav_buttons  = {}
 
-        setup_ttk_styles()              # register all ttk styles once
+        setup_ttk_styles(ctk.get_appearance_mode().lower())              # register all ttk styles once
         self._setup_window()
         self._show_login()
         self._schedule_daily_backup()   # start 24-hour backup timer
@@ -327,9 +334,11 @@ class BillingApp(ctk.CTk):
             w, h = event.width, event.height
             if w <= 1 or h <= 1:
                 return
-            # Gorgeous vertical blue gradient (deep royal blue -> dark navy blue)
-            r1, g1, b1 = 30, 58, 138    # #1E3A8A
-            r2, g2, b2 = 15, 23, 42     # #0F172A
+            # Dynamic sidebar gradient colors loaded from config
+            c_start = COLORS.get("sidebar_grad_start", "#1E3A8A")
+            c_end = COLORS.get("sidebar_grad_end", "#0F172A")
+            r1, g1, b1 = int(c_start[1:3], 16), int(c_start[3:5], 16), int(c_start[5:7], 16)
+            r2, g2, b2 = int(c_end[1:3], 16), int(c_end[3:5], 16), int(c_end[5:7], 16)
             for y in range(h):
                 t = y / h
                 r = int(r1 + (r2 - r1) * t)
@@ -531,6 +540,32 @@ class BillingApp(ctk.CTk):
         self.screens = {}
         self.nav_buttons = {}
         # Rebuild the entire main window (sidebar + header + content)
+        self._build_main_window()
+
+    def apply_theme(self, theme: str):
+        """Switch theme: save, set appearance, update config COLORS, update styles, and rebuild UI."""
+        self.current_theme = theme
+        self.db.set_setting("app_theme", theme)
+        ctk.set_appearance_mode(theme)
+        
+        # Get active mode ("light" or "dark") and update config.COLORS
+        from config import apply_theme_mode
+        actual_mode = ctk.get_appearance_mode().lower()
+        apply_theme_mode(actual_mode)
+        
+        # Reinitialize styles with new theme colors
+        setup_ttk_styles(actual_mode)
+        
+        # Clear screen cache and nav buttons so widgets are rebuilt with correct colors
+        for name, scr in list(self.screens.items()):
+            try:
+                scr.destroy()
+            except Exception:
+                pass
+        self.screens = {}
+        self.nav_buttons = {}
+        
+        # Rebuild layout
         self._build_main_window()
 
 

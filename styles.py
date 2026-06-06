@@ -14,7 +14,7 @@ from tkinter import ttk
 from config import COLORS, FONTS
 
 
-def setup_ttk_styles():
+def setup_ttk_styles(mode="light"):
     """Register every Treeview and Scrollbar style used across the app."""
     s = ttk.Style()
     s.theme_use("clam")   # clam allows the most colour overrides
@@ -79,12 +79,14 @@ def setup_ttk_styles():
         )
 
     # ── Expiry panel uses a warm header ──────────────────────
+    exp_bg = "#FFF9F0" if mode.lower() == "light" else "#2D1E10"
     s.configure("Exp.Treeview",
-        background="#FFF9F0",
-        fieldbackground="#FFF9F0",
+        background=exp_bg,
+        fieldbackground=exp_bg,
         font=FONTS["table"],
         rowheight=44,
     )
+
     s.configure("Exp.Treeview.Heading",
         font=FONTS["table_hdr"],
         background=COLORS["btn_warning"],

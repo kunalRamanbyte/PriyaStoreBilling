@@ -60,11 +60,13 @@ class SettingsScreen(ctk.CTkFrame):
         body.grid(row=1, column=0, sticky="nsew", padx=20, pady=12)
         body.grid_columnconfigure(0, weight=1)
 
-        # ── Language section ─────────────────────────────────
-        self._section(body, 0, "🌐  Language")
+        # ── Language & Theme section ─────────────────────────
+        self._section(body, 0, "🌐  Language & Theme")
         lang_card = ctk.CTkFrame(body, fg_color=COLORS["bg_card"], corner_radius=16)
         lang_card.grid(row=1, column=0, sticky="ew", pady=4, padx=4)
         lang_card.grid_columnconfigure(1, weight=1)
+        
+        # Row 0: Language Selection
         ctk.CTkLabel(lang_card, text="Select Language",
                      font=FONTS["label_form"],
                      text_color=COLORS["text_dark"],
@@ -81,6 +83,24 @@ class SettingsScreen(ctk.CTkFrame):
             command=self._change_language,
         )
         self._lang_menu.grid(row=0, column=1, padx=(0, 18), pady=10, sticky="w")
+
+        # Row 1: Theme Mode Selection
+        ctk.CTkLabel(lang_card, text="Theme Mode",
+                     font=FONTS["label_form"],
+                     text_color=COLORS["text_dark"],
+                     width=200, anchor="w").grid(row=1, column=0, padx=18, pady=14)
+        self._theme_var = tk.StringVar()
+        self._theme_menu = ctk.CTkOptionMenu(
+            lang_card, variable=self._theme_var,
+            values=["System", "Light", "Dark"],
+            font=FONTS["input"], height=42, width=260, corner_radius=10,
+            fg_color=COLORS["bg_input"], button_color=COLORS["btn_primary"],
+            button_hover_color="#005BBE",
+            text_color=COLORS["text_dark"],
+            dropdown_fg_color="#FFFFFF", dropdown_text_color="#334155",
+            command=self._change_theme,
+        )
+        self._theme_menu.grid(row=1, column=1, padx=(0, 18), pady=10, sticky="w")
 
         # Shop Info section
         self._section(body, 2, "🏪  Shop Information")
@@ -257,6 +277,10 @@ class SettingsScreen(ctk.CTkFrame):
                 break
         self._lang_var.set(lang_display)
 
+        # Restore theme selection
+        saved_theme = s.get("app_theme", "System")
+        self._theme_var.set(saved_theme)
+
         # Restore custom backup folder label
         custom = s.get("backup_folder", "")
         self._folder_label.configure(
@@ -381,6 +405,12 @@ class SettingsScreen(ctk.CTkFrame):
         self.db.set_setting("app_language", db_val)
         if hasattr(self.app, "apply_language"):
             self.app.apply_language(db_val)
+
+    def _change_theme(self, theme_name: str):
+        """Save selected theme to DB and rebuild the UI."""
+        self.db.set_setting("app_theme", theme_name)
+        if hasattr(self.app, "apply_theme"):
+            self.app.apply_theme(theme_name)
 
     def on_show(self):
         self._load()

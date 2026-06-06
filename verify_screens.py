@@ -39,6 +39,7 @@ class FakeApp:
     screens = {}
     current_role = "admin"
     current_lang = "English"
+    current_theme = "Light"
     def navigate_to(self, *a, **kw): pass
     def rebuild_screen(self, *a, **kw): pass
 
