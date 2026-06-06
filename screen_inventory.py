@@ -37,7 +37,7 @@ class InventoryScreen(ctk.CTkFrame):
                       height=44, corner_radius=10,
                       command=self._open_adjustment_dialog
                      ).pack(side="right", padx=10, pady=13)
-        ctk.CTkButton(header, text="📋  Adj. History",
+        ctk.CTkButton(header, text=t("📋  Adj. History", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
                       height=44, corner_radius=10,
                       command=self._show_adj_history
@@ -50,10 +50,10 @@ class InventoryScreen(ctk.CTkFrame):
 
         self.kpi_vars = {}
         kpi_defs = [
-            ("total_products", "📦 Total Products", COLORS["kpi_blue"],   "0"),
-            ("low_stock",      "⚠️  Low Stock",      COLORS["kpi_orange"], "0"),
-            ("out_of_stock",   "🚫 Out of Stock",   COLORS["kpi_blue"],   "0"),
-            ("stock_value",    "💰 Stock Value",     COLORS["kpi_green"],  "₹0"),
+            ("total_products", "📦 " + t("Total Products", L), COLORS["kpi_blue"],   "0"),
+            ("low_stock",      t("Low Stock", L),             COLORS["kpi_orange"], "0"),
+            ("out_of_stock",   t("Out of Stock", L),          COLORS["kpi_blue"],   "0"),
+            ("stock_value",    "💰 " + t("Stock Value", L),    COLORS["kpi_green"],  "₹0"),
         ]
         for col, (key, label, color, default) in enumerate(kpi_defs):
             card = ctk.CTkFrame(kpi_row, fg_color=COLORS["bg_card"], corner_radius=16)
@@ -78,26 +78,26 @@ class InventoryScreen(ctk.CTkFrame):
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self._load_products())
         ctk.CTkEntry(fbar, textvariable=self.search_var,
-                     placeholder_text="Search by product name, code or brand…",
+                     placeholder_text=t("Search inventory by name, code, or brand…", L),
                      font=FONTS["input"], height=40,
                      border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
                     ).grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=9)
 
-        ctk.CTkLabel(fbar, text="Category:", font=FONTS["body"],
+        ctk.CTkLabel(fbar, text=t("Category:", L), font=FONTS["body"],
                      text_color=COLORS["text_dark"]).grid(row=0, column=2, padx=(0, 6))
-        self.cat_var = tk.StringVar(value="All")
+        self.cat_var = tk.StringVar(value=t("All", L))
         self.cat_menu = ctk.CTkOptionMenu(
-            fbar, variable=self.cat_var, values=["All"],
+            fbar, variable=self.cat_var, values=[t("All", L)],
             font=FONTS["body"], height=40, width=160,
             fg_color=COLORS["btn_primary"], button_color="#005BBE",
             command=lambda _: self._load_products()
         )
         self.cat_menu.grid(row=0, column=3, padx=(0, 10), pady=9)
 
-        self.filter_var = tk.StringVar(value="All")
+        self.filter_var = tk.StringVar(value=t("All", L))
         ctk.CTkSegmentedButton(
             fbar,
-            values=["All", "Low Stock", "Out of Stock"],
+            values=[t("All", L), t("Low Stock", L), t("Out of Stock", L)],
             variable=self.filter_var,
             font=FONTS["small_bold"],
             height=38,
@@ -119,8 +119,8 @@ class InventoryScreen(ctk.CTkFrame):
             tbl_frame, columns=cols, show="headings",
             style="Inv.Treeview", selectmode="browse"
         )
-        heads  = ("Code", "Product Name", "Category", "Brand", "Unit",
-                  "Stock", "Reorder", "Status", "Stock Value ₹")
+        heads  = (t("Code", L), t("Product Name", L), t("Category", L), t("Brand", L), t("Unit", L),
+                  t("Stock", L), t("Reorder", L), t("Status", L), t("Stock Value ₹", L))
         widths = (90, 240, 120, 110, 70, 80, 70, 110, 100)
         for col, head, w in zip(cols, heads, widths):
             self.tree.heading(col, text=head)
@@ -146,8 +146,9 @@ class InventoryScreen(ctk.CTkFrame):
         self._load_products()
 
     def _load_cat_filter(self):
+        L = self.app.current_lang
         cats = self.db.get_categories()
-        names = ["All"] + [c["name"] for c in cats]
+        names = [t("All", L)] + [c["name"] for c in cats]
         self.cat_menu.configure(values=names)
         self._cats_map = {c["name"]: c["category_id"] for c in cats}
 
@@ -160,16 +161,17 @@ class InventoryScreen(ctk.CTkFrame):
         self.kpi_vars["stock_value"].set(f"₹{val:,.0f}")
 
     def _load_products(self):
+        L = self.app.current_lang
         search   = self.search_var.get().strip()
         cat_sel  = self.cat_var.get()
-        cat_id   = self._cats_map.get(cat_sel) if hasattr(self, "_cats_map") and cat_sel != "All" else None
+        cat_id   = self._cats_map.get(cat_sel) if hasattr(self, "_cats_map") and cat_sel != t("All", L) else None
         flt      = self.filter_var.get()
 
         prods = self.db.get_products(active_only=True, search=search, category_id=cat_id)
 
-        if flt == "Low Stock":
+        if flt == t("Low Stock", L):
             prods = [p for p in prods if 0 < p["current_stock"] <= p["reorder_level"]]
-        elif flt == "Out of Stock":
+        elif flt == t("Out of Stock", L):
             prods = [p for p in prods if p["current_stock"] <= 0]
 
         _row_colors = COLORS["ROW_COLORS"]
@@ -179,13 +181,13 @@ class InventoryScreen(ctk.CTkFrame):
             ror = p["reorder_level"]
             if stk <= 0:
                 tag    = "out"
-                status = "🚫 Out of Stock"
+                status = t("Out of Stock", L)
             elif stk <= ror:
                 tag    = "low"
-                status = "⚠️  Low Stock"
+                status = t("Low Stock", L)
             else:
                 tag    = f"row{i % len(_row_colors)}"
-                status = "✅ In Stock"
+                status = t("In Stock", L)
 
             val = stk * p.get("purchase_price", 0)
             self.tree.insert("", "end", iid=str(p["product_id"]), values=(
@@ -211,6 +213,7 @@ class InventoryScreen(ctk.CTkFrame):
         return int(sel[0])
 
     def _open_adjustment_dialog(self, product_id=None):
+        L = self.app.current_lang
         if not product_id:
             product_id = self._get_selected_pid()
         if not product_id:
@@ -221,7 +224,7 @@ class InventoryScreen(ctk.CTkFrame):
             return
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
-        dlg.title("Adjust Stock")
+        dlg.title(t("Adjust Stock", L))
         place_popup(dlg, 500, 480)
         dlg.resizable(False, False)
         dlg.grab_set()
@@ -229,7 +232,7 @@ class InventoryScreen(ctk.CTkFrame):
 
         # Header
         ctk.CTkFrame(dlg, fg_color=COLORS["btn_warning"], height=6, corner_radius=0).pack(fill="x")
-        ctk.CTkLabel(dlg, text="🔧   Adjust Stock",
+        ctk.CTkLabel(dlg, text="🔧   " + t("Adjust Stock", L),
                      font=FONTS["heading"], text_color=COLORS["text_dark"]
                     ).pack(pady=(18, 4), padx=24, anchor="w")
 
@@ -240,46 +243,47 @@ class InventoryScreen(ctk.CTkFrame):
                      font=FONTS["body_bold"], text_color=COLORS["text_dark"]
                     ).pack(anchor="w", padx=16, pady=(10, 2))
         ctk.CTkLabel(info,
-                     text=f"Current Stock:  {prod['current_stock']:.1f}  {prod.get('unit','piece')}   |   "
-                          f"Reorder Level: {prod['reorder_level']:.0f}",
+                     text=f"{t('Current Stock', L)}:  {prod['current_stock']:.1f}  {prod.get('unit','piece')}   |   "
+                          f"{t('Reorder Level', L)}: {prod['reorder_level']:.0f}",
                      font=FONTS["small"], text_color=COLORS["text_muted"]
                     ).pack(anchor="w", padx=16, pady=(0, 10))
 
         # Adjustment type
-        ctk.CTkLabel(dlg, text="Adjustment Type",
+        ctk.CTkLabel(dlg, text=t("Adjustment Type", L),
                      font=FONTS["label_form"], text_color=COLORS["text_dark"]
                     ).pack(anchor="w", padx=24, pady=(0, 4))
         adj_type = tk.StringVar(value="Add")
         type_frame = ctk.CTkFrame(dlg, fg_color="transparent")
         type_frame.pack(fill="x", padx=24, pady=(0, 14))
-        for t, col in [("Add", COLORS["btn_success"]),
-                       ("Remove", COLORS["btn_danger"]),
-                       ("Set", COLORS["btn_primary"])]:
+        for mode_key, col in [("Add", COLORS["btn_success"]),
+                              ("Remove", COLORS["btn_danger"]),
+                              ("Set", COLORS["btn_primary"])]:
             ctk.CTkRadioButton(
-                type_frame, text=t, variable=adj_type, value=t,
+                type_frame, text=t(mode_key, L), variable=adj_type, value=mode_key,
                 font=FONTS["body_bold"], text_color=COLORS["text_dark"],
                 fg_color=col, hover_color=col
             ).pack(side="left", padx=(0, 20))
 
         # Quantity
-        ctk.CTkLabel(dlg, text="Quantity *",
+        ctk.CTkLabel(dlg, text=t("Quantity *", L),
                      font=FONTS["label_form"], text_color=COLORS["text_dark"]
                     ).pack(anchor="w", padx=24)
         qty_var = tk.StringVar()
         ctk.CTkEntry(dlg, textvariable=qty_var,
-                     placeholder_text="e.g. 10",
+                     placeholder_text=t("e.g. 10", L),
                      font=FONTS["input"], height=50,
                      border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
                     ).pack(fill="x", padx=24, pady=(4, 14))
 
         # Reason
-        ctk.CTkLabel(dlg, text="Reason *",
+        ctk.CTkLabel(dlg, text=t("Reason *", L),
                      font=FONTS["label_form"], text_color=COLORS["text_dark"]
                     ).pack(anchor="w", padx=24)
-        reasons = ["New Stock Received", "Damaged / Expired", "Theft / Loss",
-                   "Physical Count Correction", "Return to Supplier", "Other"]
-        reason_var = tk.StringVar(value=reasons[0])
-        ctk.CTkOptionMenu(dlg, variable=reason_var, values=reasons,
+        reasons_list = ["New Stock Received", "Damaged / Expired", "Theft / Loss",
+                        "Physical Count Correction", "Return to Supplier", "Other"]
+        reasons_display = [t(r, L) for r in reasons_list]
+        reason_var = tk.StringVar(value=reasons_display[0])
+        ctk.CTkOptionMenu(dlg, variable=reason_var, values=reasons_display,
                           font=FONTS["input"], height=46, fg_color=COLORS["btn_primary"],
                           button_color="#005BBE"
                          ).pack(fill="x", padx=24, pady=(4, 0))
@@ -294,42 +298,52 @@ class InventoryScreen(ctk.CTkFrame):
                 if qty <= 0:
                     raise ValueError
             except ValueError:
-                err_lbl.configure(text="⚠  Enter a valid positive quantity.")
+                err_lbl.configure(text="⚠  " + t("Enter a valid positive quantity.", L))
                 return
-            t = adj_type.get()
-            if t == "Remove" and qty > prod["current_stock"]:
+            adj_t = adj_type.get()
+            if adj_t == "Remove" and qty > prod["current_stock"]:
                 err_lbl.configure(
-                    text=f"⚠  Cannot remove more than current stock ({prod['current_stock']:.1f})."
+                    text="⚠  " + t("Cannot remove more than current stock ({stock}).", L).format(stock=f"{prod['current_stock']:.1f}")
                 )
                 return
+            
+            # Map reason back to English for DB
+            db_reason = reason_var.get()
+            try:
+                r_idx = reasons_display.index(db_reason)
+                db_reason = reasons_list[r_idx]
+            except ValueError:
+                pass
+
             self.db.do_stock_adjustment(
-                product_id, t, qty, reason_var.get(),
+                product_id, adj_t, qty, db_reason,
                 self.current_user["user_id"]
             )
-            messagebox.showinfo("Done", f"Stock adjusted successfully!", parent=dlg)
+            messagebox.showinfo(t("Done", L), t("Stock adjusted successfully!", L), parent=dlg)
             dlg.destroy()
             self._load_stats()
             self._load_products()
 
         btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
         btn_row.pack(fill="x", padx=24, pady=14)
-        ctk.CTkButton(btn_row, text="✅  Save Adjustment",
+        ctk.CTkButton(btn_row, text=t("Save Adjustment", L),
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
                       height=52, corner_radius=16,
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ctk.CTkButton(btn_row, text="Cancel",
+        ctk.CTkButton(btn_row, text=t("Cancel", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
                       height=52, corner_radius=16,
                       command=dlg.destroy).pack(side="left", width=110)
 
     def _show_adj_history(self):
+        L = self.app.current_lang
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
-        dlg.title("Stock Adjustment History")
+        dlg.title(t("Stock Adjustment History", L))
         place_popup(dlg, 860, 520)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
 
-        ctk.CTkLabel(dlg, text="📋   Stock Adjustment History",
+        ctk.CTkLabel(dlg, text="📋   " + t("Adj. History", L),
                      font=FONTS["subheading"], text_color=COLORS["text_dark"]
                     ).pack(pady=(18, 8), padx=20, anchor="w")
 
@@ -343,7 +357,7 @@ class InventoryScreen(ctk.CTkFrame):
         cols = ("date", "product", "type", "before", "change", "after", "reason")
         tree = ttk.Treeview(frame, columns=cols, show="headings",
                             style="Adj.Treeview", selectmode="browse")
-        heads  = ("Date & Time", "Product", "Type", "Before", "Change", "After", "Reason")
+        heads  = (t("Date & Time", L), t("Product", L), t("Type", L), t("Before", L), t("Change", L), t("After", L), t("Reason", L))
         widths = (150, 220, 80, 70, 70, 70, 200)
         for col, head, w in zip(cols, heads, widths):
             tree.heading(col, text=head)
@@ -359,11 +373,11 @@ class InventoryScreen(ctk.CTkFrame):
             tree.insert("", "end", values=(
                 r["created_at"][:16],
                 r["product_name"],
-                r["adj_type"],
+                t(r["adj_type"], L),
                 f"{r['qty_before']:.1f}",
                 f"+{r['qty_change']:.1f}" if r["adj_type"] == "Add"
                     else (f"-{r['qty_change']:.1f}" if r["adj_type"] == "Remove"
                           else f"→{r['qty_change']:.1f}"),
                 f"{r['qty_after']:.1f}",
-                r.get("reason", ""),
+                t(r.get("reason", ""), L),
             ))

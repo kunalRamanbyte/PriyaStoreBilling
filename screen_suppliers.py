@@ -54,7 +54,7 @@ class SupplierScreen(ctk.CTkFrame):
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self._load_suppliers())
         ctk.CTkEntry(sbar, textvariable=self.search_var,
-                     placeholder_text="Search by name, contact person or phone…",
+                     placeholder_text=t("Search suppliers by name, phone, or contact…", L),
                      font=FONTS["input"], height=40,
                      border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
                     ).grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=9)
@@ -71,7 +71,7 @@ class SupplierScreen(ctk.CTkFrame):
         # ttk styles applied globally via styles.py
 
         cols   = ("name", "contact", "phone", "city", "gst", "status")
-        heads  = ("Supplier Name", "Contact Person", "Phone", "City", "GST Number", "Status")
+        heads  = (t("Supplier Name", L), t("Contact Person", L), t("Phone", L), t("City", L), t("GST Number", L), t("Status", L))
         widths = (240, 180, 140, 130, 160, 90)
         self.tree = ttk.Treeview(tbl, columns=cols, show="headings",
                                   style="Sup.Treeview", selectmode="browse")
@@ -89,22 +89,22 @@ class SupplierScreen(ctk.CTkFrame):
         act = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0, height=58)
         act.grid(row=2, column=0, sticky="ew")
         act.grid_propagate(False)
-        ctk.CTkButton(act, text="✏️  Edit",
+        ctk.CTkButton(act, text=t("✏️  Edit", L),
                       font=FONTS["button"], fg_color=COLORS["btn_primary"],
                       height=42, width=110, corner_radius=10,
                       command=self._open_edit_form
                      ).pack(side="left", padx=(20, 6), pady=8)
-        ctk.CTkButton(act, text="💰  Record Payment",
+        ctk.CTkButton(act, text="💰  " + t("Record Payment", L),
                       font=FONTS["button"], fg_color=COLORS["btn_warning"],
                       height=42, width=170, corner_radius=10,
                       command=self._record_payment
                      ).pack(side="left", padx=(0, 6), pady=8)
-        ctk.CTkButton(act, text="🚫  Deactivate",
+        ctk.CTkButton(act, text="🚫  " + t("Deactivate", L),
                       font=FONTS["button"], fg_color="#FF8C00",
                       height=42, width=140, corner_radius=10,
                       command=self._deactivate
                      ).pack(side="left", padx=(0, 6), pady=8)
-        ctk.CTkButton(act, text="🗑️  Delete",
+        ctk.CTkButton(act, text=t("🗑️  Delete", L),
                       font=FONTS["button"], fg_color=COLORS["btn_danger"],
                       height=42, width=110, corner_radius=10,
                       command=self._delete_supplier
@@ -114,6 +114,7 @@ class SupplierScreen(ctk.CTkFrame):
         self._load_suppliers()
 
     def _load_suppliers(self):
+        L = self.app.current_lang
         search = self.search_var.get().strip()
         rows   = self.db.get_suppliers(active_only=False, search=search)
         self.tree.delete(*self.tree.get_children())
@@ -126,11 +127,11 @@ class SupplierScreen(ctk.CTkFrame):
                 s.get("phone", "") or "",
                 s.get("city", "") or "",
                 s.get("gst_number", "") or "",
-                "✅ Active" if s["is_active"] else "❌ Inactive",
+                ("✅ " + t("Active", L)) if s["is_active"] else ("❌ " + t("Inactive", L)),
             ), tags=(tag,))
         for idx, color in enumerate(_row_colors):
             self.tree.tag_configure(f"row{idx}", background=color)
-        self.count_lbl.configure(text=f"{len(rows)} supplier(s)")
+        self.count_lbl.configure(text=t("{n} supplier(s) found", L).format(n=len(rows)))
 
     def _get_selected_id(self):
         sel = self.tree.selection()
@@ -151,9 +152,10 @@ class SupplierScreen(ctk.CTkFrame):
             self._open_form(sup)
 
     def _open_form(self, supplier):
+        L = self.app.current_lang
         self._editing_id = supplier["supplier_id"] if supplier else None
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
-        title = "Edit Supplier" if supplier else "Add New Supplier"
+        title = t("Edit Supplier" if supplier else "Add New Supplier", L)
         dlg.title(title)
         place_popup(dlg, 520, 580)
         dlg.resizable(False, True)
@@ -163,8 +165,9 @@ class SupplierScreen(ctk.CTkFrame):
         scroll = ctk.CTkScrollableFrame(dlg, fg_color=COLORS["bg_main"])
         scroll.pack(fill="both", expand=True)
 
+        header_prefix = t("✏️  Edit", L) if supplier else ("➕  " + t("Add", L))
         ctk.CTkLabel(scroll,
-                     text=f"{'✏️  Edit' if supplier else '➕  Add'} Supplier",
+                     text=f"{header_prefix} {t('Supplier', L)}",
                      font=FONTS["heading"], text_color=COLORS["btn_primary"]
                     ).pack(pady=(18, 10), padx=24, anchor="w")
         ctk.CTkFrame(scroll, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=24, pady=(0, 16))
@@ -187,21 +190,21 @@ class SupplierScreen(ctk.CTkFrame):
                         ).pack(side="left")
             entries[key] = var
 
-        field("Supplier Name",    "name",           p.get("name", ""),
+        field(t("Supplier Name", L),    "name",           p.get("name", ""),
               "e.g. Reliance Mart", required=True)
-        field("Contact Person",   "contact_person", p.get("contact_person", ""),
+        field(t("Contact Person", L),   "contact_person", p.get("contact_person", ""),
               "e.g. Ramesh Gupta")
-        field("Phone Number",     "phone",          p.get("phone", ""),
+        field(t("Phone Number", L),     "phone",          p.get("phone", ""),
               "e.g. 98765 43210")
-        field("Email",            "email",          p.get("email", ""),
+        field(t("Email", L),            "email",          p.get("email", ""),
               "e.g. supplier@email.com")
-        field("City",             "city",           p.get("city", ""),
+        field(t("City", L),             "city",           p.get("city", ""),
               "e.g. Mumbai")
-        field("GST Number",       "gst_number",     p.get("gst_number", ""),
+        field(t("GST Number", L),       "gst_number",     p.get("gst_number", ""),
               "e.g. 27AAPFU0939F1ZV")
 
         # Notes
-        ctk.CTkLabel(scroll, text="Notes", font=FONTS["label_form"],
+        ctk.CTkLabel(scroll, text=t("Notes", L), font=FONTS["label_form"],
                      text_color=COLORS["text_dark"]
                     ).pack(anchor="w", padx=24, pady=(6, 2))
         notes_box = ctk.CTkTextbox(scroll, font=FONTS["input"], height=80,
@@ -245,16 +248,17 @@ class SupplierScreen(ctk.CTkFrame):
 
         btn_row = ctk.CTkFrame(scroll, fg_color="transparent")
         btn_row.pack(fill="x", padx=24, pady=14)
-        ctk.CTkButton(btn_row, text="💾  Save Supplier",
+        ctk.CTkButton(btn_row, text=t("Save Supplier", L),
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
                       height=50, corner_radius=16,
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ctk.CTkButton(btn_row, text="Cancel",
+        ctk.CTkButton(btn_row, text=t("Cancel", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
                       height=50, corner_radius=16,
                       command=dlg.destroy).pack(side="left", width=110)
 
     def _record_payment(self):
+        L = self.app.current_lang
         sid = self._get_selected_id()
         if not sid:
             return
@@ -270,7 +274,7 @@ class SupplierScreen(ctk.CTkFrame):
             return
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
-        dlg.title(f"Record Payment — {sup['name']}")
+        dlg.title(f"{t('Record Payment', L)} — {sup['name']}")
         place_popup(dlg, 540, 480)
         dlg.resizable(False, False)
         dlg.grab_set()
@@ -279,12 +283,12 @@ class SupplierScreen(ctk.CTkFrame):
         scroll = ctk.CTkScrollableFrame(dlg, fg_color=COLORS["bg_main"])
         scroll.pack(fill="both", expand=True)
 
-        ctk.CTkLabel(scroll, text=f"💰  Record Payment — {sup['name']}",
+        ctk.CTkLabel(scroll, text=f"💰  {t('Record Payment', L)} — {sup['name']}",
                      font=FONTS["heading"], text_color=COLORS["btn_primary"]
                     ).pack(pady=(16, 6), padx=20, anchor="w")
         ctk.CTkFrame(scroll, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=20, pady=(0, 12))
 
-        ctk.CTkLabel(scroll, text="Select Invoice:",
+        ctk.CTkLabel(scroll, text=t("Select Invoice:", L),
                      font=FONTS["label_form"], text_color=COLORS["text_dark"]
                     ).pack(anchor="w", padx=20)
 
@@ -308,12 +312,12 @@ class SupplierScreen(ctk.CTkFrame):
 
         def _update_max(*_):
             _, bal = inv_map.get(inv_var.get(), (None, 0))
-            max_lbl.configure(text=f"Balance due: ₹ {bal:.2f}")
+            max_lbl.configure(text=f"{t('Balance due:', L)} ₹ {bal:.2f}")
         inv_var.trace_add("write", _update_max)
 
         amt_frame = ctk.CTkFrame(scroll, fg_color="transparent")
         amt_frame.pack(fill="x", padx=20, pady=4)
-        ctk.CTkLabel(amt_frame, text="Amount Paid (₹):",
+        ctk.CTkLabel(amt_frame, text=t("Amount Paid (₹):", L),
                      font=FONTS["label_form"], text_color=COLORS["text_dark"],
                      width=180, anchor="w").pack(side="left")
         amt_var = tk.StringVar()
@@ -324,11 +328,11 @@ class SupplierScreen(ctk.CTkFrame):
                      width=260).pack(side="left")
 
         _, init_bal = inv_map[first]
-        max_lbl = ctk.CTkLabel(scroll, text=f"Balance due: ₹ {init_bal:.2f}",
+        max_lbl = ctk.CTkLabel(scroll, text=f"{t('Balance due:', L)} ₹ {init_bal:.2f}",
                                 font=FONTS["small"], text_color=COLORS["btn_success"])
         max_lbl.pack(anchor="w", padx=20, pady=(0, 8))
 
-        notes_ent = ctk.CTkEntry(scroll, placeholder_text="Notes (optional)",
+        notes_ent = ctk.CTkEntry(scroll, placeholder_text=t("Notes (optional)", L),
                                   font=FONTS["input"], height=44,
                                   border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"])
         notes_ent.pack(fill="x", padx=20, pady=(0, 8))
@@ -359,16 +363,17 @@ class SupplierScreen(ctk.CTkFrame):
 
         btn_row = ctk.CTkFrame(scroll, fg_color="transparent")
         btn_row.pack(fill="x", padx=20, pady=14)
-        ctk.CTkButton(btn_row, text="💾  Save Payment",
+        ctk.CTkButton(btn_row, text=t("Save Payment", L),
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
                       height=50, corner_radius=10,
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ctk.CTkButton(btn_row, text="Cancel",
+        ctk.CTkButton(btn_row, text=t("Cancel", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
                       height=50, corner_radius=10,
                       command=dlg.destroy).pack(side="left", width=110)
 
     def _deactivate(self):
+        L = self.app.current_lang
         sid = self._get_selected_id()
         if not sid:
             return
@@ -380,9 +385,8 @@ class SupplierScreen(ctk.CTkFrame):
                                 f"'{sup['name']}' is already inactive.",
                                 parent=self.winfo_toplevel())
             return
-        if messagebox.askyesno("Deactivate Supplier",
-                               f"Deactivate '{sup['name']}'?\n"
-                               f"They will be hidden from purchase forms.",
+        if messagebox.askyesno(t("Deactivate Supplier", L),
+                               t("Deactivate Supplier Msg", L).format(supplier=sup['name']),
                                parent=self.winfo_toplevel()):
             self.db.deactivate_supplier(sid)
             self._load_suppliers()

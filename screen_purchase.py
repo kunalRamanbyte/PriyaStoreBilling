@@ -51,7 +51,7 @@ class PurchaseScreen(ctk.CTkFrame):
                     ).pack(side="left", padx=25, pady=15)
         # GRN-4: show auto-generated next GRN number
         self.grn_no_label = ctk.CTkLabel(
-            hdr, text="GRN: —",
+            hdr, text=f"{t('GRN No', L)}: —",
             font=FONTS["body_bold"], text_color="white",
             fg_color=COLORS["btn_primary"], corner_radius=10,
             padx=14, pady=6,
@@ -65,24 +65,24 @@ class PurchaseScreen(ctk.CTkFrame):
         meta.grid_columnconfigure(1, weight=1)
         meta.grid_columnconfigure(3, weight=1)
 
-        ctk.CTkLabel(meta, text="Supplier:", font=FONTS["body_bold"],
+        ctk.CTkLabel(meta, text=t("Supplier:", L), font=FONTS["body_bold"],
                      text_color=COLORS["text_dark"]
                     ).grid(row=0, column=0, padx=(16, 8), pady=12)
-        self.supplier_var = tk.StringVar(value="Direct Purchase")
+        self.supplier_var = tk.StringVar(value=t("Direct Purchase", L))
         self.supplier_menu = ctk.CTkOptionMenu(
             meta, variable=self.supplier_var,
-            values=["Direct Purchase"],
+            values=[t("Direct Purchase", L)],
             font=FONTS["body"], height=42, width=220,
             fg_color=COLORS["btn_primary"], button_color="#005BBE"
         )
         self.supplier_menu.grid(row=0, column=1, padx=(0, 16), pady=12, sticky="w")
 
-        ctk.CTkLabel(meta, text="Notes:", font=FONTS["body_bold"],
+        ctk.CTkLabel(meta, text=t("Notes:", L), font=FONTS["body_bold"],
                      text_color=COLORS["text_dark"]
                     ).grid(row=0, column=2, padx=(0, 8))
         self.notes_var = tk.StringVar()
         ctk.CTkEntry(meta, textvariable=self.notes_var,
-                     placeholder_text="Optional notes for this GRN",
+                     placeholder_text=t("Optional notes for this GRN", L),
                      font=FONTS["input"], height=42,
                      border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
                     ).grid(row=0, column=3, padx=(0, 16), pady=12, sticky="ew")
@@ -97,7 +97,7 @@ class PurchaseScreen(ctk.CTkFrame):
         self.prod_search_var.trace_add("write", self._on_search_change)
         self.prod_entry = ctk.CTkEntry(
             sbar, textvariable=self.prod_search_var,
-            placeholder_text="🔍  Search and select product from existing list…",
+            placeholder_text=t("🔍  Search and select product from existing list…", L),
             font=FONTS["input"], height=42,
             border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
         )
@@ -105,7 +105,7 @@ class PurchaseScreen(ctk.CTkFrame):
         self.prod_entry.bind("<Return>", lambda e: self._search_product())
         self._popup = None
 
-        ctk.CTkButton(sbar, text="➕  Add New Item",
+        ctk.CTkButton(sbar, text=t("Add New Item", L),
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
                       height=42, width=160, corner_radius=10,
                       command=self._open_new_product_form
@@ -120,7 +120,7 @@ class PurchaseScreen(ctk.CTkFrame):
         # ttk styles applied globally via styles.py
 
         cols   = ("#", "name", "unit", "qty", "price", "total")
-        heads  = ("#", "Product Name", "Unit", "Qty", "Buy Price ₹", "Total ₹")
+        heads  = ("#", t("Product Name", L), t("Unit", L), t("Qty", L), t("Buy Price ₹", L), t("Total ₹", L))
         widths = (40, 280, 70, 70, 100, 100)
         self.cart_tree = ttk.Treeview(tbl_frame, columns=cols, show="headings",
                                        style="Pur.Treeview", selectmode="browse")
@@ -140,17 +140,17 @@ class PurchaseScreen(ctk.CTkFrame):
         act = ctk.CTkFrame(left, fg_color=COLORS["bg_card"], corner_radius=0, height=58)
         act.grid(row=4, column=0, sticky="ew")
         act.grid_propagate(False)
-        ctk.CTkButton(act, text="✏️  Edit Item",
+        ctk.CTkButton(act, text=t("✏️  Edit Item", L),
                       font=FONTS["button"], fg_color=COLORS["btn_primary"],
                       height=42, width=120, corner_radius=10,
                       command=self._edit_cart_item
                      ).pack(side="left", padx=(20, 6), pady=8)
-        ctk.CTkButton(act, text="🗑️  Remove",
+        ctk.CTkButton(act, text=t("Remove", L),
                       font=FONTS["button"], fg_color=COLORS["btn_danger"],
                       height=42, width=120, corner_radius=10,
                       command=self._remove_cart_item
                      ).pack(side="left", padx=(0, 6), pady=8)
-        ctk.CTkButton(act, text="🧹  Clear All",
+        ctk.CTkButton(act, text=t("🧹  Clear All", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
                       height=42, width=120, corner_radius=10,
                       command=self._clear_cart
@@ -162,20 +162,20 @@ class PurchaseScreen(ctk.CTkFrame):
         right.grid_propagate(False)
         right.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(right, text="GRN Summary",
+        ctk.CTkLabel(right, text=t("GRN Summary", L),
                      font=FONTS["subheading"], text_color=COLORS["text_dark"]
                     ).pack(pady=(24, 4), padx=20, anchor="w")
         ctk.CTkFrame(right, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=20, pady=(0, 16))
 
         # Total items
-        ctk.CTkLabel(right, text="Total Items:", font=FONTS["body"],
+        ctk.CTkLabel(right, text=t("Total Items:", L), font=FONTS["body"],
                      text_color=COLORS["text_muted"]).pack(anchor="w", padx=20)
         self.items_var = tk.StringVar(value="0")
         ctk.CTkLabel(right, textvariable=self.items_var,
                      font=FONTS["num_md"], text_color=COLORS["kpi_blue"]
                     ).pack(anchor="w", padx=20, pady=(0, 16))
 
-        ctk.CTkLabel(right, text="Grand Total:", font=FONTS["body"],
+        ctk.CTkLabel(right, text=t("Grand Total:", L), font=FONTS["body"],
                      text_color=COLORS["text_muted"]).pack(anchor="w", padx=20)
         self.total_var = tk.StringVar(value="₹ 0.00")
         ctk.CTkLabel(right, textvariable=self.total_var,
@@ -184,23 +184,23 @@ class PurchaseScreen(ctk.CTkFrame):
 
         ctk.CTkFrame(right, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=20, pady=(0, 20))
 
-        ctk.CTkButton(right, text="✅  Save GRN\n(Update Stock)",
+        ctk.CTkButton(right, text=t("✅  Save GRN\n(Update Stock)", L),
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
                       height=70, corner_radius=16,
                       command=self._save_grn
                      ).pack(fill="x", padx=20, pady=(0, 10))
 
-        ctk.CTkButton(right, text="🧹  Clear Form",
+        ctk.CTkButton(right, text=t("🧹  Clear Form", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
                       height=50, corner_radius=16,
                       command=self._clear_all
                      ).pack(fill="x", padx=20, pady=(0, 20))
 
         ctk.CTkFrame(right, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=20, pady=(0, 16))
-        ctk.CTkLabel(right, text="📋  GRN History",
+        ctk.CTkLabel(right, text=t("📋  GRN History", L),
                      font=FONTS["subheading"], text_color=COLORS["text_dark"]
                     ).pack(anchor="w", padx=20, pady=(0, 8))
-        ctk.CTkButton(right, text="View All GRNs",
+        ctk.CTkButton(right, text=t("View All GRNs", L),
                       font=FONTS["button"], fg_color=COLORS["btn_purple"],
                       height=44, corner_radius=10,
                       command=self._show_grn_history
@@ -215,15 +215,17 @@ class PurchaseScreen(ctk.CTkFrame):
 
     def _refresh_grn_number(self):
         """Display next auto-generated GRN number (GRN-4)."""
+        L = self.app.current_lang
         try:
             grn_no = self.db.next_grn_number()
-            self.grn_no_label.configure(text=f"GRN: {grn_no}")
+            self.grn_no_label.configure(text=f"{t('GRN No', L)}: {grn_no}")
         except Exception:
             pass
 
     def _load_suppliers(self):
+        L = self.app.current_lang
         sups = self.db.get_suppliers()
-        names = ["Direct Purchase"] + [s["name"] for s in sups]
+        names = [t("Direct Purchase", L)] + [s["name"] for s in sups]
         self._supplier_map = {s["name"]: s["supplier_id"] for s in sups}
         self.supplier_menu.configure(values=names)
 
@@ -323,6 +325,7 @@ class PurchaseScreen(ctk.CTkFrame):
         self._edit_item_dialog(prod, new=True)
 
     def _edit_item_dialog(self, prod=None, new=False):
+        L = self.app.current_lang
         if prod is None:
             sel = self.cart_tree.selection()
             if not sel:
@@ -337,7 +340,7 @@ class PurchaseScreen(ctk.CTkFrame):
             prod_data = None
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
-        dlg.title("Add Item" if new else "Edit Item")
+        dlg.title(t("Add Item", L) if new else t("Edit Item", L))
         place_popup(dlg, 420, 360)
         dlg.resizable(False, False)
         dlg.grab_set()
@@ -346,12 +349,12 @@ class PurchaseScreen(ctk.CTkFrame):
         ctk.CTkLabel(dlg, text=prod["name"],
                      font=FONTS["subheading"], text_color=COLORS["text_dark"]
                     ).pack(pady=(20, 4), padx=24, anchor="w")
-        ctk.CTkLabel(dlg, text=f"Unit: {prod.get('unit','piece')}",
+        ctk.CTkLabel(dlg, text=f"{t('Unit', L)}: {prod.get('unit','piece')}",
                      font=FONTS["small"], text_color=COLORS["text_muted"]
                     ).pack(anchor="w", padx=24, pady=(0, 16))
 
         # Qty
-        ctk.CTkLabel(dlg, text="Quantity *", font=FONTS["label_form"],
+        ctk.CTkLabel(dlg, text=t("Quantity *", L), font=FONTS["label_form"],
                      text_color=COLORS["text_dark"]).pack(anchor="w", padx=24)
         qty_var = tk.StringVar(value="1" if new else str(prod_data["quantity"]))
         ctk.CTkEntry(dlg, textvariable=qty_var, font=FONTS["input"],
@@ -359,7 +362,7 @@ class PurchaseScreen(ctk.CTkFrame):
                     ).pack(fill="x", padx=24, pady=(4, 14))
 
         # Buy price
-        ctk.CTkLabel(dlg, text="Purchase Price (₹) *", font=FONTS["label_form"],
+        ctk.CTkLabel(dlg, text=t("Purchase Price (₹) *", L), font=FONTS["label_form"],
                      text_color=COLORS["text_dark"]).pack(anchor="w", padx=24)
         buy_default = prod_data["unit_price"] if not new else prod.get("purchase_price", 0)
         price_var = tk.StringVar(value=str(buy_default))
@@ -378,7 +381,7 @@ class PurchaseScreen(ctk.CTkFrame):
                 if qty <= 0 or price < 0:
                     raise ValueError
             except ValueError:
-                err_lbl.configure(text="⚠  Enter valid quantity and price.")
+                err_lbl.configure(text="⚠  " + t("Enter valid quantity and price.", L))
                 return
 
             if new:
@@ -402,11 +405,11 @@ class PurchaseScreen(ctk.CTkFrame):
 
         btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
         btn_row.pack(fill="x", padx=24, pady=10)
-        ctk.CTkButton(btn_row, text="✅  Confirm",
+        ctk.CTkButton(btn_row, text=t("✅  Confirm", L),
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
                       height=50, corner_radius=16,
                       command=confirm).pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ctk.CTkButton(btn_row, text="Cancel",
+        ctk.CTkButton(btn_row, text=t("Cancel", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
                       height=50, corner_radius=16,
                       command=dlg.destroy).pack(side="left", width=100)
@@ -508,8 +511,9 @@ class PurchaseScreen(ctk.CTkFrame):
     def _open_new_product_form(self):
         """Open a form to create a brand-new product, save it to the
         Product Master, and immediately add it to the current GRN cart."""
+        L = self.app.current_lang
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
-        dlg.title("Add New Product")
+        dlg.title(t("Add New Product", L))
         place_popup(dlg, 540, 640)
         dlg.resizable(False, True)
         dlg.grab_set()
@@ -518,7 +522,7 @@ class PurchaseScreen(ctk.CTkFrame):
         scroll = ctk.CTkScrollableFrame(dlg, fg_color=COLORS["bg_main"])
         scroll.pack(fill="both", expand=True)
 
-        ctk.CTkLabel(scroll, text="➕  Add New Product",
+        ctk.CTkLabel(scroll, text="➕  " + t("Add New Product", L),
                      font=FONTS["heading"], text_color=COLORS["btn_primary"]
                     ).pack(pady=(16, 10), padx=24, anchor="w")
 
@@ -532,15 +536,15 @@ class PurchaseScreen(ctk.CTkFrame):
             f = ctk.CTkFrame(scroll, fg_color="transparent")
             f.pack(fill="x", padx=24, pady=5)
             ctk.CTkLabel(f, text=label, font=FONTS["label_form"],
-                         text_color=COLORS["text_dark"],
-                         width=165, anchor="w").pack(side="left")
+                          text_color=COLORS["text_dark"],
+                          width=165, anchor="w").pack(side="left")
             var = tk.StringVar(value=str(default) if default not in (None, "") else "")
             ctk.CTkEntry(f, textvariable=var,
-                         placeholder_text=placeholder,
-                         font=FONTS["input"], height=40,
-                         border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"],
-                         width=290 if wide else 220
-                        ).pack(side="left")
+                          placeholder_text=placeholder,
+                          font=FONTS["input"], height=40,
+                          border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"],
+                          width=290 if wide else 220
+                         ).pack(side="left")
             entries[key] = var
             return var
 
@@ -548,42 +552,42 @@ class PurchaseScreen(ctk.CTkFrame):
             f = ctk.CTkFrame(scroll, fg_color="transparent")
             f.pack(fill="x", padx=24, pady=5)
             ctk.CTkLabel(f, text=label, font=FONTS["label_form"],
-                         text_color=COLORS["text_dark"],
-                         width=165, anchor="w").pack(side="left")
+                          text_color=COLORS["text_dark"],
+                          width=165, anchor="w").pack(side="left")
             var = tk.StringVar(value=default if default else (values[0] if values else ""))
             ctk.CTkOptionMenu(f, variable=var, values=values,
-                              font=FONTS["input"], height=40, width=220,
-                              fg_color=COLORS["btn_primary"], button_color="#005BBE"
-                             ).pack(side="left")
+                               font=FONTS["input"], height=40, width=220,
+                               fg_color=COLORS["btn_primary"], button_color="#005BBE"
+                              ).pack(side="left")
             entries[key] = var
 
-        field("Product Name *",       "name",           "",  "e.g. Aashirvaad Atta 5kg", wide=True)
-        field("Product Code",         "product_code",   "",  "Auto-generated if blank")
-        dropdown("Category *",        "category",       c_names,
+        field(t("Product Name *", L),       "name",           "",  t("e.g. Aashirvaad Atta 5kg", L), wide=True)
+        field(t("Product Code", L),         "product_code",   "",  t("Auto-generated if blank", L))
+        dropdown(t("Category *", L),        "category",       c_names,
                  c_names[0] if c_names else "")
-        field("Brand",                "brand",          "",  "Optional")
-        dropdown("Unit *",            "unit",           UNITS, "piece")
-        field("Selling Price (₹) *",  "selling_price",  "",  "e.g. 45.50")
-        field("Purchase Price (₹)",   "purchase_price", "",  "For margin calc")
-        field("Current Stock",        "current_stock",  "0", "Quantity in hand")
-        field("Reorder Level",        "reorder_level",  "5", "Alert threshold")
+        field(t("Brand", L),                "brand",          "",  t("Optional", L))
+        dropdown(t("Unit *", L),            "unit",           UNITS, "piece")
+        field(t("Selling Price (₹) *", L),  "selling_price",  "",  t("e.g. 45.50", L))
+        field(t("Purchase Price (₹)", L),   "purchase_price", "",  t("For margin calc", L))
+        field(t("Current Stock", L),        "current_stock",  "0", t("Quantity in hand", L))
+        field(t("Reorder Level", L),        "reorder_level",  "5", t("Alert threshold", L))
         # Expiry date — entry + calendar button
         exp_f = ctk.CTkFrame(scroll, fg_color="transparent")
         exp_f.pack(fill="x", padx=24, pady=5)
-        ctk.CTkLabel(exp_f, text="Expiry Date", font=FONTS["label_form"],
+        ctk.CTkLabel(exp_f, text=t("Expiry Date", L), font=FONTS["label_form"],
                      text_color=COLORS["text_dark"],
                      width=165, anchor="w").pack(side="left")
         exp_var = tk.StringVar(value="")
         entries["expiry_date"] = exp_var
         ctk.CTkEntry(exp_f, textvariable=exp_var,
-                     placeholder_text="Click calendar →",
+                     placeholder_text=t("Click calendar →", L),
                      font=FONTS["input"], height=40, width=170,
                      border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
                     ).pack(side="left", padx=(0, 6))
         ctk.CTkButton(exp_f, text="📅", width=44, height=40,
                       font=("Segoe UI", 18), corner_radius=10,
                       fg_color=COLORS["btn_primary"],
-                      command=lambda: open_date_picker(exp_f, exp_var, "Select Expiry Date")
+                      command=lambda: open_date_picker(exp_f, exp_var, t("Select Expiry Date", L))
                      ).pack(side="left")
 
         err_lbl = ctk.CTkLabel(scroll, text="", font=FONTS["small"],
@@ -593,7 +597,7 @@ class PurchaseScreen(ctk.CTkFrame):
         def save():
             name = entries["name"].get().strip()
             if not name:
-                err_lbl.configure(text="⚠  Product Name is required.")
+                err_lbl.configure(text="⚠  " + t("Product Name is required.", L))
                 return
             try:
                 sell = float(entries["selling_price"].get() or 0)
@@ -601,7 +605,7 @@ class PurchaseScreen(ctk.CTkFrame):
                 stk  = float(entries["current_stock"].get() or 0)
                 ror  = float(entries["reorder_level"].get() or 5)
             except ValueError:
-                err_lbl.configure(text="⚠  Prices and stock must be numbers.")
+                err_lbl.configure(text="⚠  " + t("Prices and stock must be numbers.", L))
                 return
 
             exp_raw = entries["expiry_date"].get().strip()
@@ -612,7 +616,7 @@ class PurchaseScreen(ctk.CTkFrame):
                     _date.fromisoformat(exp_raw)
                     expiry = exp_raw
                 except ValueError:
-                    err_lbl.configure(text="⚠  Expiry Date must be YYYY-MM-DD (e.g. 2026-12-31).")
+                    err_lbl.configure(text="⚠  " + t("Expiry Date must be YYYY-MM-DD (e.g. 2026-12-31).", L))
                     return
 
             cat_name = entries["category"].get()
@@ -641,9 +645,8 @@ class PurchaseScreen(ctk.CTkFrame):
 
             dlg.destroy()
             messagebox.showinfo(
-                "Product Added",
-                f"'{name}' has been added to the Product Master.\n\n"
-                "It will now be opened for quantity & price entry.",
+                t("Product Added", L),
+                t("Product Added Msg", L).format(name=name),
                 parent=self.winfo_toplevel()
             )
 
@@ -656,11 +659,11 @@ class PurchaseScreen(ctk.CTkFrame):
 
         btn_row = ctk.CTkFrame(scroll, fg_color="transparent")
         btn_row.pack(fill="x", padx=24, pady=12)
-        ctk.CTkButton(btn_row, text="💾  Save & Add to GRN",
+        ctk.CTkButton(btn_row, text=t("Save & Add to GRN", L),
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
                       height=48, corner_radius=16,
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ctk.CTkButton(btn_row, text="Cancel",
+        ctk.CTkButton(btn_row, text=t("Cancel", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
                       height=48, corner_radius=16,
                       command=dlg.destroy).pack(side="left", width=100)
@@ -813,12 +816,13 @@ class PurchaseScreen(ctk.CTkFrame):
     # GRN Receipt popup
     # ─────────────────────────────────────────────────────────────
     def _show_grn_receipt(self, purchase_id):
+        L = self.app.current_lang
         p, items = self.db.get_purchase_by_id(purchase_id)
         if not p:
             return
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
-        dlg.title("GRN Saved ✅")
+        dlg.title(t("GRN Saved ✅", L))
         place_popup(dlg, 520, 520)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
@@ -828,13 +832,13 @@ class PurchaseScreen(ctk.CTkFrame):
         scroll = ctk.CTkScrollableFrame(dlg, fg_color=COLORS["bg_card"])
         scroll.pack(fill="both", expand=True, padx=0, pady=0)
 
-        ctk.CTkLabel(scroll, text="✅  GRN Saved Successfully!",
+        ctk.CTkLabel(scroll, text="✅  " + t("GRN Saved Successfully!", L),
                      font=FONTS["subheading"], text_color=COLORS["btn_success"]
                     ).pack(pady=(18, 4), padx=24, anchor="w")
-        ctk.CTkLabel(scroll, text=f"GRN Number:  {p['grn_number']}",
+        ctk.CTkLabel(scroll, text=f"{t('GRN Number', L)}:  {p['grn_number']}",
                      font=FONTS["body_bold"], text_color=COLORS["text_dark"]
                     ).pack(anchor="w", padx=24)
-        ctk.CTkLabel(scroll, text=f"Supplier:  {p['supplier_name']}",
+        ctk.CTkLabel(scroll, text=f"{t('Supplier:', L)}  {p['supplier_name']}",
                      font=FONTS["body"], text_color=COLORS["text_muted"]
                     ).pack(anchor="w", padx=24, pady=(2, 16))
 
@@ -854,23 +858,23 @@ class PurchaseScreen(ctk.CTkFrame):
 
         ctk.CTkFrame(scroll, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=24, pady=8)
         ctk.CTkLabel(scroll,
-                     text=f"Total Amount:  ₹{p['total_amount']:,.2f}",
+                     text=f"{t('Total Amount:', L)}  ₹{p['total_amount']:,.2f}",
                      font=FONTS["num_md"], text_color=COLORS["kpi_green"]
                     ).pack(anchor="e", padx=24, pady=(0, 16))
 
         ctk.CTkLabel(scroll,
-                     text="📦  Stock has been updated for all items.",
+                     text=t("Stock has been updated for all items.", L),
                      font=FONTS["body_bold"], text_color=COLORS["btn_success"]
                     ).pack(pady=(0, 16), padx=24)
 
         btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
         btn_row.pack(fill="x", padx=24, pady=16)
-        ctk.CTkButton(btn_row, text="📄  Print PDF",
+        ctk.CTkButton(btn_row, text=t("Print PDF", L),
                       font=FONTS["button"], fg_color=COLORS["btn_purple"],
                       height=48, corner_radius=16,
                       command=lambda: self._print_grn_pdf(p, items, dlg)
                      ).pack(side="left", fill="x", expand=True, padx=(0, 8))
-        ctk.CTkButton(btn_row, text="Close",
+        ctk.CTkButton(btn_row, text=t("Close", L),
                       font=FONTS["button"], fg_color=COLORS["btn_primary"],
                       height=48, corner_radius=16,
                       command=dlg.destroy
@@ -880,8 +884,9 @@ class PurchaseScreen(ctk.CTkFrame):
     # GRN History
     # ─────────────────────────────────────────────────────────────
     def _show_grn_history(self):
+        L = self.app.current_lang
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
-        dlg.title("GRN History")
+        dlg.title(t("GRN History", L))
         place_popup(dlg, 900, 560)
         dlg.grab_set()
         dlg.attributes("-topmost", True)
@@ -889,13 +894,13 @@ class PurchaseScreen(ctk.CTkFrame):
         # Header + search
         top = ctk.CTkFrame(dlg, fg_color=COLORS["bg_main"], corner_radius=0)
         top.pack(fill="x", padx=12, pady=(12, 4))
-        ctk.CTkLabel(top, text="📋   GRN History",
+        ctk.CTkLabel(top, text="📋   " + t("GRN History", L),
                      font=FONTS["subheading"], text_color=COLORS["text_dark"]
                     ).pack(side="left")
 
         search_var = tk.StringVar()
         ctk.CTkEntry(top, textvariable=search_var,
-                     placeholder_text="Search GRN no. or supplier…",
+                     placeholder_text=t("Search GRN no. or supplier…", L),
                      font=FONTS["input"], height=40, width=260,
                      border_color=COLORS["border_focus"], fg_color=COLORS["bg_card"]
                     ).pack(side="right")
@@ -908,7 +913,7 @@ class PurchaseScreen(ctk.CTkFrame):
         # ttk styles applied globally via styles.py
 
         cols   = ("grn", "date", "supplier", "items", "total")
-        heads  = ("GRN Number", "Date", "Supplier", "Items", "Total ₹")
+        heads  = (t("GRN Number", L), t("Date", L), t("Supplier", L), t("Items", L), t("Total ₹", L))
         widths = (120, 150, 260, 70, 120)
         tree   = ttk.Treeview(frame, columns=cols, show="headings",
                                style="GRN.Treeview", selectmode="browse")
@@ -947,7 +952,7 @@ class PurchaseScreen(ctk.CTkFrame):
             self._show_grn_receipt(int(sel[0]))
 
         tree.bind("<Double-1>", view_detail)
-        ctk.CTkButton(dlg, text="👁  View GRN Details",
+        ctk.CTkButton(dlg, text=t("View GRN Details", L),
                       font=FONTS["button"], fg_color=COLORS["btn_primary"],
                       height=44, corner_radius=10,
                       command=view_detail
