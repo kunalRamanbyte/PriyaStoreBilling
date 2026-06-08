@@ -91,9 +91,9 @@ class CustomerScreen(ctk.CTkFrame):
             background=[("selected", "#BBDEFB")],
             foreground=[("selected", COLORS["text_dark"])])
 
-        cols   = ("name", "phone", "address", "balance", "status")
-        heads  = (t("Customer Name", L), t("Phone", L), t("Address", L), t("Udhaar Balance", L), t("Status", L))
-        widths = (240, 160, 260, 160, 100)
+        cols   = ("name", "phone", "address", "balance", "change", "status")
+        heads  = (t("Customer Name", L), t("Phone", L), t("Address", L), t("Udhaar Balance", L), t("Change Balance", L), t("Status", L))
+        widths = (210, 130, 230, 130, 130, 100)
         self.tree = ttk.Treeview(tbl, columns=cols, show="headings",
                                   style="Cust.Treeview", selectmode="browse")
         stretch_cols = {"name", "address"}
@@ -120,6 +120,7 @@ class CustomerScreen(ctk.CTkFrame):
             (t("🖨️  Print Ledger", L),  "#0277BD",               self._print_ledger),
             (t("💳  Add Payment", L),   COLORS["btn_success"],   self._add_payment),
             (t("📝  Add Udhaar", L),    COLORS["btn_warning"],   self._add_udhaar),
+            (t("💰  Clear Change", L),   "#E65100",               self._clear_change),
             (t("🗑️  Delete", L),        COLORS["btn_danger"],    self._delete_customer),
         ]:
             ctk.CTkButton(act, text=txt, font=FONTS["button"],
@@ -154,12 +155,14 @@ class CustomerScreen(ctk.CTkFrame):
         _row_colors = COLORS["ROW_COLORS"]
         for i, c in enumerate(rows):
             bal = c.get("credit_balance") or 0
+            change = c.get("change_balance") or 0
             tag = "credit" if bal > 0 else f"row{i % len(_row_colors)}"
             self.tree.insert("", "end", iid=str(c["customer_id"]), values=(
                 c["name"],
                 c.get("phone", "") or "",
                 c.get("address", "") or "",
                 f"₹{bal:,.2f}" if bal > 0 else "—",
+                f"₹{change:,.2f}" if change > 0 else "—",
                 "✅ Active" if (c.get("is_active") in (None, 1)) else "❌ Inactive",
             ), tags=(tag,))
         for idx, color in enumerate(_row_colors):
@@ -274,11 +277,15 @@ class CustomerScreen(ctk.CTkFrame):
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
         bal = cust.get("credit_balance") or 0
+        change_bal = cust.get("change_balance") or 0
         ctk.CTkLabel(hdr, text=f"📖  {cust['name']}  |  " + t("Phone", L) + f": {cust.get('phone','—')}",
                      font=FONTS["body_bold"], text_color="white"
                     ).pack(side="left", padx=20, pady=10)
+        bal_text = t("Current Balance", L) + f": ₹{bal:,.2f}"
+        if change_bal > 0:
+            bal_text += f"  |  " + t("Change Balance", L) + f": ₹{change_bal:,.2f}"
         bal_color = "#FFCDD2" if bal > 0 else "#C8E6C9"
-        ctk.CTkLabel(hdr, text=t("Current Balance", L) + f": ₹{bal:,.2f}",
+        ctk.CTkLabel(hdr, text=bal_text,
                      font=FONTS["body_bold"], text_color=bal_color
                     ).pack(side="right", padx=20)
 
@@ -312,14 +319,32 @@ class CustomerScreen(ctk.CTkFrame):
         tree.configure(yscrollcommand=vsb.set)
         tree.grid(row=0, column=0, sticky="nsew", padx=(4, 0), pady=4)
         vsb.grid(row=0, column=1, sticky="ns", pady=4)
-        tree.tag_configure("credit",  background=COLORS["row_expired"])
-        tree.tag_configure("payment", background=COLORS["row_payment"])
+        tree.tag_configure("credit",         background=COLORS["row_expired"])
+        tree.tag_configure("payment",        background=COLORS["row_payment"])
+        tree.tag_configure("change_deposit", background="#E3F2FD")
+        tree.tag_configure("change_clear",   background="#ECEFF1")
 
         for i, t_ in enumerate(txns):
-            tag = "credit" if t_["txn_type"] == "Credit" else "payment"
+            ttype = t_["txn_type"]
+            if ttype == "Credit":
+                disp_type = "🔴 " + t("Udhaar", L)
+                tag = "credit"
+            elif ttype == "Payment":
+                disp_type = "🟢 " + t("Payment", L)
+                tag = "payment"
+            elif ttype == "Change Deposit":
+                disp_type = "🔵 " + t("Change Deposit", L)
+                tag = "change_deposit"
+            elif ttype == "Change Clear":
+                disp_type = "🟡 " + t("Change Cleared", L)
+                tag = "change_clear"
+            else:
+                disp_type = ttype
+                tag = f"row{i % 2}"
+
             tree.insert("", "end", values=(
                 str(t_["created_at"])[:16],
-                "🔴 " + t("Udhaar", L) if t_["txn_type"] == "Credit" else "🟢 " + t("Payment", L),
+                disp_type,
                 f"₹{t_['amount']:,.2f}",
                 t_.get("reference", "") or "",
                 t_.get("notes", "") or "",
@@ -425,6 +450,57 @@ class CustomerScreen(ctk.CTkFrame):
         ctk.CTkButton(btn_row, text=t("Cancel", L), font=FONTS["button"],
                       fg_color=COLORS["btn_secondary"], height=50, corner_radius=16,
                       command=dlg.destroy).pack(side="left", width=110)
+
+    def _clear_change(self):
+        L = self.app.current_lang
+        if self.current_user["role"] != "admin":
+            messagebox.showerror(
+                t("Permission Denied", L),
+                t("Only admins can clear the change balance.", L),
+                parent=self.winfo_toplevel()
+            )
+            return
+
+        cid = self._get_selected_id()
+        if not cid:
+            return
+        cust = self.db.get_customer_by_id(cid)
+        if not cust:
+            return
+
+        change_bal = cust.get("change_balance") or 0
+        if change_bal <= 0:
+            messagebox.showinfo(
+                t("Clear Change", L),
+                t("Customer has no change balance to clear.", L),
+                parent=self.winfo_toplevel()
+            )
+            return
+
+        confirm_msg = t("Are you sure you want to clear change balance of ₹{bal:,.2f} for '{name}'?", L).format(
+            bal=change_bal, name=cust["name"]
+        )
+        if not messagebox.askyesno(
+            t("Clear Change", L),
+            confirm_msg,
+            parent=self.winfo_toplevel()
+        ):
+            return
+
+        # Record transaction and clear it
+        self.db.add_customer_transaction(
+            cid, "Change Clear", change_bal,
+            None, "Change cleared by admin",
+            self.current_user["user_id"]
+        )
+        self.db.log_activity(
+            self.current_user["user_id"],
+            "CUSTOMER_CHANGE_CLEAR",
+            f"Cleared change balance of ₹{change_bal:.2f} for customer '{cust['name']}'"
+        )
+        messagebox.showinfo(t("Success", L), t("Change balance cleared.", L), parent=self.winfo_toplevel())
+        self._load_customers()
+        self._load_kpis()
 
     def _delete_customer(self):
         """Permanently delete customer (CUST-1). Deactivates if has bills."""

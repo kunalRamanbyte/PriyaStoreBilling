@@ -29,6 +29,7 @@ class BillingScreen(ctk.CTkFrame):
         self.cust_results = []          # customer-name autocomplete results
         self.cust_popup   = None
         self._pending_udhaar        = 0.0   # BIL-5: outstanding due of selected customer
+        self._change_adjusted       = 0.0   # available change of selected customer
         self._selected_customer_id  = None  # BIL-5: customer id
         self._selected_customer_name = None
         self._inline_entry   = None   # active inline-edit Entry widget
@@ -148,6 +149,11 @@ class BillingScreen(ctk.CTkFrame):
         # Gridded dynamically in _select_customer; hidden until a credit customer is picked
         self.udhaar_badge = self._make_chip(
             self.context_frame, "", "#FF9800", "white", 42
+        )
+
+        # Gridded dynamically in _select_customer; hidden until customer has change balance
+        self.change_badge = self._make_chip(
+            self.context_frame, "", "#10B981", "white", 42
         )
 
         search_frame = ctk.CTkFrame(
@@ -307,6 +313,24 @@ class BillingScreen(ctk.CTkFrame):
         )
         self.lbl_udhaar_adj.grid(row=0, column=1, sticky="e", padx=10, pady=6)
         self.udhaar_row_frame = udhaar_row   # shown/hidden dynamically; do NOT pack yet
+
+        # Change Used row — hidden until a customer with change balance is selected and adjusted
+        change_row = ctk.CTkFrame(
+            panel,
+            fg_color=COLORS.get("bg_summary_change", "#F0FDF4"),
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS.get("border_summary_change", "#BBF7D0")
+        )
+        change_row.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(change_row, text=t("Change Used", self.app.current_lang), font=_font_lbl,
+                     text_color=COLORS.get("text_summary_change", "#15803D"), anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
+        self.lbl_change_adj = ctk.CTkLabel(
+            change_row, text="₹ 0.00", font=_font_val,
+            text_color=COLORS.get("text_summary_change", "#15803D"), anchor="e"
+        )
+        self.lbl_change_adj.grid(row=0, column=1, sticky="e", padx=10, pady=6)
+        self.change_row_frame = change_row   # shown/hidden dynamically; do NOT pack yet
 
         self._totals_divider = ctk.CTkFrame(panel, fg_color=COLORS.get("border_summary_card", "#E9D5FF"), height=2)
         self._totals_divider.pack(fill="x", padx=10, pady=4)
@@ -558,6 +582,31 @@ class BillingScreen(ctk.CTkFrame):
             self.customer_entry.delete(0, "end")
             self.customer_entry.insert(0, cname)
 
+        if self._selected_customer_id:
+            cust = self.db.get_customer_by_id(self._selected_customer_id)
+            if cust:
+                self._pending_udhaar = float(bill.get("udhaar_adjustment") or 0)
+                self._change_adjusted = float(bill.get("change_adjustment") or 0)
+
+                cur_credit = float(cust.get("credit_balance") or 0)
+                cur_change = float(cust.get("change_balance") or 0)
+                if cur_credit > 0:
+                    self.udhaar_badge.configure(text=f"⚠️  Udhaar Pending: ₹{cur_credit:,.2f}")
+                    self.udhaar_badge.grid(row=0, column=1, sticky="e", padx=(12, 0), pady=2)
+                else:
+                    self.udhaar_badge.grid_remove()
+
+                if cur_change > 0:
+                    self.change_badge.configure(text=f"💰  Change Available: ₹{cur_change:,.2f}")
+                    self.change_badge.grid(row=0, column=2, sticky="e", padx=(12, 0), pady=2)
+                else:
+                    self.change_badge.grid_remove()
+        else:
+            self._pending_udhaar = 0.0
+            self._change_adjusted = 0.0
+            self.udhaar_badge.grid_remove()
+            self.change_badge.grid_remove()
+
         self.discount_var.set(str(int(bill.get("discount", 0)) if float(bill.get("discount", 0)) == int(float(bill.get("discount", 0))) else bill.get("discount", 0)))
 
         mode = bill.get("payment_mode", "Cash")
@@ -779,8 +828,10 @@ class BillingScreen(ctk.CTkFrame):
         for c in results:
             phone = f"   📞 {c['phone']}" if c.get("phone") else ""
             bal = c.get("credit_balance") or 0
+            change_bal = c.get("change_balance") or 0
             bal_txt = f"   • Udhaar ₹{bal:.0f}" if bal else ""
-            listbox.insert("end", f"  {c['name']}{phone}{bal_txt}")
+            change_txt = f"   • Change ₹{change_bal:.0f}" if change_bal else ""
+            listbox.insert("end", f"  {c['name']}{phone}{bal_txt}{change_txt}")
 
         listbox.bind("<Return>",   lambda e: self._select_customer(listbox))
         listbox.bind("<Double-1>", lambda e: self._select_customer(listbox))
@@ -837,6 +888,25 @@ class BillingScreen(ctk.CTkFrame):
         else:
             self.udhaar_badge.grid_remove()
             self._pending_udhaar = 0
+
+        # Available change balance
+        change_bal = float(c.get("change_balance") or 0)
+        if change_bal > 0:
+            self.change_badge.configure(text=f"💰  Change Available: ₹{change_bal:,.2f}")
+            self.change_badge.grid(row=0, column=2, sticky="e", padx=(12, 0), pady=2)
+            if messagebox.askyesno(
+                t("Change Balance Detected", self.app.current_lang),
+                f"Customer '{c['name']}' has an available change balance of ₹{change_bal:,.2f}.\n\n"
+                f"Would you like to adjust/use this change balance in the new bill?",
+                parent=self.winfo_toplevel()
+            ):
+                self._change_adjusted = change_bal
+                self._set_status(f"💰  Change ₹{change_bal:,.2f} will be adjusted in the bill.")
+            else:
+                self._change_adjusted = 0.0
+        else:
+            self.change_badge.grid_remove()
+            self._change_adjusted = 0.0
 
         self._update_walkin_badge()
         self.search_entry.focus_set()
@@ -899,6 +969,7 @@ class BillingScreen(ctk.CTkFrame):
                 self._selected_customer_id   = cid
                 self._selected_customer_name = name
                 self._pending_udhaar         = 0.0
+                self._change_adjusted        = 0.0
                 self._update_walkin_badge()
                 self._set_status(f"✅  New customer '{name}' added and selected.")
             except Exception as e:
@@ -918,8 +989,10 @@ class BillingScreen(ctk.CTkFrame):
         self._selected_customer_id = None
         self._selected_customer_name = None
         self._pending_udhaar = 0.0
+        self._change_adjusted = 0.0
         try:
             self.udhaar_badge.grid_remove()
+            self.change_badge.grid_remove()
         except Exception:
             pass
         self._update_walkin_badge()
@@ -1319,7 +1392,8 @@ class BillingScreen(ctk.CTkFrame):
         discount    = min(discount, subtotal)
         bill_total  = max(0, round(subtotal - discount, 2))
         udhaar      = self._pending_udhaar
-        grand_total = round(bill_total + udhaar, 2)
+        change_adj  = min(self._change_adjusted, bill_total)
+        grand_total = round(bill_total + udhaar - change_adj, 2)
 
         self.lbl_subtotal.configure(text=f"₹ {subtotal:,.2f}")
         self.lbl_discount.configure(text=f"₹ {discount:,.2f}")
@@ -1330,6 +1404,13 @@ class BillingScreen(ctk.CTkFrame):
                                        before=self._totals_divider)
         else:
             self.udhaar_row_frame.pack_forget()
+
+        if change_adj > 0:
+            self.lbl_change_adj.configure(text=f"₹ {change_adj:,.2f}")
+            self.change_row_frame.pack(fill="x", padx=12, pady=3,
+                                       before=self._totals_divider)
+        else:
+            self.change_row_frame.pack_forget()
 
         self.lbl_grand_total.configure(text=f"₹  {grand_total:,.2f}")
 
@@ -1344,6 +1425,11 @@ class BillingScreen(ctk.CTkFrame):
         change = max(0, round(cash - grand, 2))
         self.lbl_change.configure(text=f"₹  {change:,.2f}",
                                    text_color="white")
+        if self._selected_customer_id:
+            if cash < grand and cash > 0:
+                self._set_status(f"ℹ️  Unpaid ₹{grand - cash:,.2f} will go to Udhaar.")
+            elif cash > grand:
+                self._set_status(f"ℹ️  Surplus ₹{cash - grand:,.2f} will go to Change Balance.")
 
     def _on_payment_mode_change(self, mode):
         if mode == "Cash":
@@ -1364,7 +1450,8 @@ class BillingScreen(ctk.CTkFrame):
         discount         = min(discount, subtotal)
         bill_total       = max(0, round(subtotal - discount, 2))
         udhaar_adj       = self._pending_udhaar
-        total_to_collect = round(bill_total + udhaar_adj, 2)
+        change_adj       = min(self._change_adjusted, bill_total)
+        total_to_collect = round(bill_total + udhaar_adj - change_adj, 2)
         try:
             amount_paid = float(self.cash_var.get() or 0)
         except ValueError:
@@ -1378,6 +1465,16 @@ class BillingScreen(ctk.CTkFrame):
             else None
         )
 
+        if mode == "Credit (Udhaar)":
+            amt_paid_val = 0.0
+            change_due_val = 0.0
+        elif mode == "Cash":
+            amt_paid_val = amount_paid
+            change_due_val = change_due
+        else:
+            amt_paid_val = total_to_collect
+            change_due_val = 0.0
+
         return {
             "customer_id"      : customer_id,
             "customer_name"    : customer_name,
@@ -1385,10 +1482,12 @@ class BillingScreen(ctk.CTkFrame):
             "discount"         : discount,
             "grand_total"      : bill_total,         # items total only (no udhaar inflation)
             "udhaar_adjustment": udhaar_adj,
+            "change_adjustment": change_adj,
             "payment_mode"     : mode,
-            "amount_paid"      : amount_paid if mode == "Cash" else total_to_collect,
-            "change_due"       : change_due,
+            "amount_paid"      : amt_paid_val,
+            "change_due"       : change_due_val,
         }
+
 
     # ─────────────────────────────────────────────────────────────
     # Bill actions

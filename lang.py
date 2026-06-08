@@ -338,6 +338,16 @@ T = {
     "Customer Name":        ["Customer Name",           "কাস্টমার নাম",         "ग्राहक नाम"],
     "Credit Balance":       ["Credit Balance",          "বাকি টাকা",            "बाकी पैसा"],
     "Save Customer_btn":    ["💾  Save Customer",       "💾  সেভ কাস্টমার",         "💾  सेव ग्राहक"],
+    "Change Balance":       ["Change Balance",          "চেঞ্জ ব্যালেন্স",        "चेंज बैलेंस"],
+    "Change Used":          ["Change Used",             "চেঞ্জ ব্যবহার",         "चेंज उपयोग"],
+    "Change Available":     ["Change Available",        "চেঞ্জ আছে",           "चेंज उपलब्ध"],
+    "Change Balance Detected": ["Change Balance Detected",  "চেঞ্জ ব্যালেন্স পাওয়া গেছে", "चेंज बैलेंस मिला"],
+    "Change Deposit":       ["Change Deposit",          "চেঞ্জ জমা",           "चेंज जमा"],
+    "Change Cleared":       ["Change Cleared",          "চেঞ্জ পরিশোধ",         "चेंज क्लियर"],
+    "Clear Change":         ["Clear Change",            "চেঞ্জ ক্লিয়ার",         "चेंज क्लियर"],
+    "Only admins can clear the change balance.": ["Only admins can clear the change balance.", "শুধুমাত্র অ্যাডমিনরাই চেঞ্জ ব্যালেন্স ক্লিয়ার করতে পারবেন।", "केवल एडमिन ही चेंज बैलेंस क्लियर कर सकते हैं।"],
+    "Are you sure you want to clear change balance of ₹{bal:,.2f} for '{name}'?": ["Are you sure you want to clear change balance of ₹{bal:,.2f} for '{name}'?", "আপনি কি নিশ্চিত যে আপনি '{name}'-এর জন্য ₹{bal:,.2f} চেঞ্জ ব্যালেন্স ক্লিয়ার করতে চান?", "क्या आप वाकई '{name}' के लिए ₹{bal:,.2f} का चेंज बैलेंस clear करना चाहते हैं?"],
+    "Customer has no change balance to clear.": ["Customer has no change balance to clear.", "কাস্টমারের ক্লিয়ার করার মতো কোনো চেঞ্জ ব্যালেন্স নেই।", "ग्राहक के पास क्लियर करने के लिए कोई चेंज बैलेंस नहीं है।"],
 
     # ══════════════════════════════════════════════════════════════
     # Reports

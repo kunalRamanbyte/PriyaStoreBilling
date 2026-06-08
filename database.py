@@ -69,6 +69,7 @@ class Database:
                     phone          TEXT,
                     address        TEXT,
                     credit_balance REAL DEFAULT 0,
+                    change_balance REAL DEFAULT 0,
                     created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -102,7 +103,9 @@ class Database:
                     status       TEXT DEFAULT 'Active',
                     void_reason  TEXT,
                     created_by   INTEGER REFERENCES users(user_id),
-                    notes        TEXT
+                    notes        TEXT,
+                    udhaar_adjustment REAL DEFAULT 0,
+                    change_adjustment REAL DEFAULT 0
                 );
 
                 CREATE TABLE IF NOT EXISTS bill_items (
@@ -204,6 +207,8 @@ class Database:
                 "ALTER TABLE customers ADD COLUMN is_active INTEGER DEFAULT 1",
                 "ALTER TABLE products  ADD COLUMN expiry_date TEXT",
                 "ALTER TABLE bills     ADD COLUMN udhaar_adjustment REAL DEFAULT 0",
+                "ALTER TABLE customers ADD COLUMN change_balance REAL DEFAULT 0",
+                "ALTER TABLE bills     ADD COLUMN change_adjustment REAL DEFAULT 0",
             ]:
                 try:
                     conn.execute(migration)
@@ -537,12 +542,13 @@ class Database:
             prefix = pfx["value"] if pfx else "BILL"
             bill_number = self._claim_number(conn, "next_bill_no", prefix)
             udhaar_adj = float(bill_data.get("udhaar_adjustment") or 0)
+            change_adj = float(bill_data.get("change_adjustment") or 0)
             cur = conn.execute(
                 """INSERT INTO bills
                    (bill_number, customer_id, customer_name, subtotal, discount,
                     grand_total, payment_mode, amount_paid, change_due, status,
-                    udhaar_adjustment, created_by)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    udhaar_adjustment, change_adjustment, created_by)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     bill_number,
                     bill_data.get("customer_id"),
@@ -555,6 +561,7 @@ class Database:
                     bill_data["change_due"],
                     "Active",
                     udhaar_adj,
+                    change_adj,
                     user_id,
                 )
             )
@@ -582,33 +589,84 @@ class Database:
                     (item["quantity"], item["product_id"])
                 )
 
-            # Auto-log credit transaction (Udhaar)
-            if bill_data.get("payment_mode") == "Credit (Udhaar)" and bill_data.get("customer_id"):
+            # Auto-log credit/payment transaction (Udhaar)
+            if bill_data.get("customer_id"):
+                cust_id = bill_data["customer_id"]
+                p_val = float(bill_data.get("amount_paid") or 0)
+                b_due = max(0.0, round(bill_data["grand_total"] - change_adj, 2))
+                u_prev = udhaar_adj
+                total_to_collect = round(b_due + u_prev, 2)
+
+                credit_added = 0.0
+                udhaar_collected = 0.0
+
+                if p_val >= total_to_collect:
+                    udhaar_collected = u_prev
+                else:
+                    if p_val >= u_prev:
+                        udhaar_collected = u_prev
+                        credit_added = round(total_to_collect - p_val, 2)
+                    else:
+                        udhaar_collected = p_val
+                        credit_added = b_due
+
+                if credit_added > 0:
+                    conn.execute(
+                        """INSERT INTO customer_transactions
+                           (customer_id, txn_type, amount, reference, notes, created_by)
+                           VALUES (?,?,?,?,?,?)""",
+                        (cust_id, "Credit", credit_added,
+                         bill_number, "Auto from bill", user_id)
+                    )
+                    conn.execute(
+                        "UPDATE customers SET credit_balance = credit_balance + ? WHERE customer_id=?",
+                        (credit_added, cust_id)
+                    )
+
+                if udhaar_collected > 0:
+                    conn.execute(
+                        """INSERT INTO customer_transactions
+                           (customer_id, txn_type, amount, reference, notes, created_by)
+                           VALUES (?,?,?,?,?,?)""",
+                        (cust_id, "Payment", udhaar_collected,
+                         bill_number, "Udhaar collected with bill", user_id)
+                    )
+                    conn.execute(
+                        "UPDATE customers SET credit_balance = MAX(0, credit_balance - ?) WHERE customer_id=?",
+                        (udhaar_collected, cust_id)
+                    )
+
+            # Deduct change_adjustment from customer's change_balance if customer is selected
+            if change_adj > 0 and bill_data.get("customer_id"):
                 conn.execute(
                     """INSERT INTO customer_transactions
                        (customer_id, txn_type, amount, reference, notes, created_by)
                        VALUES (?,?,?,?,?,?)""",
-                    (bill_data["customer_id"], "Credit", bill_data["grand_total"],
-                     bill_number, "Auto from bill", user_id)
+                    (bill_data["customer_id"], "Change Clear", change_adj,
+                     bill_number, "Change adjusted in bill", user_id)
                 )
                 conn.execute(
-                    "UPDATE customers SET credit_balance = credit_balance + ? WHERE customer_id=?",
-                    (bill_data["grand_total"], bill_data["customer_id"])
+                    "UPDATE customers SET change_balance = MAX(0, change_balance - ?) WHERE customer_id=?",
+                    (change_adj, bill_data["customer_id"])
                 )
 
-            # Clear previous udhaar if collected with this bill
-            if udhaar_adj > 0 and bill_data.get("customer_id"):
+            # Deposit change_due to customer's change_balance if customer is selected
+            change_due = float(bill_data.get("change_due") or 0)
+            if change_due > 0 and bill_data.get("customer_id"):
                 conn.execute(
                     """INSERT INTO customer_transactions
                        (customer_id, txn_type, amount, reference, notes, created_by)
                        VALUES (?,?,?,?,?,?)""",
-                    (bill_data["customer_id"], "Payment", udhaar_adj,
-                     bill_number, "Udhaar collected with bill", user_id)
+                    (bill_data["customer_id"], "Change Deposit", change_due,
+                     bill_number, "Change from bill", user_id)
                 )
                 conn.execute(
-                    "UPDATE customers SET credit_balance = MAX(0, credit_balance - ?) WHERE customer_id=?",
-                    (udhaar_adj, bill_data["customer_id"])
+                    "UPDATE customers SET change_balance = change_balance + ? WHERE customer_id=?",
+                    (change_due, bill_data["customer_id"])
                 )
+
+            if bill_data.get("customer_id"):
+                self._net_customer_balances(conn, bill_data["customer_id"], user_id, bill_number)
 
             conn.commit()
 
@@ -622,11 +680,13 @@ class Database:
             pfx = conn.execute("SELECT value FROM settings WHERE key='bill_prefix'").fetchone()
             prefix = pfx["value"] if pfx else "BILL"
             bill_number = self._claim_number(conn, "next_bill_no", prefix)
+            change_adj = float(bill_data.get("change_adjustment") or 0)
             cur = conn.execute(
                 """INSERT INTO bills
                    (bill_number, customer_id, customer_name, subtotal, discount,
-                    grand_total, payment_mode, amount_paid, change_due, status, created_by)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    grand_total, payment_mode, amount_paid, change_due, status,
+                    change_adjustment, created_by)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     bill_number,
                     bill_data.get("customer_id"),
@@ -638,6 +698,7 @@ class Database:
                     bill_data.get("amount_paid", 0),
                     bill_data.get("change_due", 0),
                     "Draft",
+                    change_adj,
                     user_id,
                 )
             )
@@ -709,35 +770,83 @@ class Database:
                     "UPDATE products SET current_stock = current_stock + ? WHERE product_id=?",
                     (item["quantity"], item["product_id"])
                 )
-            # Reverse the customer credit balance that was created when the Udhaar bill was saved
-            if bill.get("payment_mode") == "Credit (Udhaar)" and bill.get("customer_id"):
+            # Reverse the customer credit/payment balance that was affected when the bill was saved
+            if bill.get("customer_id"):
+                cust_id = bill["customer_id"]
+                p_val = float(bill.get("amount_paid") or 0)
+                change_adj_bill = float(bill.get("change_adjustment") or 0)
+                udhaar_adj_bill = float(bill.get("udhaar_adjustment") or 0)
+                b_due = max(0.0, round(bill["grand_total"] - change_adj_bill, 2))
+                total_to_collect = round(b_due + udhaar_adj_bill, 2)
+
+                credit_added = 0.0
+                udhaar_collected = 0.0
+
+                if p_val >= total_to_collect:
+                    udhaar_collected = udhaar_adj_bill
+                else:
+                    if p_val >= udhaar_adj_bill:
+                        udhaar_collected = udhaar_adj_bill
+                        credit_added = round(total_to_collect - p_val, 2)
+                    else:
+                        udhaar_collected = p_val
+                        credit_added = b_due
+
+                if credit_added > 0:
+                    conn.execute(
+                        "UPDATE customers SET credit_balance = MAX(0, credit_balance - ?) WHERE customer_id=?",
+                        (credit_added, cust_id)
+                    )
+                    conn.execute(
+                        """INSERT INTO customer_transactions
+                           (customer_id, txn_type, amount, reference, notes, created_by)
+                           VALUES (?,?,?,?,?,?)""",
+                        (cust_id, "Payment", credit_added,
+                         bill["bill_number"], "Auto-reversed: bill voided", user_id)
+                    )
+
+                if udhaar_collected > 0:
+                    conn.execute(
+                        "UPDATE customers SET credit_balance = credit_balance + ? WHERE customer_id=?",
+                        (udhaar_collected, cust_id)
+                    )
+                    conn.execute(
+                        """INSERT INTO customer_transactions
+                           (customer_id, txn_type, amount, reference, notes, created_by)
+                           VALUES (?,?,?,?,?,?)""",
+                        (cust_id, "Credit", udhaar_collected,
+                         bill["bill_number"], "Auto-reversed: udhaar collection voided", user_id)
+                    )
+            # Reverse any change_due that was deposited into customer's change_balance
+            change_due = float(bill.get("change_due") or 0)
+            if change_due > 0 and bill.get("customer_id"):
                 conn.execute(
-                    "UPDATE customers"
-                    " SET credit_balance = MAX(0, credit_balance - ?)"
-                    " WHERE customer_id=?",
-                    (bill["grand_total"], bill["customer_id"])
+                    "UPDATE customers SET change_balance = MAX(0, change_balance - ?) WHERE customer_id=?",
+                    (change_due, bill["customer_id"])
                 )
                 conn.execute(
                     """INSERT INTO customer_transactions
                        (customer_id, txn_type, amount, reference, notes, created_by)
                        VALUES (?,?,?,?,?,?)""",
-                    (bill["customer_id"], "Payment", bill["grand_total"],
+                    (bill["customer_id"], "Change Clear", change_due,
                      bill["bill_number"], "Auto-reversed: bill voided", user_id)
                 )
-            # Reverse any udhaar_adjustment that was collected with this bill
-            udhaar_adj = float(bill.get("udhaar_adjustment") or 0)
-            if udhaar_adj > 0 and bill.get("customer_id"):
+            # Reverse any change_adjustment that was used/adjusted in this bill
+            change_adj = float(bill.get("change_adjustment") or 0)
+            if change_adj > 0 and bill.get("customer_id"):
                 conn.execute(
-                    "UPDATE customers SET credit_balance = credit_balance + ? WHERE customer_id=?",
-                    (udhaar_adj, bill["customer_id"])
+                    "UPDATE customers SET change_balance = change_balance + ? WHERE customer_id=?",
+                    (change_adj, bill["customer_id"])
                 )
                 conn.execute(
                     """INSERT INTO customer_transactions
                        (customer_id, txn_type, amount, reference, notes, created_by)
                        VALUES (?,?,?,?,?,?)""",
-                    (bill["customer_id"], "Credit", udhaar_adj,
-                     bill["bill_number"], "Auto-reversed: udhaar collection voided", user_id)
+                    (bill["customer_id"], "Change Deposit", change_adj,
+                     bill["bill_number"], "Auto-reversed: change adjustment voided", user_id)
                 )
+            if bill.get("customer_id"):
+                self._net_customer_balances(conn, bill["customer_id"], user_id, bill["bill_number"])
             conn.commit()
         self.log_activity(user_id, "BILL_VOID", f"Bill {bill['bill_number']} voided. Reason: {reason}")
         return True
@@ -1053,7 +1162,7 @@ class Database:
         with self.get_conn() as conn:
             like = f"%{query}%"
             rows = conn.execute(
-                """SELECT customer_id, name, phone, credit_balance
+                """SELECT customer_id, name, phone, credit_balance, change_balance
                    FROM customers
                    WHERE (is_active IS NULL OR is_active=1)
                      AND (name LIKE ? OR phone LIKE ?)
@@ -1067,10 +1176,46 @@ class Database:
             rows = conn.execute(
                 """SELECT * FROM customer_transactions
                    WHERE customer_id=?
-                   ORDER BY created_at DESC LIMIT ?""",
+                   ORDER BY txn_id DESC LIMIT ?""",
                 (customer_id, limit)
             ).fetchall()
             return [dict(r) for r in rows]
+
+    def _net_customer_balances(self, conn, customer_id: int, user_id: int, reference: str = None):
+        """Net out the customer's credit_balance and change_balance.
+        A customer cannot have both positive Udhaar and positive Change at the same time.
+        """
+        row = conn.execute(
+            "SELECT credit_balance, change_balance FROM customers WHERE customer_id = ?",
+            (customer_id,)
+        ).fetchone()
+        if not row:
+            return
+        credit = float(row["credit_balance"] or 0)
+        change = float(row["change_balance"] or 0)
+        if credit > 0 and change > 0:
+            netted_amt = min(credit, change)
+            new_credit = credit - netted_amt
+            new_change = change - netted_amt
+            conn.execute(
+                "UPDATE customers SET credit_balance = ?, change_balance = ? WHERE customer_id = ?",
+                (new_credit, new_change, customer_id)
+            )
+            # Log the automatic offsetting in the customer transaction history
+            conn.execute(
+                """INSERT INTO customer_transactions
+                   (customer_id, txn_type, amount, reference, notes, created_by)
+                   VALUES (?,?,?,?,?,?)""",
+                (customer_id, "Payment", netted_amt, reference,
+                 "Auto-adjusted with Change Balance", user_id)
+            )
+            conn.execute(
+                """INSERT INTO customer_transactions
+                   (customer_id, txn_type, amount, reference, notes, created_by)
+                   VALUES (?,?,?,?,?,?)""",
+                (customer_id, "Change Clear", netted_amt, reference,
+                 "Auto-adjusted with Udhaar Balance", user_id)
+            )
 
     def add_customer_transaction(self, customer_id: int, txn_type: str,
                                   amount: float, reference, notes, user_id: int):
@@ -1086,11 +1231,57 @@ class Database:
                     "UPDATE customers SET credit_balance = credit_balance + ? WHERE customer_id=?",
                     (amount, customer_id)
                 )
-            else:
+            elif txn_type == "Payment":
+                # Get current credit balance
+                row = conn.execute(
+                    "SELECT credit_balance FROM customers WHERE customer_id=?",
+                    (customer_id,)
+                ).fetchone()
+                cur_bal = row["credit_balance"] if row else 0.0
+
+                if amount > cur_bal:
+                    surplus = amount - cur_bal
+                    conn.execute(
+                        "UPDATE customers SET credit_balance = 0, change_balance = change_balance + ? WHERE customer_id=?",
+                        (surplus, customer_id)
+                    )
+                    # If they paid off some Udhaar and had extra change
+                    if cur_bal > 0:
+                        # Update the initial transaction to cover the credit payoff amount
+                        conn.execute(
+                            "UPDATE customer_transactions SET amount = ? WHERE txn_id = (SELECT MAX(txn_id) FROM customer_transactions)",
+                            (cur_bal,)
+                        )
+                        # Log a second transaction for the change deposit
+                        conn.execute(
+                            """INSERT INTO customer_transactions
+                               (customer_id, txn_type, amount, reference, notes, created_by)
+                               VALUES (?,?,?,?,?,?)""",
+                            (customer_id, "Change Deposit", surplus, reference,
+                             "Change deposit from surplus payment", user_id)
+                        )
+                    else:
+                        # The customer had 0 Udhaar, so convert this transaction to a Change Deposit
+                        conn.execute(
+                            "UPDATE customer_transactions SET txn_type = 'Change Deposit', notes = ? WHERE txn_id = (SELECT MAX(txn_id) FROM customer_transactions)",
+                            ("Change deposit from payment",)
+                        )
+                else:
+                    conn.execute(
+                        "UPDATE customers SET credit_balance = credit_balance - ? WHERE customer_id=?",
+                        (amount, customer_id)
+                    )
+            elif txn_type == "Change Deposit":
                 conn.execute(
-                    "UPDATE customers SET credit_balance = MAX(0, credit_balance - ?) WHERE customer_id=?",
+                    "UPDATE customers SET change_balance = change_balance + ? WHERE customer_id=?",
                     (amount, customer_id)
                 )
+            elif txn_type == "Change Clear":
+                conn.execute(
+                    "UPDATE customers SET change_balance = MAX(0, change_balance - ?) WHERE customer_id=?",
+                    (amount, customer_id)
+                )
+            self._net_customer_balances(conn, customer_id, user_id, reference)
             conn.commit()
 
     def get_customers_summary(self):

@@ -167,7 +167,8 @@ def generate_pdf_bill(bill: dict, items: list, settings: dict,
     discount    = bill.get("discount",    0)
     grand_total = bill.get("grand_total", 0)
     udhaar_adj  = float(bill.get("udhaar_adjustment") or 0)
-    total_collect = round(grand_total + udhaar_adj, 2)
+    change_adj  = float(bill.get("change_adjustment") or 0)
+    total_collect = round(grand_total + udhaar_adj - change_adj, 2)
     amount_paid = bill.get("amount_paid", 0)
     change_due  = bill.get("change_due",  0)
     balance_due = max(0, round(total_collect - amount_paid, 2))
@@ -185,6 +186,10 @@ def generate_pdf_bill(bill: dict, items: list, settings: dict,
     if discount:
         totals_data.append(
             [Paragraph("Discount:", tot_lbl), Paragraph(f"- ₹ {discount:,.2f}", tot_val)]
+        )
+    if change_adj > 0:
+        totals_data.append(
+            [Paragraph("Change Used:", tot_lbl), Paragraph(f"- ₹ {change_adj:,.2f}", tot_val)]
         )
     if udhaar_adj > 0:
         totals_data.append(
@@ -364,14 +369,17 @@ def _build_receipt_lines(bill: dict, items: list, settings: dict,
     subtotal = float(bill.get("subtotal", 0))
     discount = float(bill.get("discount", 0))
     udhaar   = float(bill.get("udhaar_adjustment") or 0)
+    change_adj = float(bill.get("change_adjustment") or 0)
     grand    = float(bill.get("grand_total", 0))
     paid     = float(bill.get("amount_paid", 0))
     change   = float(bill.get("change_due", 0))
-    total_collect = grand + udhaar
+    total_collect = grand + udhaar - change_adj
 
     lines.append(ljr(f"Total Qty: {total_qty:.0f}", f"Sub Total  {subtotal:>8.2f}"))
     if discount:
         lines.append(ljr("Discount:", f"  -{discount:>8.2f}"))
+    if change_adj > 0:
+        lines.append(ljr("Change Used:", f"  -{change_adj:>8.2f}"))
     if udhaar > 0:
         lines.append(ljr("Prev. Udhaar:", f"  +{udhaar:>8.2f}"))
     lines.append("")
@@ -517,15 +525,18 @@ def print_thermal(bill: dict, items: list, settings: dict,
         subtotal = float(bill.get("subtotal", 0))
         discount = float(bill.get("discount", 0))
         udhaar   = float(bill.get("udhaar_adjustment") or 0)
+        change_adj = float(bill.get("change_adjustment") or 0)
         grand    = float(bill.get("grand_total", 0))
         paid     = float(bill.get("amount_paid", 0))
         change   = float(bill.get("change_due", 0))
-        total_collect = grand + udhaar
+        total_collect = grand + udhaar - change_adj
 
         p.set(align="left", bold=False, width=1, height=1)
         p.text(ljr(f"Total Qty: {total_qty:.0f}", f"Sub Total  {subtotal:>8.2f}") + "\n")
         if discount:
             p.text(ljr("Discount:", f"  -{discount:>8.2f}") + "\n")
+        if change_adj > 0:
+            p.text(ljr("Change Used:", f"  -{change_adj:>8.2f}") + "\n")
         if udhaar > 0:
             p.text(ljr("Prev. Udhaar:", f"  +{udhaar:>8.2f}") + "\n")
 
