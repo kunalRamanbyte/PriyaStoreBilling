@@ -1790,7 +1790,7 @@ class BillingScreen(ctk.CTkFrame):
         def _thermal():
             try:
                 from bill_printer import print_thermal
-                paper = self.db.get_setting("thermal_paper_width", "80mm") or "80mm"
+                paper = self.db.get_setting("paper_width", "80mm") or "80mm"
                 ok, msg = print_thermal(bill, items, settings, paper)
                 if ok:
                     messagebox.showinfo("Printed", f"Receipt sent to: {msg}", parent=dlg)

@@ -244,34 +244,7 @@ def generate_pdf_bill(bill: dict, items: list, settings: dict,
 
 def _build_receipt_lines(bill: dict, items: list, settings: dict,
                           width: int = 48) -> list:
-    """Build list of plain-text receipt lines for the given paper width.
-
-    Layout inspired by the reference thermal receipt:
-      Shop name (centered, uppercase)
-      Address, City, Pincode (centered)
-      Contact: phone (centered)
-      ────────────────────────────────────
-      Name: Customer   (M: phone)
-      Adr: address
-      ────────────────────────────────────
-      Date: DD/MM/YY   Mode   Time
-      Cashier: xxx     Bill No.: xxx
-      ────────────────────────────────────
-      Item         Qty.  Price  Amount
-      ────────────────────────────────────
-      ...items...
-      ────────────────────────────────────
-      Total Qty: N    Sub Total  xxx.xx
-      Discount:                 -xxx.xx
-      Prev. Udhaar:             +xxx.xx
-      ====================================
-           Grand Total  ₹xxx.xx
-      ====================================
-      Amount Paid:              xxx.xx
-      Balance Due:              xxx.xx
-      ────────────────────────────────────
-          Thanks & Visit Again
-    """
+    """Build list of plain-text receipt lines for the given paper width."""
     shop_name  = settings.get("shop_name",    "Priya Store")
     shop_addr  = settings.get("shop_address", "")
     shop_city  = settings.get("shop_city",    "")
@@ -285,13 +258,12 @@ def _build_receipt_lines(bill: dict, items: list, settings: dict,
         l = l[:width - len(r) - 1]
         return l + " " * (width - len(l) - len(r)) + r
 
-    sep  = "─" * width
-    dsep = "═" * width
+    sep  = "-" * width
+    dsep = "=" * width
 
     lines = []
 
     # ── Shop header (centered) ──
-    lines.append("")
     lines.append(center(shop_name.upper()))
     addr = ", ".join(filter(None, [shop_addr, shop_city]))
     if addr:
@@ -306,19 +278,25 @@ def _build_receipt_lines(bill: dict, items: list, settings: dict,
     cust = bill.get("customer_name", "Walk-in Customer")
     cust_phone = bill.get("customer_phone", "")
     cust_addr  = bill.get("customer_address", "")
-    if cust_phone:
-        lines.append(f"Name: {cust}  (M: {cust_phone})")
+    if width >= 48:
+        if cust_phone:
+            lines.append(f"Name: {cust}  (M: {cust_phone})")
+        else:
+            lines.append(f"Name: {cust}")
+        if cust_addr:
+            lines.append(f"Adr: {cust_addr}")
     else:
         lines.append(f"Name: {cust}")
-    if cust_addr:
-        lines.append(f"Adr: {cust_addr}")
+        if cust_phone:
+            lines.append(f"Phone: {cust_phone}")
+        if cust_addr:
+            lines.append(f"Adr: {cust_addr}")
     lines.append(sep)
 
     # ── Date / Time / Cashier / Bill No ──
     raw_dt    = str(bill.get("bill_date", ""))
     date_disp = raw_dt[:10] if len(raw_dt) >= 10 else ""
     time_disp = raw_dt[11:16] if len(raw_dt) >= 16 else ""
-    # Try to format date as DD/MM/YY
     try:
         _dt = datetime.strptime(raw_dt[:19], "%Y-%m-%d %H:%M:%S")
         date_disp = _dt.strftime("%d/%m/%y")
@@ -327,21 +305,25 @@ def _build_receipt_lines(bill: dict, items: list, settings: dict,
         pass
 
     mode = bill.get("payment_mode", "Cash")
-    # Line 1: Date + Mode + Time
-    lines.append(ljr(f"Date: {date_disp}    {mode}", time_disp))
-    # Line 2: Cashier + Bill No
-    lines.append(ljr(f"Cashier: {cashier}", f"Bill No.: {bill['bill_number']}"))
+    payment_line = f"Payment: {mode} | {time_disp}"
+
+    if width >= 48:
+        lines.append(ljr(f"Bill No: {bill['bill_number']}", f"Date: {date_disp}"))
+        lines.append(ljr(f"Cashier: {cashier}", payment_line))
+    else:
+        lines.append(f"Bill No: {bill['bill_number']}")
+        lines.append(f"Date: {date_disp}")
+        lines.append(payment_line)
+        lines.append(f"Cashier: {cashier}")
     lines.append(sep)
 
     # ── Column header ──
     if width >= 48:
-        # Wide: Item (variable) | Qty (5) | Price (8) | Amount (8) = 21 fixed
-        nm = width - 23
+        nm = width - 24
         lines.append(f"{'Item':<{nm}}  {'Qty.':<5}{'Price':>8} {'Amount':>8}")
     else:
-        # Narrow: Item | Qty | Amt
-        nm = width - 13
-        lines.append(f"{'Item':<{nm}} {'Qty':>3} {'Amt':>7}")
+        nm = 9
+        lines.append(f"{'Item':<{nm}} {'Qty':>4} {'Price':>8} {'Amount':>8}")
     lines.append(sep)
 
     # ── Items ──
@@ -352,17 +334,19 @@ def _build_receipt_lines(bill: dict, items: list, settings: dict,
         rate = float(it.get("unit_price", 0))
         amt  = float(it.get("line_total", 0))
         total_qty += qty
+        qty_str = f"{qty:g}"
         if width >= 48:
-            # If item name is too long, print on two lines
             if len(name) > nm:
                 lines.append(name)
-                lines.append(f"{'':<{nm}}  {qty:<5.0f}{rate:>8.2f} {amt:>8.2f}")
+                lines.append(f"{'':<{nm}}  {qty_str:<5}{rate:>8.2f} {amt:>8.2f}")
             else:
-                lines.append(f"{name:<{nm}}  {qty:<5.0f}{rate:>8.2f} {amt:>8.2f}")
+                lines.append(f"{name:<{nm}}  {qty_str:<5}{rate:>8.2f} {amt:>8.2f}")
         else:
-            name = name[:nm]
-            lines.append(f"{name:<{nm}} {qty:>3.0f} {amt:>7.2f}")
-
+            if len(name) > nm:
+                lines.append(name)
+                lines.append(f"{'':<10}{qty_str:>4} {rate:>8.2f} {amt:>8.2f}")
+            else:
+                lines.append(f"{name:<{nm}} {qty_str:>4} {rate:>8.2f} {amt:>8.2f}")
     lines.append(sep)
 
     # ── Totals ──
@@ -375,36 +359,32 @@ def _build_receipt_lines(bill: dict, items: list, settings: dict,
     change   = float(bill.get("change_due", 0))
     total_collect = grand + udhaar - change_adj
 
-    lines.append(ljr(f"Total Qty: {total_qty:.0f}", f"Sub Total  {subtotal:>8.2f}"))
+    lines.append(ljr("Sub Total:", f"Rs.{subtotal:.2f}"))
     if discount:
-        lines.append(ljr("Discount:", f"  -{discount:>8.2f}"))
+        lines.append(ljr("Discount:", f"-Rs.{discount:.2f}"))
     if change_adj > 0:
-        lines.append(ljr("Change Used:", f"  -{change_adj:>8.2f}"))
+        lines.append(ljr("Change Used:", f"-Rs.{change_adj:.2f}"))
     if udhaar > 0:
-        lines.append(ljr("Prev. Udhaar:", f"  +{udhaar:>8.2f}"))
-    lines.append("")
+        lines.append(ljr("Prev. Udhaar:", f"+Rs.{udhaar:.2f}"))
     lines.append(dsep)
-    lines.append(center(f"Grand Total  Rs.{total_collect:,.2f}"))
+    lines.append(ljr("Grand Total:", f"Rs.{total_collect:.2f}"))
     lines.append(dsep)
-    lines.append("")
 
     # Payment info
-    lines.append(ljr("Amount Paid:", f"Rs.{paid:>8.2f}"))
+    lines.append(ljr("Amount Paid:", f"Rs.{paid:.2f}"))
     balance_due = max(0, round(total_collect - paid, 2))
     if change > 0:
-        lines.append(ljr("Change Due:", f"Rs.{change:>8.2f}"))
+        lines.append(ljr("Change Due:", f"Rs.{change:.2f}"))
     if balance_due > 0:
-        lines.append(ljr("Balance Due:", f"Rs.{balance_due:>8.2f}"))
+        lines.append(ljr("Balance Due:", f"Rs.{balance_due:.2f}"))
 
     # Show udhaar credit status if bill is credit mode
     if bill.get("payment_mode") == "Credit (Udhaar)":
-        lines.append("")
         lines.append(center("** CREDIT SALE (UDHAAR) **"))
 
     lines.append(sep)
 
     # ── Footer ──
-    lines.append("")
     lines.append(center("Thanks & Visit Again"))
     lines.append("")
     lines.append("")
@@ -420,7 +400,7 @@ def print_thermal(bill: dict, items: list, settings: dict,
     Returns (True, printer_name) on success or (False, error_message).
     paper_width: '58mm' or '80mm'
     """
-    char_width = 32 if paper_width == "58mm" else 48
+    char_width = 32 if str(paper_width).strip().lower() == "58mm" else 48
 
     # ── Try python-escpos with real thermal formatting ────────
     try:
@@ -437,8 +417,8 @@ def print_thermal(bill: dict, items: list, settings: dict,
         shop_phone = settings.get("shop_phone",   "")
         shop_gst   = settings.get("shop_gst",     "")
         cashier    = settings.get("cashier",      "")
-        sep        = "─" * char_width
-        eq_sep     = "═" * char_width
+        sep        = "-" * char_width
+        eq_sep     = "=" * char_width
         is_wide    = char_width >= 48
 
         def ljr(left, right):
@@ -464,12 +444,19 @@ def print_thermal(bill: dict, items: list, settings: dict,
         cust = bill.get("customer_name", "Walk-in Customer")
         cust_phone = bill.get("customer_phone", "")
         cust_addr  = bill.get("customer_address", "")
-        if cust_phone:
-            p.text(f"Name: {cust}  (M: {cust_phone})\n")
+        if is_wide:
+            if cust_phone:
+                p.text(f"Name: {cust}  (M: {cust_phone})\n")
+            else:
+                p.text(f"Name: {cust}\n")
+            if cust_addr:
+                p.text(f"Adr: {cust_addr}\n")
         else:
             p.text(f"Name: {cust}\n")
-        if cust_addr:
-            p.text(f"Adr: {cust_addr}\n")
+            if cust_phone:
+                p.text(f"Phone: {cust_phone}\n")
+            if cust_addr:
+                p.text(f"Adr: {cust_addr}\n")
         p.text(sep + "\n")
 
         # ── Date / Time / Cashier / Bill No ──
@@ -484,20 +471,26 @@ def print_thermal(bill: dict, items: list, settings: dict,
             pass
 
         mode = bill.get("payment_mode", "Cash")
+        payment_line = f"Payment: {mode} | {time_disp}"
         p.set(align="left", bold=False, width=1, height=1)
-        p.text(ljr(f"Date: {date_disp}    {mode}", time_disp) + "\n")
-        p.set(align="left", bold=True, width=1, height=1)
-        p.text(ljr(f"Cashier: {cashier}", f"Bill No.: {bill['bill_number']}") + "\n")
+        if is_wide:
+            p.text(ljr(f"Bill No: {bill['bill_number']}", f"Date: {date_disp}") + "\n")
+            p.text(ljr(f"Cashier: {cashier}", payment_line) + "\n")
+        else:
+            p.text(f"Bill No: {bill['bill_number']}\n")
+            p.text(f"Date: {date_disp}\n")
+            p.text(payment_line + "\n")
+            p.text(f"Cashier: {cashier}\n")
         p.text(sep + "\n")
 
         # ── Column header ──
         p.set(align="left", bold=True, width=1, height=1)
         if is_wide:
-            nm  = char_width - 23
+            nm  = char_width - 24
             hdr = f"{'Item':<{nm}}  {'Qty.':<5}{'Price':>8} {'Amount':>8}"
         else:
-            nm  = char_width - 13
-            hdr = f"{'Item':<{nm}} {'Qty':>3} {'Amt':>7}"
+            nm  = 9
+            hdr = f"{'Item':<{nm}} {'Qty':>4} {'Price':>8} {'Amount':>8}"
         p.text(hdr + "\n")
         p.text(sep + "\n")
 
@@ -510,15 +503,19 @@ def print_thermal(bill: dict, items: list, settings: dict,
             rate = float(it.get("unit_price", 0))
             amt  = float(it.get("line_total", 0))
             total_qty += qty
+            qty_str = f"{qty:g}"
             if is_wide:
                 if len(name) > nm:
                     p.text(name + "\n")
-                    p.text(f"{'':<{nm}}  {qty:<5.0f}{rate:>8.2f} {amt:>8.2f}\n")
+                    p.text(f"{'':<{nm}}  {qty_str:<5}{rate:>8.2f} {amt:>8.2f}\n")
                 else:
-                    p.text(f"{name:<{nm}}  {qty:<5.0f}{rate:>8.2f} {amt:>8.2f}\n")
+                    p.text(f"{name:<{nm}}  {qty_str:<5}{rate:>8.2f} {amt:>8.2f}\n")
             else:
-                name = name[:nm]
-                p.text(f"{name:<{nm}} {qty:>3.0f} {amt:>7.2f}\n")
+                if len(name) > nm:
+                    p.text(name + "\n")
+                    p.text(f"{'':<10}{qty_str:>4} {rate:>8.2f} {amt:>8.2f}\n")
+                else:
+                    p.text(f"{name:<{nm}} {qty_str:>4} {rate:>8.2f} {amt:>8.2f}\n")
         p.text(sep + "\n")
 
         # ── Subtotal / discount / udhaar ──
@@ -532,36 +529,33 @@ def print_thermal(bill: dict, items: list, settings: dict,
         total_collect = grand + udhaar - change_adj
 
         p.set(align="left", bold=False, width=1, height=1)
-        p.text(ljr(f"Total Qty: {total_qty:.0f}", f"Sub Total  {subtotal:>8.2f}") + "\n")
+        p.text(ljr("Sub Total:", f"Rs.{subtotal:.2f}") + "\n")
         if discount:
-            p.text(ljr("Discount:", f"  -{discount:>8.2f}") + "\n")
+            p.text(ljr("Discount:", f"-Rs.{discount:.2f}") + "\n")
         if change_adj > 0:
-            p.text(ljr("Change Used:", f"  -{change_adj:>8.2f}") + "\n")
+            p.text(ljr("Change Used:", f"-Rs.{change_adj:.2f}") + "\n")
         if udhaar > 0:
-            p.text(ljr("Prev. Udhaar:", f"  +{udhaar:>8.2f}") + "\n")
+            p.text(ljr("Prev. Udhaar:", f"+Rs.{udhaar:.2f}") + "\n")
 
-        # ── Grand total — bold + double height, centered ──
-        p.text("\n")
+        # ── Grand total — bold, normal width ──
         p.text(eq_sep + "\n")
-        p.set(align="center", bold=True, width=2, height=2)
-        p.text(f"Grand Total  Rs.{total_collect:,.2f}\n")
+        p.set(align="left", bold=True, width=1, height=1)
+        p.text(ljr("Grand Total:", f"Rs.{total_collect:.2f}") + "\n")
         p.set(align="left", bold=False, width=1, height=1)
         p.text(eq_sep + "\n")
-        p.text("\n")
 
         # ── Payment info ──
-        p.text(ljr("Amount Paid:", f"Rs.{paid:>8.2f}") + "\n")
+        p.text(ljr("Amount Paid:", f"Rs.{paid:.2f}") + "\n")
         balance_due = max(0, round(total_collect - paid, 2))
         if change > 0:
-            p.text(ljr("Change Due:", f"Rs.{change:>8.2f}") + "\n")
+            p.text(ljr("Change Due:", f"Rs.{change:.2f}") + "\n")
         if balance_due > 0:
             p.set(align="left", bold=True, width=1, height=1)
-            p.text(ljr("Balance Due:", f"Rs.{balance_due:>8.2f}") + "\n")
+            p.text(ljr("Balance Due:", f"Rs.{balance_due:.2f}") + "\n")
             p.set(align="left", bold=False, width=1, height=1)
 
         # ── Credit sale indicator ──
         if bill.get("payment_mode") == "Credit (Udhaar)":
-            p.text("\n")
             p.set(align="center", bold=True, width=1, height=1)
             p.text("** CREDIT SALE (UDHAAR) **\n")
 
@@ -569,7 +563,6 @@ def print_thermal(bill: dict, items: list, settings: dict,
         p.text(sep + "\n")
 
         # ── Footer ──
-        p.text("\n")
         p.set(align="center", bold=True, width=1, height=1)
         p.text("Thanks & Visit Again\n")
         p.set(align="center", bold=False, width=1, height=1)
@@ -584,22 +577,41 @@ def print_thermal(bill: dict, items: list, settings: dict,
     except Exception as e:
         return False, str(e)
 
-    # Plain-text fallback via Windows print spooler
+    # Plain-text fallback via Windows print spooler (RAW mode)
     lines_txt = _build_receipt_lines(bill, items, settings, char_width)
     txt = "\n".join(lines_txt)
     try:
-        import win32print, win32api
+        import win32print
         default = win32print.GetDefaultPrinter()
-        tmp = tempfile.NamedTemporaryFile(
-            suffix=".txt", delete=False, mode="w",
-            encoding="utf-8", errors="replace"
-        )
-        tmp.write(txt)
-        tmp.close()
-        win32api.ShellExecute(
-            0, "print", tmp.name, f'/d:"{default}"', ".", 0
-        )
+        hPrinter = win32print.OpenPrinter(default)
+        try:
+            hJob = win32print.StartDocPrinter(hPrinter, 1, (f"Bill_{bill['bill_number']}", None, "RAW"))
+            try:
+                win32print.StartPagePrinter(hPrinter)
+                # Convert text to bytes
+                raw_bytes = (txt + "\n\n\n\n\x1dV\x42\x00").encode("utf-8", errors="replace")
+                win32print.WritePrinter(hPrinter, raw_bytes)
+                win32print.EndPagePrinter(hPrinter)
+            finally:
+                win32print.EndDocPrinter(hPrinter)
+        finally:
+            win32print.ClosePrinter(hPrinter)
         return True, default
-    except Exception as e:
-        return False, f"Plain-text fallback failed: {e}"
+    except Exception as raw_err:
+        # Final safety fallback: notepad.exe
+        try:
+            import win32api
+            default = win32print.GetDefaultPrinter()
+            tmp = tempfile.NamedTemporaryFile(
+                suffix=".txt", delete=False, mode="w",
+                encoding="utf-8", errors="replace"
+            )
+            tmp.write(txt)
+            tmp.close()
+            win32api.ShellExecute(
+                0, "print", tmp.name, f'/d:"{default}"', ".", 0
+            )
+            return True, default
+        except Exception as e:
+            return False, f"Raw print failed: {raw_err}. Notepad fallback failed: {e}"
 
