@@ -18,7 +18,7 @@ pip install -r requirements.txt
 
 Core packages: `customtkinter>=5.2.0`, `Pillow>=10.0.0`, `openpyxl>=3.1.0`, `reportlab>=4.0.0`
 
-Optional (thermal printer): `python-escpos`, `pywin32`
+Optional: `python-escpos`, `pywin32` (thermal printer), `tkcalendar` (date picker), `opencv-python` (webcam scanner)
 
 ## Running Tests
 
@@ -95,6 +95,23 @@ Every treeview uses a rotating 6-colour pastel palette defined as `COLORS["ROW_C
    ```
 
 Special rows (low-stock, void bills, etc.) use override tags like `"low_stock"`, `"void"`, `"draft"` which are configured separately and take precedence. `verify_screens.py` checks that this pattern is correctly applied on every screen — any new treeview must follow it or the test will fail.
+
+### Internationalisation (`lang.py`)
+
+The app supports English, Bengali, and Hindi. Every visible UI string must go through `t(key, lang)` from `lang.py`, where `key` is the English string and `lang` is `app.current_lang`. New strings must be added to the `T` dict in `lang.py` with all three translations (index 0 = English, 1 = Bengali, 2 = Hindi). Hardcoding text that bypasses `t()` will break non-English modes.
+
+The language setting is stored in the `settings` table as `app_language` with values `"English"`, `"Bengali"`, or `"Hindi"`.
+
+### Dark / Light Theme
+
+Theme is stored in the `settings` table as `app_theme`. On startup, `main.py` applies it via `ctk.set_appearance_mode()` and then calls `apply_theme_mode(mode)` from `config.py`, which swaps the global `COLORS` dict between `LIGHT_COLORS` and `DARK_COLORS`. All screen files read colours from `COLORS` at widget-creation time, so theme changes take effect on a full rebuild. Never read from `LIGHT_COLORS` or `DARK_COLORS` directly in screen files — always use `COLORS`.
+
+### Shared UI Helpers (`ui_utils.py`)
+
+Two helpers beyond `place_popup`:
+
+- **`open_date_picker(parent, var, title)`** — opens a `tkcalendar` popup and writes the selected date (YYYY-MM-DD) into a `tk.StringVar`. Requires `tkcalendar`; shows an install error if missing.
+- **`WebcamScanner`** in `webcam_scanner.py` — a reusable `CTkToplevel` that opens a live webcam feed, decodes QR/barcodes via `cv2`, and fires a callback on success. Requires `opencv-python`.
 
 ### Activity Logging
 
