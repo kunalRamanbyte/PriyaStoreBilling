@@ -21,6 +21,13 @@ REPORTS = [
      "cols": [("date","Date",120),("bills","Bills",70),("subtotal","Subtotal ₹",130),
                ("discount","Discount ₹",120),("total","Total ₹",130)],
      "summary_col": "total"},
+    {"key": "sales_returns",   "title": "Sales Returns",    "emoji": "↩️",
+     "color": "#C2410C", "needs_dates": True,  "needs_cust": False,
+     "cols": [("date","Date",150),("return_number","Return No",120),
+               ("bill_number","Bill No",120),("customer","Customer",170),
+               ("items","Items",70),("refund_mode","Refund Mode",130),
+               ("total","Refund ₹",120)],
+     "summary_col": "total"},
     {"key": "itemwise",        "title": "Item-wise Sales",  "emoji": "📦",
      "color": COLORS["btn_success"], "needs_dates": True,  "needs_cust": False,
      "cols": [("product_name","Product",220),("qty_sold","Qty",80),
@@ -301,6 +308,7 @@ class ReportScreen(ctk.CTkFrame):
         # Fetch data
         try:
             if   rpt["key"] == "daily_sales":     data = self.db.report_daily_sales(df, dt)
+            elif rpt["key"] == "sales_returns":    data = self.db.report_returns(df, dt)
             elif rpt["key"] == "itemwise":         data = self.db.report_itemwise_sales(df, dt)
             elif rpt["key"] == "top_products":     data = self.db.report_top_products(df, dt)
             elif rpt["key"] == "low_stock":        data = self.db.report_low_stock()

@@ -328,23 +328,36 @@ class BillingApp(ctk.CTk):
         # Draw dynamic royal-blue-to-navy-blue gradient on sidebar
         sidebar_canvas = tk.Canvas(sidebar, borderwidth=0, highlightthickness=0)
         sidebar_canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        sidebar_canvas._grad_size = (0, 0)   # last (w, h) actually drawn
+        sidebar_canvas._grad_job = None      # pending debounce callback
 
-        def _draw_sidebar_grad(event):
-            sidebar_canvas.delete("grad")
-            w, h = event.width, event.height
-            if w <= 1 or h <= 1:
+        def _render_sidebar_grad():
+            sidebar_canvas._grad_job = None
+            w, h = sidebar_canvas.winfo_width(), sidebar_canvas.winfo_height()
+            if w <= 1 or h <= 1 or (w, h) == sidebar_canvas._grad_size:
                 return
+            sidebar_canvas._grad_size = (w, h)
+            sidebar_canvas.delete("grad")
             # Dynamic sidebar gradient colors loaded from config
             c_start = COLORS.get("sidebar_grad_start", "#1E3A8A")
             c_end = COLORS.get("sidebar_grad_end", "#0F172A")
             r1, g1, b1 = int(c_start[1:3], 16), int(c_start[3:5], 16), int(c_start[5:7], 16)
             r2, g2, b2 = int(c_end[1:3], 16), int(c_end[3:5], 16), int(c_end[5:7], 16)
-            for y in range(h):
-                t = y / h
-                r = int(r1 + (r2 - r1) * t)
-                g = int(g1 + (g2 - g1) * t)
-                b = int(b1 + (b2 - b1) * t)
-                sidebar_canvas.create_line(0, y, w, y, fill=f"#{r:02x}{g:02x}{b:02x}", tags="grad")
+            # Step by 2px and draw a thick band — visually identical at half the line count.
+            for y in range(0, h, 2):
+                f = y / h
+                r = int(r1 + (r2 - r1) * f)
+                g = int(g1 + (g2 - g1) * f)
+                b = int(b1 + (b2 - b1) * f)
+                sidebar_canvas.create_line(0, y, w, y, width=2,
+                                           fill=f"#{r:02x}{g:02x}{b:02x}", tags="grad")
+
+        def _draw_sidebar_grad(_event=None):
+            # Debounce: coalesce the burst of <Configure> events fired during a
+            # window-resize drag into a single redraw once the drag settles.
+            if sidebar_canvas._grad_job is not None:
+                sidebar_canvas.after_cancel(sidebar_canvas._grad_job)
+            sidebar_canvas._grad_job = sidebar_canvas.after(60, _render_sidebar_grad)
 
         sidebar_canvas.bind("<Configure>", _draw_sidebar_grad)
 

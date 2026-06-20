@@ -27,8 +27,10 @@ class Database:
         promptly instead of waiting on garbage collection."""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row          # rows as dicts
-        conn.execute("PRAGMA journal_mode=WAL")  # power-cut safe
-        conn.execute("PRAGMA foreign_keys=ON")
+        # journal_mode=WAL is persistent (stored in the DB header) and is set
+        # once in init_db() — no need to re-issue it on every connection.
+        conn.execute("PRAGMA foreign_keys=ON")   # per-connection, must be set each time
+        conn.execute("PRAGMA synchronous=NORMAL")  # safe under WAL; fewer fsyncs per commit
         try:
             yield conn
             conn.commit()
@@ -43,6 +45,7 @@ class Database:
     def init_db(self):
         """Create all tables and seed default data."""
         with self.get_conn() as conn:
+            conn.execute("PRAGMA journal_mode=WAL")  # persistent; set once for the DB file
             cur = conn.cursor()
 
             cur.executescript("""
@@ -200,6 +203,33 @@ class Database:
                     notes       TEXT,
                     created_by  INTEGER REFERENCES users(user_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS sales_returns (
+                    return_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+                    return_number TEXT UNIQUE NOT NULL,
+                    return_date   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    bill_id       INTEGER NOT NULL REFERENCES bills(bill_id),
+                    bill_number   TEXT,
+                    customer_id   INTEGER REFERENCES customers(customer_id),
+                    customer_name TEXT,
+                    total_amount  REAL DEFAULT 0,
+                    refund_mode   TEXT DEFAULT 'Cash',
+                    reason        TEXT,
+                    created_by    INTEGER REFERENCES users(user_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS sales_return_items (
+                    ret_item_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                    return_id     INTEGER NOT NULL REFERENCES sales_returns(return_id),
+                    bill_item_id  INTEGER REFERENCES bill_items(item_id),
+                    product_id    INTEGER NOT NULL REFERENCES products(product_id),
+                    product_name  TEXT NOT NULL,
+                    unit          TEXT DEFAULT 'piece',
+                    quantity      REAL NOT NULL,
+                    unit_price    REAL NOT NULL,
+                    line_total    REAL NOT NULL,
+                    restocked     INTEGER DEFAULT 1
+                );
             """)
 
             # ── Migrations ────────────────────────────────────────
@@ -229,6 +259,9 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_purchases_sup  ON purchase_entries(supplier_id)",
                 "CREATE INDEX IF NOT EXISTS idx_cust_txn_cust  ON customer_transactions(customer_id)",
                 "CREATE INDEX IF NOT EXISTS idx_sp_purchase    ON supplier_payments(purchase_id)",
+                "CREATE INDEX IF NOT EXISTS idx_sret_bill      ON sales_returns(bill_id)",
+                "CREATE INDEX IF NOT EXISTS idx_sret_date      ON sales_returns(return_date)",
+                "CREATE INDEX IF NOT EXISTS idx_sreti_ret      ON sales_return_items(return_id)",
             ]:
                 try:
                     conn.execute(idx)
@@ -276,6 +309,8 @@ class Database:
                 ("shop_phone",   "+91 00000 00000"),
                 ("bill_prefix",  "BILL"),
                 ("next_bill_no", "1"),
+                ("return_prefix", "RET"),
+                ("next_return_no", "1"),
                 ("paper_width",  "80mm"),
             ]
             for key, val in default_settings:
@@ -732,11 +767,15 @@ class Database:
                 q += " AND (bill_number LIKE ? OR customer_name LIKE ?)"
                 like = f"%{search}%"
                 params += [like, like]
+            # Compare the bare bill_date column against bounds (the date() call
+            # wraps the parameter, not the column) so idx_bills_date can drive a
+            # range scan. '< date_to + 1 day' keeps the upper bound inclusive of
+            # same-day bills that carry a time component.
             if date_from:
-                q += " AND DATE(bill_date) >= ?"
+                q += " AND bill_date >= ?"
                 params.append(date_from)
             if date_to:
-                q += " AND DATE(bill_date) <= ?"
+                q += " AND bill_date < date(?, '+1 day')"
                 params.append(date_to)
             if status:
                 q += " AND status=?"
@@ -873,8 +912,9 @@ class Database:
                           COALESCE(SUM(grand_total),0) AS total_sales,
                           COALESCE(SUM(discount),0)    AS total_discount
                    FROM bills
-                   WHERE DATE(bill_date)=? AND status='Active'""",
-                (today,)
+                   WHERE bill_date >= ? AND bill_date < date(?, '+1 day')
+                     AND status='Active'""",
+                (today, today)
             ).fetchone()
             return dict(row) if row else {"bill_count": 0, "total_sales": 0, "total_discount": 0}
 
@@ -884,6 +924,164 @@ class Database:
                 "SELECT * FROM bills WHERE status='Active' ORDER BY bill_date DESC LIMIT ?",
                 (limit,)
             ).fetchall()]
+
+    # ─── Sales Returns / Refunds ──────────────────────────────
+
+    def get_returnable_items(self, bill_id: int):
+        """Each bill_item annotated with already-returned and remaining returnable qty."""
+        with self.get_conn() as conn:
+            items = conn.execute(
+                "SELECT * FROM bill_items WHERE bill_id=?", (bill_id,)
+            ).fetchall()
+            result = []
+            for it in items:
+                prior = conn.execute(
+                    "SELECT COALESCE(SUM(quantity),0) FROM sales_return_items WHERE bill_item_id=?",
+                    (it["item_id"],)
+                ).fetchone()[0]
+                d = dict(it)
+                d["already_returned"] = float(prior or 0)
+                d["returnable"] = round(float(it["quantity"]) - float(prior or 0), 3)
+                result.append(d)
+            return result
+
+    def save_return(self, return_data: dict, items: list, user_id: int):
+        """Record a sales return atomically: restore stock per line, process the
+        refund, and assign a return number. Returns (return_id, return_number).
+        Raises ValueError if any line exceeds the remaining returnable quantity."""
+        with self.get_conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            bill_id = return_data["bill_id"]
+
+            # Re-validate returnable quantities inside the transaction (guards
+            # against a stale dialog over-returning a line).
+            returnable = {}
+            for it in conn.execute(
+                "SELECT item_id, quantity FROM bill_items WHERE bill_id=?", (bill_id,)
+            ).fetchall():
+                prior = conn.execute(
+                    "SELECT COALESCE(SUM(quantity),0) FROM sales_return_items WHERE bill_item_id=?",
+                    (it["item_id"],)
+                ).fetchone()[0]
+                returnable[it["item_id"]] = round(float(it["quantity"]) - float(prior or 0), 3)
+
+            total = 0.0
+            for line in items:
+                qty = float(line["quantity"])
+                if qty <= 0:
+                    continue
+                biid = line.get("bill_item_id")
+                if biid is not None and qty > returnable.get(biid, 0) + 1e-9:
+                    raise ValueError(
+                        f"Cannot return {qty} of '{line['product_name']}' — only "
+                        f"{returnable.get(biid, 0)} remaining."
+                    )
+                total += float(line["line_total"])
+            total = round(total, 2)
+
+            prefix = self.get_setting("return_prefix", "RET")
+            return_number = self._claim_number(conn, "next_return_no", prefix)
+
+            cur = conn.execute(
+                """INSERT INTO sales_returns
+                   (return_number, bill_id, bill_number, customer_id, customer_name,
+                    total_amount, refund_mode, reason, created_by)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (return_number, bill_id, return_data.get("bill_number"),
+                 return_data.get("customer_id"), return_data.get("customer_name"),
+                 total, return_data.get("refund_mode", "Cash"),
+                 return_data.get("reason"), user_id)
+            )
+            return_id = cur.lastrowid
+
+            for line in items:
+                qty = float(line["quantity"])
+                if qty <= 0:
+                    continue
+                restocked = 1 if line.get("restocked", 1) else 0
+                conn.execute(
+                    """INSERT INTO sales_return_items
+                       (return_id, bill_item_id, product_id, product_name, unit,
+                        quantity, unit_price, line_total, restocked)
+                       VALUES (?,?,?,?,?,?,?,?,?)""",
+                    (return_id, line.get("bill_item_id"), line["product_id"],
+                     line["product_name"], line.get("unit", "piece"), qty,
+                     line["unit_price"], line["line_total"], restocked)
+                )
+                if restocked:
+                    conn.execute(
+                        "UPDATE products SET current_stock = current_stock + ? WHERE product_id=?",
+                        (qty, line["product_id"])
+                    )
+
+            # Refund routing (balance options only apply to saved customers)
+            mode    = return_data.get("refund_mode", "Cash")
+            cust_id = return_data.get("customer_id")
+            if cust_id and total > 0:
+                if mode == "Credit Adjust":
+                    conn.execute(
+                        "UPDATE customers SET credit_balance = MAX(0, credit_balance - ?) WHERE customer_id=?",
+                        (total, cust_id)
+                    )
+                    conn.execute(
+                        """INSERT INTO customer_transactions
+                           (customer_id, txn_type, amount, reference, notes, created_by)
+                           VALUES (?,?,?,?,?,?)""",
+                        (cust_id, "Payment", total, return_number,
+                         "Return refund adjusted to Udhaar", user_id)
+                    )
+                elif mode == "Store Credit":
+                    conn.execute(
+                        "UPDATE customers SET change_balance = change_balance + ? WHERE customer_id=?",
+                        (total, cust_id)
+                    )
+                    conn.execute(
+                        """INSERT INTO customer_transactions
+                           (customer_id, txn_type, amount, reference, notes, created_by)
+                           VALUES (?,?,?,?,?,?)""",
+                        (cust_id, "Store Credit", total, return_number,
+                         "Return refund to store credit", user_id)
+                    )
+                else:  # Cash
+                    conn.execute(
+                        """INSERT INTO customer_transactions
+                           (customer_id, txn_type, amount, reference, notes, created_by)
+                           VALUES (?,?,?,?,?,?)""",
+                        (cust_id, "Refund", total, return_number,
+                         "Cash refund for return", user_id)
+                    )
+
+            return return_id, return_number
+
+    def get_returns(self, search="", date_from=None, date_to=None, limit=500):
+        with self.get_conn() as conn:
+            q = "SELECT * FROM sales_returns WHERE 1=1"
+            params = []
+            if search:
+                q += " AND (return_number LIKE ? OR bill_number LIKE ? OR customer_name LIKE ?)"
+                like = f"%{search}%"
+                params += [like, like, like]
+            if date_from:
+                q += " AND return_date >= ?"
+                params.append(date_from)
+            if date_to:
+                q += " AND return_date < date(?, '+1 day')"
+                params.append(date_to)
+            q += " ORDER BY return_date DESC LIMIT ?"
+            params.append(limit)
+            return [dict(r) for r in conn.execute(q, params).fetchall()]
+
+    def get_return_by_id(self, return_id: int):
+        with self.get_conn() as conn:
+            r = conn.execute(
+                "SELECT * FROM sales_returns WHERE return_id=?", (return_id,)
+            ).fetchone()
+            if not r:
+                return None, []
+            items = conn.execute(
+                "SELECT * FROM sales_return_items WHERE return_id=?", (return_id,)
+            ).fetchall()
+            return dict(r), [dict(i) for i in items]
 
     # ─── Activity Log ─────────────────────────────────────────
 
@@ -1327,11 +1525,34 @@ class Database:
                        COALESCE(SUM(grand_total),0) AS total
                 FROM bills
                 WHERE status='Active'
-                  AND DATE(bill_date) BETWEEN ? AND ?
+                  AND bill_date >= ? AND bill_date < date(?, '+1 day')
                 GROUP BY DATE(bill_date)
                 ORDER BY date DESC
             """, (date_from, date_to)).fetchall()
             return [dict(r) for r in rows]
+
+    def report_returns(self, date_from: str, date_to: str):
+        """Sales returns within the date range — one row per return."""
+        with self.get_conn() as conn:
+            rows = conn.execute("""
+                SELECT r.return_date AS date,
+                       r.return_number,
+                       r.bill_number,
+                       COALESCE(r.customer_name, 'Walk-in') AS customer,
+                       (SELECT COUNT(*) FROM sales_return_items ri
+                          WHERE ri.return_id = r.return_id) AS items,
+                       r.refund_mode,
+                       COALESCE(r.total_amount, 0) AS total
+                FROM sales_returns r
+                WHERE r.return_date >= ? AND r.return_date < date(?, '+1 day')
+                ORDER BY r.return_date DESC
+            """, (date_from, date_to)).fetchall()
+            out = []
+            for x in rows:
+                d = dict(x)
+                d["date"] = str(d["date"])[:16]
+                out.append(d)
+            return out
 
     def report_itemwise_sales(self, date_from: str, date_to: str):
         with self.get_conn() as conn:

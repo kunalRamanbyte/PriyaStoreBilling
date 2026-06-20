@@ -752,6 +752,49 @@ T = {
         "কোড '{code}' এর জন্য কোনো প্রোডাক্ট পাওয়া যায়নি",
         "कोड '{code}' के लिए कोई प्रोडक्ट नहीं मिला"
     ],
+
+    # ══════════════════════════════════════════════════════════════
+    # Sales Return / Refund
+    # ══════════════════════════════════════════════════════════════
+    "Return / Refund":   ["Return / Refund",   "রিটার্ন / রিফান্ড",   "रिटर्न / रिफंड"],
+    "Sales Return":      ["Sales Return",      "সেলস রিটার্ন",       "सेल्स रिटर्न"],
+    "Return Qty":        ["Return Qty",        "রিটার্ন পরিমাণ",     "रिटर्न मात्रा"],
+    "Sold Qty":          ["Sold Qty",          "বিক্রি পরিমাণ",      "बिकी मात्रा"],
+    "Already Returned":  ["Already Returned",  "আগে রিটার্ন হয়েছে",  "पहले रिटर्न हुआ"],
+    "Restock":           ["Restock",           "স্টকে ফেরত",         "स्टॉक में वापस"],
+    "Damaged / Not restocked": [
+        "Damaged / Not restocked",
+        "ড্যামেজ / স্টকে ফেরত নয়",
+        "खराब / स्टॉक में वापस नहीं"
+    ],
+    "Refund Method":     ["Refund Method",     "রিফান্ড পদ্ধতি",      "रिफंड तरीका"],
+    "Cash Refund":       ["Cash Refund",       "ক্যাশ রিফান্ড",       "कैश रिफंड"],
+    "Adjust Credit":     ["Adjust Credit",     "ক্রেডিট অ্যাডজাস্ট",   "क्रेडिट एडजस्ट"],
+    "Store Credit":      ["Store Credit",      "স্টোর ক্রেডিট",       "स्टोर क्रेडिट"],
+    "Return Reason":     ["Return Reason",     "রিটার্নের কারণ",      "रिटर्न का कारण"],
+    "Total Refund":      ["Total Refund",      "মোট রিফান্ড",        "कुल रिफंड"],
+    "Return Note":       ["Return Note",       "রিটার্ন নোট",        "रिटर्न नोट"],
+    "Process Return":    ["Process Return",    "রিটার্ন করো",        "रिटर्न करो"],
+    "Sales Returns":     ["Sales Returns",     "সেলস রিটার্নস",      "सेल्स रिटर्न्स"],
+    "Return No":         ["Return No",         "রিটার্ন নং",         "रिटर्न नं"],
+    "Bill No":           ["Bill No",           "বিল নং",            "बिल नं"],
+    "Refund Mode":       ["Refund Mode",       "রিফান্ড মোড",        "रिफंड मोड"],
+    "Refund ₹":          ["Refund ₹",          "রিফান্ড ₹",          "रिफंड ₹"],
+    "Returned successfully": [
+        "Return {return_number} processed successfully.",
+        "রিটার্ন {return_number} সফলভাবে হয়েছে।",
+        "रिटर्न {return_number} सफलतापूर्वक हो गया।"
+    ],
+    "No items to return": [
+        "Enter a return quantity for at least one item.",
+        "অন্তত একটি আইটেমের রিটার্ন পরিমাণ দিন।",
+        "कम से कम एक आइटम की रिटर्न मात्रा डालें।"
+    ],
+    "Only active bills returnable": [
+        "Only Active bills can be returned. This bill is '{status}'.",
+        "শুধু অ্যাক্টিভ বিল রিটার্ন করা যায়। এই বিল '{status}'।",
+        "केवल एक्टिव बिल रिटर्न हो सकते हैं। यह बिल '{status}' है।"
+    ],
 }
 
 # ── Internal index map ─────────────────────────────────────────────

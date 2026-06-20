@@ -488,15 +488,27 @@ class BillingScreen(ctk.CTkFrame):
         )
 
     def _on_resize(self, _event=None):
-        self.after_idle(self._apply_responsive_layout)
+        # Debounce: a resize drag fires <Configure> continuously; coalesce into
+        # one relayout once the drag settles instead of re-gridding every tick.
+        if getattr(self, "_resize_job", None) is not None:
+            self.after_cancel(self._resize_job)
+        self._resize_job = self.after(80, self._apply_responsive_layout)
 
     def _apply_responsive_layout(self):
+        self._resize_job = None
         width = self.winfo_width()
         if width <= 1 or not hasattr(self, "right_panel"):
             return
 
         summary_below = width < self._RESPONSIVE_SUMMARY_BREAK
         buttons_stacked = width < self._RESPONSIVE_BUTTON_BREAK
+
+        # Skip the full re-grid when the layout class hasn't actually changed —
+        # dragging within a breakpoint band shouldn't touch the widget tree.
+        layout_state = (summary_below, buttons_stacked, width < 980)
+        if layout_state == getattr(self, "_last_layout_state", None):
+            return
+        self._last_layout_state = layout_state
 
         if summary_below:
             self.cart_frame.grid_configure(row=2, column=0, columnspan=2, padx=(0, 0), pady=(0, 10))
@@ -680,6 +692,18 @@ class BillingScreen(ctk.CTkFrame):
             )
 
     def _on_search_change(self, *_):
+        # Debounce: avoid a DB query + popup rebuild on every keystroke. Closing
+        # the popup on an empty box is immediate; the query is deferred.
+        if getattr(self, "_search_job", None) is not None:
+            self.after_cancel(self._search_job)
+            self._search_job = None
+        if len(self.search_var.get().strip()) < 1:
+            self._close_popup()
+            return
+        self._search_job = self.after(150, self._perform_product_search)
+
+    def _perform_product_search(self):
+        self._search_job = None
         query = self.search_var.get().strip()
         if len(query) < 1:
             self._close_popup()
@@ -786,11 +810,24 @@ class BillingScreen(ctk.CTkFrame):
         query = self.customer_entry.get().strip()
         if self._selected_customer_id and query != self._selected_customer_name:
             self._clear_selected_customer()
+        # Immediate UI-state handling stays synchronous; only the DB query +
+        # popup is debounced so we don't hit the DB on every keystroke.
+        if getattr(self, "_cust_search_job", None) is not None:
+            self.after_cancel(self._cust_search_job)
+            self._cust_search_job = None
         if len(query) < 1 or query == "Walk-in Customer":
             self._close_cust_popup()
             self._clear_selected_customer()
             return
         self.udhaar_badge.grid_remove()  # hide until a customer is confirmed via autocomplete
+        self._cust_search_job = self.after(150, self._perform_customer_search)
+
+    def _perform_customer_search(self):
+        self._cust_search_job = None
+        query = self.customer_entry.get().strip()
+        if len(query) < 1 or query == "Walk-in Customer":
+            self._close_cust_popup()
+            return
         results = self.db.search_customers_billing(query)
         self.cust_results = results
         if results:
@@ -1058,8 +1095,13 @@ class BillingScreen(ctk.CTkFrame):
                 "✏️ Edit",
             ), tags=(tag,))
 
-        for idx, color in enumerate(_row_colors):
-            self.cart_tree.tag_configure(f"row{idx}", background=color, foreground=COLORS["text_dark"])
+        # Row-color tags persist on the tree, so configure them once rather
+        # than on every cart refresh.
+        if not getattr(self, "_cart_tags_done", False):
+            for idx, color in enumerate(_row_colors):
+                self.cart_tree.tag_configure(f"row{idx}", background=color,
+                                             foreground=COLORS["text_dark"])
+            self._cart_tags_done = True
 
     # ─────────────────────────────────────────────────────────────
     # Inline cell editing (Qty / Price) — click a cell to type

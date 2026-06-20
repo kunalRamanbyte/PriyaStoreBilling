@@ -16,9 +16,9 @@ Default credentials: `admin` / `admin123`, `cashier` / `cash123`
 pip install -r requirements.txt
 ```
 
-Core packages: `customtkinter>=5.2.0`, `Pillow>=10.0.0`, `openpyxl>=3.1.0`, `reportlab>=4.0.0`
+Core packages (in `requirements.txt`): `customtkinter>=5.2.0`, `Pillow>=10.0.0`, `openpyxl>=3.1.0`, `reportlab>=4.0.0`, `tkcalendar>=1.6.0` (date picker), `opencv-contrib-python>=4.8.0` (webcam scanner — note the `-contrib` build, which bundles the QR/barcode detector).
 
-Optional: `python-escpos`, `pywin32` (thermal printer), `tkcalendar` (date picker), `opencv-python` (webcam scanner)
+Optional (not in `requirements.txt`, guarded by try/import): `python-escpos`, `pywin32` (thermal printer).
 
 ## Running Tests
 

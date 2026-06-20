@@ -29,6 +29,7 @@ def _row_colors(action: str, mode: str = "light") -> tuple[str, str]:
             "LOGOUT"          : ("#374151", "#F8FAFC"),      # Muted Slate
             "BILL_SAVED"      : ("#1E293B", "#F8FAFC"),      # Dark Blue-Slate
             "BILL_VOIDED"     : ("#5F1E24", "#F8FAFC"),      # Muted Dark Red
+            "RETURN_SAVED"    : ("#4A2410", "#F8FAFC"),      # Muted Dark Orange-Brown
             "GRN_SAVED"       : ("#1C2035", "#F8FAFC"),      # Muted Indigo
             "PRODUCT_"        : ("#5C4E15", "#F8FAFC"),      # Muted Gold
             "USER_"           : ("#3A1E5C", "#F8FAFC"),      # Muted Dark Purple
@@ -46,6 +47,7 @@ def _row_colors(action: str, mode: str = "light") -> tuple[str, str]:
             "LOGOUT"          : ("#EEEEEE", "#1A1A2E"),
             "BILL_SAVED"      : ("#DBEAFE", "#1A1A2E"),
             "BILL_VOIDED"     : ("#FFEBEE", "#1A1A2E"),
+            "RETURN_SAVED"    : ("#FFEDD5", "#1A1A2E"),
             "GRN_SAVED"       : ("#E8EAF6", "#1A1A2E"),
             "PRODUCT_"        : ("#FFF8E1", "#1A1A2E"),
             "USER_"           : ("#F3E5F5", "#1A1A2E"),

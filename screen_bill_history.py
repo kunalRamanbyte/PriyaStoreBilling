@@ -139,6 +139,12 @@ class BillHistoryScreen(ctk.CTkFrame):
                      ).pack(side="left", padx=(0,8), pady=8)
 
         if self.current_user["role"] == "admin":
+            ctk.CTkButton(act_bar, text=f"↩ {t('Return / Refund', L)}",
+                          font=FONTS["button"], fg_color="#C2410C",
+                          hover_color="#9A3412",
+                          height=44, width=170, corner_radius=10,
+                          command=self._return_bill
+                         ).pack(side="left", padx=(0,8), pady=8)
             ctk.CTkButton(act_bar, text=t("Void Bill", L),
                           font=FONTS["button"], fg_color=COLORS["btn_danger"],
                           height=44, width=120, corner_radius=10,
@@ -367,6 +373,278 @@ class BillHistoryScreen(ctk.CTkFrame):
             else:
                 messagebox.showerror("Error", "Could not void bill.",
                                      parent=self.winfo_toplevel())
+
+    # ─────────────────────────────────────────────────────────────
+    # Sales Return / Refund (admin only)
+    # ─────────────────────────────────────────────────────────────
+    def _return_bill(self):
+        bill_id = self._get_selected_bill_id()
+        if not bill_id:
+            return
+        bill, _ = self.db.get_bill_by_id(bill_id)
+        if not bill:
+            return
+        L = self.app.current_lang
+        if bill["status"] != "Active":
+            messagebox.showwarning(
+                t("Return / Refund", L),
+                t("Only active bills returnable", L).format(status=bill["status"]),
+                parent=self.winfo_toplevel())
+            return
+
+        rows = [r for r in self.db.get_returnable_items(bill_id) if r["returnable"] > 0]
+        if not rows:
+            messagebox.showinfo(
+                t("Return / Refund", L),
+                "All items on this bill have already been fully returned.",
+                parent=self.winfo_toplevel())
+            return
+
+        has_customer = bool(bill.get("customer_id"))
+
+        dlg = ctk.CTkToplevel(self.winfo_toplevel())
+        dlg.title(f"{t('Return / Refund', L)} — {bill['bill_number']}")
+        place_popup(dlg, 780, 660, self.winfo_toplevel())
+        dlg.grab_set()
+        dlg.attributes("-topmost", True)
+
+        # Header
+        head = ctk.CTkFrame(dlg, fg_color=COLORS["bg_card"], corner_radius=0, height=56)
+        head.pack(fill="x")
+        head.pack_propagate(False)
+        ctk.CTkLabel(head, text=f"↩  {t('Sales Return', L)} — {bill['bill_number']}",
+                     font=FONTS["subheading"], text_color="#9A3412"
+                     ).pack(side="left", padx=18, pady=10)
+        ctk.CTkLabel(head, text=f"{bill.get('customer_name','Walk-in')}  •  {bill['bill_date'][:16]}",
+                     font=FONTS["small"], text_color=COLORS["text_muted"]
+                     ).pack(side="right", padx=18)
+
+        # Column header
+        colhdr = ctk.CTkFrame(dlg, fg_color="transparent")
+        colhdr.pack(fill="x", padx=18, pady=(10, 0))
+        for txt, w, anchor in [
+            (t("Product", L), 220, "w"),
+            (t("Sold Qty", L), 100, "e"),
+            (t("Already Returned", L), 130, "e"),
+            (t("Return Qty", L), 110, "center"),
+            (f"{t('Total Refund', L)} ₹", 100, "e"),
+            (t("Restock", L), 90, "center"),
+        ]:
+            ctk.CTkLabel(colhdr, text=txt, font=FONTS["small_bold"],
+                         text_color=COLORS["text_muted"], width=w, anchor=anchor
+                         ).pack(side="left", padx=2)
+
+        # Scrollable item rows
+        body = ctk.CTkScrollableFrame(dlg, fg_color=COLORS["bg_main"], height=300)
+        body.pack(fill="both", expand=True, padx=16, pady=4)
+
+        ret_rows = []
+        total_var = tk.StringVar(value="₹ 0.00")
+        self._ret_total = 0.0
+
+        def _recalc(*_):
+            total = 0.0
+            for rr in ret_rows:
+                try:
+                    q = float(rr["qty_var"].get() or 0)
+                except ValueError:
+                    q = 0.0
+                q = max(0.0, min(q, rr["returnable"]))
+                line = round(q * rr["unit_price"], 2)
+                rr["refund_lbl"].configure(text=f"{line:,.2f}")
+                total += line
+            self._ret_total = round(total, 2)
+            total_var.set(f"₹ {total:,.2f}")
+
+        for r in rows:
+            rowf = ctk.CTkFrame(body, fg_color=COLORS["bg_card"], corner_radius=8)
+            rowf.pack(fill="x", pady=3, padx=2)
+            ctk.CTkLabel(rowf, text=r["product_name"], font=FONTS["body"],
+                         text_color=COLORS["text_dark"], width=220, anchor="w"
+                         ).pack(side="left", padx=4, pady=6)
+            ctk.CTkLabel(rowf, text=f"{r['quantity']:.2f} {r['unit']}", font=FONTS["small"],
+                         text_color=COLORS["text_muted"], width=100, anchor="e"
+                         ).pack(side="left", padx=2)
+            ctk.CTkLabel(rowf, text=f"{r['already_returned']:.2f}", font=FONTS["small"],
+                         text_color=COLORS["text_muted"], width=130, anchor="e"
+                         ).pack(side="left", padx=2)
+            qv = tk.StringVar(value="0")
+            qv.trace_add("write", _recalc)
+            ctk.CTkEntry(rowf, textvariable=qv, width=100, height=34, justify="center",
+                         font=FONTS["input"]).pack(side="left", padx=2)
+            refund_lbl = ctk.CTkLabel(rowf, text="0.00", font=FONTS["body_bold"],
+                                      text_color="#9A3412", width=100, anchor="e")
+            refund_lbl.pack(side="left", padx=2)
+            rsv = tk.BooleanVar(value=True)
+            ctk.CTkCheckBox(rowf, text=f"max {r['returnable']:.2f}", variable=rsv,
+                            font=("Segoe UI", 11), width=90
+                            ).pack(side="left", padx=(14, 2))
+            ret_rows.append({
+                "bill_item_id": r["item_id"],
+                "product_id":   r["product_id"],
+                "product_name": r["product_name"],
+                "unit":         r["unit"],
+                "unit_price":   float(r["unit_price"]),
+                "returnable":   float(r["returnable"]),
+                "qty_var":      qv,
+                "restock_var":  rsv,
+                "refund_lbl":   refund_lbl,
+            })
+
+        # Footer
+        footer = ctk.CTkFrame(dlg, fg_color=COLORS["bg_card"], corner_radius=0)
+        footer.pack(fill="x", side="bottom")
+
+        row1 = ctk.CTkFrame(footer, fg_color="transparent")
+        row1.pack(fill="x", padx=16, pady=(10, 4))
+        ctk.CTkLabel(row1, text=f"{t('Refund Method', L)}:", font=FONTS["body"],
+                     text_color=COLORS["text_dark"]).pack(side="left", padx=(0, 8))
+        method_map = {
+            t("Cash Refund", L):   "Cash",
+            t("Adjust Credit", L): "Credit Adjust",
+            t("Store Credit", L):  "Store Credit",
+        }
+        method_labels = [t("Cash Refund", L)]
+        if has_customer:
+            method_labels += [t("Adjust Credit", L), t("Store Credit", L)]
+        method_var = tk.StringVar(value=method_labels[0])
+        ctk.CTkOptionMenu(row1, variable=method_var, values=method_labels,
+                          width=200, height=36, font=FONTS["input"]).pack(side="left")
+        if not has_customer:
+            ctk.CTkLabel(row1, text="(Walk-in: cash only)", font=FONTS["small"],
+                         text_color=COLORS["text_muted"]).pack(side="left", padx=10)
+        ctk.CTkLabel(row1, textvariable=total_var, font=FONTS["subheading"],
+                     text_color="#9A3412").pack(side="right", padx=4)
+        ctk.CTkLabel(row1, text=f"{t('Total Refund', L)}:", font=FONTS["body"],
+                     text_color=COLORS["text_muted"]).pack(side="right")
+
+        row2 = ctk.CTkFrame(footer, fg_color="transparent")
+        row2.pack(fill="x", padx=16, pady=(0, 8))
+        ctk.CTkLabel(row2, text=f"{t('Return Reason', L)}:", font=FONTS["body"],
+                     text_color=COLORS["text_dark"]).pack(side="left", padx=(0, 8))
+        reason_var = tk.StringVar()
+        ctk.CTkEntry(row2, textvariable=reason_var, width=440, height=34,
+                     font=FONTS["input"], placeholder_text=t("Return Reason", L)
+                     ).pack(side="left")
+
+        btns = ctk.CTkFrame(footer, fg_color="transparent")
+        btns.pack(fill="x", padx=16, pady=(0, 12))
+
+        def _confirm():
+            items = []
+            for rr in ret_rows:
+                try:
+                    q = float(rr["qty_var"].get() or 0)
+                except ValueError:
+                    q = 0.0
+                if q <= 0:
+                    continue
+                if q > rr["returnable"] + 1e-9:
+                    messagebox.showwarning(
+                        t("Return / Refund", L),
+                        f"{rr['product_name']}: max {rr['returnable']:.2f}.", parent=dlg)
+                    return
+                items.append({
+                    "bill_item_id": rr["bill_item_id"],
+                    "product_id":   rr["product_id"],
+                    "product_name": rr["product_name"],
+                    "unit":         rr["unit"],
+                    "quantity":     round(q, 3),
+                    "unit_price":   rr["unit_price"],
+                    "line_total":   round(q * rr["unit_price"], 2),
+                    "restocked":    1 if rr["restock_var"].get() else 0,
+                })
+            if not items:
+                messagebox.showinfo(t("Return / Refund", L),
+                                    t("No items to return", L), parent=dlg)
+                return
+            refund_mode = method_map.get(method_var.get(), "Cash")
+            return_data = {
+                "bill_id":       bill["bill_id"],
+                "bill_number":   bill["bill_number"],
+                "customer_id":   bill.get("customer_id"),
+                "customer_name": bill.get("customer_name"),
+                "refund_mode":   refund_mode,
+                "reason":        reason_var.get().strip(),
+            }
+            try:
+                ret_id, ret_no = self.db.save_return(
+                    return_data, items, self.current_user["user_id"])
+            except Exception as e:
+                messagebox.showerror(t("Return / Refund", L), str(e), parent=dlg)
+                return
+            self.db.log_activity(
+                self.current_user["user_id"], "RETURN_SAVED",
+                f"{ret_no} vs {bill['bill_number']} — ₹{self._ret_total:.2f} ({refund_mode})")
+            dlg.destroy()
+            messagebox.showinfo(
+                t("Return / Refund", L),
+                t("Returned successfully", L).format(return_number=ret_no),
+                parent=self.winfo_toplevel())
+            if messagebox.askyesno(t("Return Note", L),
+                                   f"{t('Return Note', L)} — {ret_no}?",
+                                   parent=self.winfo_toplevel()):
+                self._print_return_receipt(ret_id)
+            self._load_bills()
+
+        ctk.CTkButton(btns, text=t("Process Return", L), font=FONTS["button"],
+                      fg_color="#C2410C", hover_color="#9A3412", height=44, width=180,
+                      command=_confirm).pack(side="left")
+        ctk.CTkButton(btns, text=t("Cancel", L), font=FONTS["button"],
+                      fg_color=COLORS["btn_secondary"], height=44, width=120,
+                      command=dlg.destroy).pack(side="left", padx=8)
+
+        _recalc()
+
+    def _print_return_receipt(self, return_id):
+        """Print the thermal return receipt; fall back to the A4 PDF note on failure."""
+        ret, items = self.db.get_return_by_id(return_id)
+        if not ret:
+            return
+        settings = {
+            "shop_name":    self.db.get_setting("shop_name",    "Priya Store"),
+            "shop_address": self.db.get_setting("shop_address", ""),
+            "shop_city":    self.db.get_setting("shop_city",    ""),
+            "shop_phone":   self.db.get_setting("shop_phone",   ""),
+            "shop_gst":     self.db.get_setting("shop_gst",     ""),
+            "cashier":      self.current_user.get("username",   ""),
+        }
+        paper = self.db.get_setting("paper_width", "80mm") or "80mm"
+        try:
+            from bill_printer import print_thermal_return
+            ok, msg = print_thermal_return(ret, items, settings, paper)
+            if ok:
+                messagebox.showinfo("Printed", f"Receipt sent to: {msg}",
+                                    parent=self.winfo_toplevel())
+                return
+            if messagebox.askyesno(
+                "Thermal Print Failed",
+                f"{msg}\n\nGenerate A4 PDF return note instead?",
+                parent=self.winfo_toplevel()):
+                self._print_return_note(return_id)
+        except Exception as e:
+            messagebox.showerror("Print Error", str(e),
+                                 parent=self.winfo_toplevel())
+
+    def _print_return_note(self, return_id):
+        """Generate the PDF return note and auto-open it."""
+        ret, items = self.db.get_return_by_id(return_id)
+        if not ret:
+            return
+        try:
+            from bill_printer import generate_return_pdf, open_file
+            settings = {
+                "shop_name":    self.db.get_setting("shop_name",    "Priya Store"),
+                "shop_address": self.db.get_setting("shop_address", ""),
+                "shop_city":    self.db.get_setting("shop_city",    ""),
+                "shop_phone":   self.db.get_setting("shop_phone",   ""),
+                "shop_gst":     self.db.get_setting("shop_gst",     ""),
+            }
+            path = generate_return_pdf(ret, items, settings)
+            open_file(path)
+        except Exception as e:
+            messagebox.showerror("PDF Error", str(e),
+                                 parent=self.winfo_toplevel())
 
     def _resume_draft(self):
         """Load a Draft bill back into the billing cart for completion."""
