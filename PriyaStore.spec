@@ -3,10 +3,14 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('C:\\Users\\Admin\\Desktop\\billing\\assets', 'assets')]
 binaries = []
-hiddenimports = ['customtkinter', 'PIL', 'PIL._tkinter_finder', 'openpyxl', 'reportlab', 'reportlab.platypus', 'reportlab.lib.pagesizes', 'reportlab.lib.styles', 'reportlab.lib.colors', 'reportlab.lib.units', 'reportlab.lib.enums', 'win32print', 'win32api', 'styles']
+hiddenimports = ['customtkinter', 'PIL', 'PIL._tkinter_finder', 'openpyxl', 'reportlab', 'reportlab.platypus', 'reportlab.lib.pagesizes', 'reportlab.lib.styles', 'reportlab.lib.colors', 'reportlab.lib.units', 'reportlab.lib.enums', 'win32print', 'win32api', 'styles', 'tkcalendar', 'cv2', 'webcam_scanner']
 tmp_ret = collect_all('customtkinter')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('reportlab')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('tkcalendar')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('cv2')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
