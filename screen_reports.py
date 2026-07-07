@@ -71,7 +71,9 @@ REPORTS = [
      "cols": [("created_at","Date & Time",160),("customer","Customer",160),
                ("txn_type","Type",110),("amount","Amount ₹",120),
                ("reference","Reference",150),("notes","Notes",160)],
-     "summary_col": "amount"},
+     # No grand total: the amount column mixes Credit/Payment/Refund/Change types,
+     # so a single unsigned sum would be meaningless.
+     "summary_col": None},
     {"key": "slow_moving",     "title": "Slow-Moving Items", "emoji": "🐌",
      "color": "#6D4C41", "needs_dates": False, "needs_cust": False,
      "cols": [("product_code","Code",90),("name","Product",200),
@@ -240,6 +242,13 @@ class ReportScreen(ctk.CTkFrame):
         self.tree.grid(row=0, column=0, sticky="nsew", padx=(4,0), pady=4)
         vsb.grid(row=0, column=1, sticky="ns",  pady=4)
         hsb.grid(row=1, column=0, sticky="ew",  padx=(4,0))
+        # Highlight tags used by _render_table (danger/warning) and zebra striping.
+        self.tree.tag_configure("danger",  background=COLORS["row_low_stock"],
+                                foreground=COLORS["text_dark"])
+        self.tree.tag_configure("warning", background=COLORS["row_expiring"],
+                                foreground=COLORS["text_dark"])
+        self.tree.tag_configure("alt",     background=COLORS["ROW_COLORS"][1],
+                                foreground=COLORS["text_dark"])
         self.tree.bind("<Double-1>", self._on_tree_drilldown)
 
     def _select_report(self, rpt: dict):
@@ -562,10 +571,14 @@ class ReportScreen(ctk.CTkFrame):
                 try:
                     total = sum(float(r.get(rpt["summary_col"], 0) or 0)
                                 for r in self._report_data)
+                    # Translate the human-readable column header, not the raw
+                    # dict key (which has no lang.py entry).
+                    keys = [c[0] for c in rpt["cols"]]
+                    col_label = t(rpt["cols"][keys.index(rpt["summary_col"])][1], L)
                     story.append(Spacer(1, 4*mm))
                     story.append(Paragraph(
                         f"<b>Total rows: {len(self._report_data)}  |  "
-                        f"Grand Total ({t(rpt['summary_col'], L)}): {total:,.2f}</b>",
+                        f"Grand Total ({col_label}): {total:,.2f}</b>",
                         ParagraphStyle("sum", fontSize=9, fontName="Helvetica-Bold",
                                        textColor=BLUE, alignment=TA_LEFT)
                     ))
@@ -611,7 +624,10 @@ class ReportScreen(ctk.CTkFrame):
         L = self.app.current_lang
         if not date_str:
             return
-        bills = self.db.get_bills(date_from=date_str, date_to=date_str, status="Active")
+        # High limit so the drilldown never truncates below the report's own
+        # count (default get_bills limit is only 200).
+        bills = self.db.get_bills(date_from=date_str, date_to=date_str,
+                                  status="Active", limit=100000)
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title(t("Bills", L) + f" — {date_str}")
@@ -629,7 +645,7 @@ class ReportScreen(ctk.CTkFrame):
         active = [b for b in bills if b.get("status") == "Active"]
         grand  = sum(float(b.get("grand_total", 0)) for b in active)
         ctk.CTkLabel(hdr,
-                     text=t("bill(s)   |   Total ₹", L).format(n=len(active)) + f"{grand:,.2f}",
+                     text=f"{len(active)} " + t("bill(s)   |   Total ₹", L) + f"{grand:,.2f}",
                      font=FONTS["body_bold"], text_color="#BFDBFE"
                     ).pack(side="right", padx=20)
 

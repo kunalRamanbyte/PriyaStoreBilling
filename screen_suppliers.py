@@ -3,6 +3,7 @@ screen_suppliers.py — Supplier Master (Phase 2)
 Add, edit, view all suppliers.
 """
 
+import math
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -134,10 +135,11 @@ class SupplierScreen(ctk.CTkFrame):
         self.count_lbl.configure(text=t("{n} supplier(s) found", L).format(n=len(rows)))
 
     def _get_selected_id(self):
+        L = self.app.current_lang
         sel = self.tree.selection()
         if not sel:
-            messagebox.showinfo("Select Supplier",
-                                "Please select a supplier first.",
+            messagebox.showinfo(t("Select Supplier", L),
+                                t("Please select a supplier first.", L),
                                 parent=self.winfo_toplevel())
             return None
         return int(sel[0])
@@ -221,7 +223,7 @@ class SupplierScreen(ctk.CTkFrame):
         def save():
             name = entries["name"].get().strip()
             if not name:
-                err_lbl.configure(text="⚠  Supplier name is required.")
+                err_lbl.configure(text="⚠  " + t("Supplier name is required.", L))
                 return
             data = {
                 "name":           name,
@@ -232,19 +234,27 @@ class SupplierScreen(ctk.CTkFrame):
                 "gst_number":     entries["gst_number"].get().strip() or None,
                 "notes":          notes_box.get("1.0", "end-1c").strip() or None,
             }
+            uid = self.current_user.get("user_id") if self.current_user else None
             if self._editing_id:
                 self.db.update_supplier(self._editing_id, data)
-                messagebox.showinfo("Saved", f"Supplier '{name}' updated.", parent=dlg)
+                if uid:
+                    self.db.log_activity(uid, "SUPPLIER_UPDATED", f"Supplier '{name}' updated")
+                messagebox.showinfo(t("Saved", L), f"Supplier '{name}' " + t("updated.", L), parent=dlg)
             else:
                 self.db.add_supplier(data)
-                messagebox.showinfo("Added", f"Supplier '{name}' added.", parent=dlg)
+                if uid:
+                    self.db.log_activity(uid, "SUPPLIER_ADDED", f"Supplier '{name}' added")
+                messagebox.showinfo(t("Added", L), f"Supplier '{name}' " + t("added.", L), parent=dlg)
             dlg.destroy()
             self._load_suppliers()
 
-        # Enter key submits the form
-        dlg.bind("<Return>", lambda e: save())
-
-        dlg.bind("<Return>", lambda e: save())  # SUP-2: Enter key submits form
+        # Enter submits the form — but NOT when the focus is in the multi-line
+        # Notes textbox, where Enter should insert a newline.
+        def _on_return(e):
+            if isinstance(e.widget, tk.Text):
+                return  # let the Text widget handle the newline
+            save()
+        dlg.bind("<Return>", _on_return)
 
         btn_row = ctk.CTkFrame(scroll, fg_color="transparent")
         btn_row.pack(fill="x", padx=24, pady=14)
@@ -268,8 +278,8 @@ class SupplierScreen(ctk.CTkFrame):
 
         invoices = self.db.get_outstanding_purchases(sid)
         if not invoices:
-            messagebox.showinfo("No Outstanding Bills",
-                                f"No unpaid invoices found for '{sup['name']}'.",
+            messagebox.showinfo(t("No Outstanding Bills", L),
+                                t("No unpaid invoices found for", L) + f" '{sup['name']}'.",
                                 parent=self.winfo_toplevel())
             return
 
@@ -347,17 +357,20 @@ class SupplierScreen(ctk.CTkFrame):
                 return
             try:
                 amount = float(amt_var.get().strip())
-                if amount <= 0: raise ValueError
+                if amount <= 0 or not math.isfinite(amount): raise ValueError
             except ValueError:
-                err_lbl.configure(text="⚠  Enter a valid amount greater than 0.")
+                err_lbl.configure(text="⚠  " + t("Enter a valid amount greater than 0.", L))
                 return
             if amount > balance + 0.01:
-                err_lbl.configure(text=f"⚠  Amount exceeds balance of ₹{balance:.2f}.")
+                err_lbl.configure(text="⚠  " + t("Amount exceeds balance", L) + f" ₹{balance:.2f}.")
                 return
             uid = self.current_user.get("user_id") if self.current_user else None
             self.db.record_supplier_payment(purchase_id, amount, notes_ent.get().strip() or None, uid)
-            messagebox.showinfo("Payment Recorded",
-                                f"✅  ₹{amount:,.2f} recorded successfully.",
+            if uid:
+                self.db.log_activity(uid, "SUPPLIER_PAYMENT",
+                                     f"Payment ₹{amount:,.2f} on invoice #{purchase_id}")
+            messagebox.showinfo(t("Payment Recorded", L),
+                                f"✅  ₹{amount:,.2f} " + t("recorded successfully.", L),
                                 parent=dlg)
             dlg.destroy()
 
@@ -381,28 +394,40 @@ class SupplierScreen(ctk.CTkFrame):
         if not sup:
             return
         if not sup["is_active"]:
-            messagebox.showinfo("Already Inactive",
-                                f"'{sup['name']}' is already inactive.",
+            messagebox.showinfo(t("Already Inactive", L),
+                                f"'{sup['name']}' " + t("is already inactive.", L),
                                 parent=self.winfo_toplevel())
             return
         if messagebox.askyesno(t("Deactivate Supplier", L),
                                t("Deactivate Supplier Msg", L).format(supplier=sup['name']),
                                parent=self.winfo_toplevel()):
             self.db.deactivate_supplier(sid)
+            uid = self.current_user.get("user_id") if self.current_user else None
+            if uid:
+                self.db.log_activity(uid, "SUPPLIER_DEACTIVATED", f"Supplier '{sup['name']}' deactivated")
             self._load_suppliers()
 
     def _delete_supplier(self):
+        L = self.app.current_lang
         sid = self._get_selected_id()
         if not sid:
             return
         sup = self.db.get_supplier_by_id(sid)
         if not sup:
             return
-        if not messagebox.askyesno("Delete Supplier",
-                                   f"Delete '{sup['name']}'?\n\n"
-                                   f"If they have purchase records they will be deactivated instead.",
+        if not messagebox.askyesno(t("Delete Supplier", L),
+                                   t("Delete supplier confirm", L).format(name=sup['name']),
                                    parent=self.winfo_toplevel()):
             return
         ok, msg = self.db.delete_supplier(sid)
-        messagebox.showinfo("Done", msg, parent=self.winfo_toplevel())
+        uid = self.current_user.get("user_id") if self.current_user else None
+        # delete_supplier refuses (ok=False) when purchase records exist and only
+        # *says* it will deactivate — actually perform the deactivation here.
+        if not ok:
+            self.db.deactivate_supplier(sid)
+            if uid:
+                self.db.log_activity(uid, "SUPPLIER_DEACTIVATED", f"Supplier '{sup['name']}' deactivated")
+        elif uid:
+            self.db.log_activity(uid, "SUPPLIER_DELETED", f"Supplier '{sup['name']}' deleted")
+        messagebox.showinfo(t("Done", L), msg, parent=self.winfo_toplevel())
         self._load_suppliers()

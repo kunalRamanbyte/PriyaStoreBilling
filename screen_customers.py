@@ -3,6 +3,7 @@ screen_customers.py — Customer Master + Udhaar Ledger (Phase 3)
 Add/edit customers, view & manage credit balances, full transaction history.
 """
 
+import math
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -79,17 +80,8 @@ class CustomerScreen(ctk.CTkFrame):
         tbl.grid_rowconfigure(0, weight=1)
         tbl.grid_columnconfigure(0, weight=1)
 
-        style = ttk.Style()
-        style.configure("Cust.Treeview",
-            font=FONTS["table"], rowheight=48,
-            background="white", foreground=COLORS["text_dark"],
-            fieldbackground="white", borderwidth=0)
-        style.configure("Cust.Treeview.Heading",
-            font=FONTS["table_hdr"],
-            background=COLORS["tbl_header_bg"], foreground="white", relief="flat")
-        style.map("Cust.Treeview",
-            background=[("selected", "#BBDEFB")],
-            foreground=[("selected", COLORS["text_dark"])])
+        # Treeview styling is registered globally in styles.py ("Cust"); do not
+        # override it here (hardcoded colors break dark theme).
 
         cols   = ("name", "phone", "address", "balance", "change", "status")
         heads  = (t("Customer Name", L), t("Phone", L), t("Address", L), t("Udhaar Balance", L), t("Change Balance", L), t("Status", L))
@@ -163,7 +155,8 @@ class CustomerScreen(ctk.CTkFrame):
                 c.get("address", "") or "",
                 f"₹{bal:,.2f}" if bal > 0 else "—",
                 f"₹{change:,.2f}" if change > 0 else "—",
-                "✅ Active" if (c.get("is_active") in (None, 1)) else "❌ Inactive",
+                ("✅ " + t("Active", L)) if (c.get("is_active") in (None, 1))
+                    else ("❌ " + t("Inactive", L)),
             ), tags=(tag,))
         for idx, color in enumerate(_row_colors):
             self.tree.tag_configure(f"row{idx}", background=color)
@@ -230,17 +223,31 @@ class CustomerScreen(ctk.CTkFrame):
             if not name:
                 err_lbl.configure(text="⚠  " + t("Customer name is required.", L))
                 return
+            phone = entries["phone"].get().strip() or None
             data = {
                 "name":    name,
-                "phone":   entries["phone"].get().strip() or None,
+                "phone":   phone,
                 "address": entries["address"].get().strip() or None,
             }
+            # Reject a duplicate phone number: two records for the same customer
+            # split their udhaar/change balances and corrupt the credit ledger.
+            if phone:
+                exclude = customer["customer_id"] if customer else None
+                dup = self.db.find_customer_by_phone(phone, exclude_id=exclude)
+                if dup:
+                    err_lbl.configure(
+                        text="⚠  " + t("A customer with this phone already exists.", L)
+                             + f" ({dup['name']})")
+                    return
+            uid = self.current_user["user_id"]
             if customer:
                 self.db.update_customer(customer["customer_id"], data)
-                messagebox.showinfo(t("Saved", L), f"'{name}' " + t("User updated.", L), parent=dlg)
+                self.db.log_activity(uid, "CUSTOMER_UPDATED", f"Customer '{name}' updated")
+                messagebox.showinfo(t("Saved", L), f"'{name}' " + t("Customer updated.", L), parent=dlg)
             else:
                 self.db.add_customer(data)
-                messagebox.showinfo(t("Added", L), f"'{name}' " + t("User added.", L), parent=dlg)
+                self.db.log_activity(uid, "CUSTOMER_ADDED", f"Customer '{name}' added")
+                messagebox.showinfo(t("Added", L), f"'{name}' " + t("Customer added.", L), parent=dlg)
             dlg.destroy()
             self._load_customers()
             self._load_kpis()
@@ -295,17 +302,8 @@ class CustomerScreen(ctk.CTkFrame):
         tbl.grid_rowconfigure(0, weight=1)
         tbl.grid_columnconfigure(0, weight=1)
 
-        style = ttk.Style()
-        style.configure("Led.Treeview",
-            font=FONTS["table"], rowheight=38,
-            background="white", foreground=COLORS["text_dark"],
-            fieldbackground="white", borderwidth=0)
-        style.configure("Led.Treeview.Heading",
-            font=FONTS["table_hdr"],
-            background=COLORS["btn_primary"], foreground="white", relief="flat")
-        style.map("Led.Treeview",
-            background=[("selected", "#BBDEFB")],
-            foreground=[("selected", COLORS["text_dark"])])
+        # "Led" Treeview style is registered globally in styles.py; no in-screen
+        # override (hardcoded colors break dark theme).
 
         cols   = ("date", "type", "amount", "reference", "notes")
         heads  = (t("Date & Time", L), t("Type", L), t("Amount (₹)", L), t("Reference", L), t("Notes", L))
@@ -321,8 +319,8 @@ class CustomerScreen(ctk.CTkFrame):
         vsb.grid(row=0, column=1, sticky="ns", pady=4)
         tree.tag_configure("credit",         background=COLORS["row_expired"])
         tree.tag_configure("payment",        background=COLORS["row_payment"])
-        tree.tag_configure("change_deposit", background="#E3F2FD")
-        tree.tag_configure("change_clear",   background="#ECEFF1")
+        tree.tag_configure("change_deposit", background=COLORS["row_ok"])
+        tree.tag_configure("change_clear",   background=COLORS["row_inactive"])
 
         for i, t_ in enumerate(txns):
             ttype = t_["txn_type"]
@@ -424,7 +422,7 @@ class CustomerScreen(ctk.CTkFrame):
         def save():
             try:
                 amount = float(amt_var.get().strip())
-                if amount <= 0:
+                if amount <= 0 or not math.isfinite(amount):
                     raise ValueError
             except ValueError:
                 err_lbl.configure(text="⚠  " + t("Enter a valid amount.", L))
@@ -435,8 +433,12 @@ class CustomerScreen(ctk.CTkFrame):
                 note_var.get().strip() or None,
                 self.current_user["user_id"]
             )
-            verb = "Payment of" if txn_type == "Payment" else "Udhaar of"
-            messagebox.showinfo(t("Saved", L), f"{verb} ₹{amount:,.2f} recorded.", parent=dlg)
+            action = "CUSTOMER_PAYMENT" if txn_type == "Payment" else "CUSTOMER_UDHAAR"
+            self.db.log_activity(self.current_user["user_id"], action,
+                                 f"{txn_type} ₹{amount:,.2f} for customer #{cid}")
+            verb = t("Payment of", L) if txn_type == "Payment" else t("Udhaar of", L)
+            messagebox.showinfo(t("Saved", L),
+                                f"{verb} ₹{amount:,.2f} " + t("recorded.", L), parent=dlg)
             dlg.destroy()
             self._load_customers()
             self._load_kpis()
@@ -511,6 +513,18 @@ class CustomerScreen(ctk.CTkFrame):
         cust = self.db.get_customer_by_id(cid)
         if not cust:
             return
+        # Refuse to delete/deactivate a customer who still owes (or is owed) money —
+        # deleting erases the debt + ledger; deactivating hides it from the udhaar KPI.
+        credit_bal = float(cust.get("credit_balance") or 0)
+        change_bal = float(cust.get("change_balance") or 0)
+        if abs(credit_bal) > 0.01 or abs(change_bal) > 0.01:
+            messagebox.showwarning(
+                t("Cannot Delete", L),
+                t("This customer has an outstanding balance", L)
+                + f":\n  Udhaar ₹{credit_bal:,.2f}   |   Change ₹{change_bal:,.2f}\n\n"
+                + t("Settle the balance to zero before deleting.", L),
+                parent=self.winfo_toplevel())
+            return
         msg_template = "Permanently DELETE '{name}'?\n\n⚠️  Cannot be undone.\nIf this customer has billing history they will be deactivated instead."
         if not messagebox.askyesno(
             t("Delete Customer", L),
@@ -520,6 +534,8 @@ class CustomerScreen(ctk.CTkFrame):
             return
         ok, msg = self.db.delete_customer(cid)
         if ok:
+            self.db.log_activity(self.current_user["user_id"], "CUSTOMER_DELETED",
+                                 f"Customer '{cust['name']}' deleted")
             messagebox.showinfo(t("Deleted", L), msg, parent=self.winfo_toplevel())
         else:
             messagebox.showwarning(t("Cannot Delete", L), msg, parent=self.winfo_toplevel())
@@ -610,18 +626,3 @@ class CustomerScreen(ctk.CTkFrame):
                                  parent=self.winfo_toplevel())
         except Exception as e:
             messagebox.showerror("PDF Error", str(e), parent=self.winfo_toplevel())
-
-    def _deactivate(self):
-        L = self.app.current_lang
-        cid = self._get_selected_id()
-        if not cid:
-            return
-        cust = self.db.get_customer_by_id(cid)
-        if not cust:
-            return
-        if messagebox.askyesno(t("Deactivate", L),
-                               t("Deactivate", L) + f" '{cust['name']}'?",
-                               parent=self.winfo_toplevel()):
-            self.db.deactivate_customer(cid)
-            self._load_customers()
-            self._load_kpis()

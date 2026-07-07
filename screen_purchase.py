@@ -227,6 +227,11 @@ class PurchaseScreen(ctk.CTkFrame):
         self._load_suppliers()
         self._refresh_grn_number()
 
+    def on_hide(self):
+        """Called when navigating away — dismiss the floating product-search
+        overlay so it doesn't stay on top of the next screen."""
+        self._close_popup()
+
     def _refresh_grn_number(self):
         """Display next auto-generated GRN number (GRN-4)."""
         L = self.app.current_lang

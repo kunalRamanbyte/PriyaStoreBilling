@@ -65,12 +65,22 @@ class DashboardScreen(ctk.CTkFrame):
         qa_row = ctk.CTkFrame(body, fg_color="transparent")
         qa_row.pack(fill="x", pady=(0, 16))
 
+        # Screen→roles mirrors the sidebar NAV so quick actions never offer a
+        # screen the current role is not allowed to open.
+        role = self.app.current_role
+        role_access = {
+            "billing":      ["admin", "cashier"],
+            "products":     ["admin", "stock_manager"],
+            "bill_history": ["admin", "cashier", "stock_manager"],
+            "categories":   ["admin", "stock_manager"],
+        }
         actions = [
             (t("New Bill_qa", L),       COLORS["btn_primary"],  COLORS["btn_primary_h"], "billing"),
             (t("Add Product_qa", L),    COLORS["btn_success"],  COLORS["btn_success_h"], "products"),
             (t("Bill History_qa", L),   COLORS["btn_purple"],   COLORS["btn_purple_h"], "bill_history"),
             (t("Categories_qa", L),    COLORS["btn_warning"],  COLORS["btn_warning_h"], "categories"),
         ]
+        actions = [a for a in actions if role in role_access.get(a[3], [])]
         for text, fg, hov, screen in actions:
             ctk.CTkButton(
                 qa_row, text=text,

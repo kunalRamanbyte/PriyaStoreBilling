@@ -143,8 +143,8 @@ class UserScreen(ctk.CTkFrame):
         self.tree.delete(*self.tree.get_children())
         users = self.db.get_users(include_inactive=self._show_all.get())
         for i, u in enumerate(users):
-            role_lbl = ROLE_LABELS.get(u["role"], u["role"])
-            status   = "✅ Active" if u["is_active"] else "❌ Inactive"
+            role_lbl = t(ROLE_LABELS.get(u["role"], u["role"]), L)
+            status   = ("✅ " + t("Active", L)) if u["is_active"] else ("❌ " + t("Inactive", L))
             created  = str(u.get("created_at", ""))[:10]
             tags = []
             if not u["is_active"]:
@@ -274,7 +274,10 @@ class UserScreen(ctk.CTkFrame):
                 return
 
             if is_edit:
-                self.db.update_user(user["user_id"], name, role)
+                ok, err = self.db.update_user(user["user_id"], name, role)
+                if not ok:
+                    messagebox.showerror(t("Error", L), err, parent=dlg)
+                    return
                 self.db.log_activity(self.current_user["user_id"],
                                      "USER_UPDATED", f"User '{uname}' updated")
                 messagebox.showinfo(t("Saved", L), f"User '{name}' " + t("User updated.", L), parent=dlg)
@@ -381,7 +384,9 @@ class UserScreen(ctk.CTkFrame):
         if not self._selected_id:
             return
         if self._selected_id == self.current_user["user_id"]:
-            messagebox.showwarning(t("Warning", L), t("Admin cannot be deactivated.", L))
+            messagebox.showwarning(t("Warning", L),
+                                   t("You cannot deactivate your own account.", L),
+                                   parent=self.winfo_toplevel())
             return
         u = self.db.get_user_by_id(self._selected_id)
         if not u:
@@ -392,7 +397,10 @@ class UserScreen(ctk.CTkFrame):
                     t("Deactivate", L),
                     t(msg_tpl, L).format(name=u['name'])):
                 return
-            self.db.deactivate_user(u["user_id"])
+            ok, err = self.db.deactivate_user(u["user_id"])
+            if not ok:
+                messagebox.showerror(t("Error", L), err, parent=self.winfo_toplevel())
+                return
             self.db.log_activity(self.current_user["user_id"],
                                  "USER_DEACTIVATED",
                                  f"User '{u['username']}' deactivated")

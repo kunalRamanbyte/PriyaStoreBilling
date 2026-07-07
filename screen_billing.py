@@ -579,6 +579,11 @@ class BillingScreen(ctk.CTkFrame):
         self._refresh_bill_number()
         self._focus_search()
 
+    def on_hide(self):
+        """Called when navigating away — tear down floating search overlays
+        (Toplevels) that would otherwise stay on top of the next screen."""
+        self._dismiss_search_overlays()
+
     # ─────────────────────────────────────────────────────────────
     # Draft resume (called from Bill History)
     # ─────────────────────────────────────────────────────────────
@@ -891,6 +896,18 @@ class BillingScreen(ctk.CTkFrame):
                 pass
             self.cust_popup   = None
             self.cust_listbox = None
+
+    def _dismiss_search_overlays(self):
+        """Close both suggestion popups AND cancel any pending debounced search,
+        so a queued search can't re-open a -topmost overlay over a dialog."""
+        if getattr(self, "_search_job", None) is not None:
+            try:
+                self.after_cancel(self._search_job)
+            except Exception:
+                pass
+            self._search_job = None
+        self._close_popup()
+        self._close_cust_popup()
 
     def _select_customer(self, listbox):
         sel = listbox.curselection()
@@ -1567,6 +1584,15 @@ class BillingScreen(ctk.CTkFrame):
         )
 
     def _save_and_print(self):
+        # Guard against double-submit (F10 pressed twice / button double-clicked
+        # while the receipt/print step pumps the event loop).
+        if getattr(self, "_saving", False):
+            return
+
+        # Dismiss any open search-suggestion overlay first: it is a -topmost
+        # Toplevel and would otherwise float above (and hide) the receipt dialog.
+        self._dismiss_search_overlays()
+
         if not self.cart:
             messagebox.showwarning("Empty Cart",
                                    "Please add at least one product to the bill.",
@@ -1580,24 +1606,24 @@ class BillingScreen(ctk.CTkFrame):
         is_walk_in = not bill_data.get("customer_id")
         total_to_collect = round(bill_data["grand_total"] + bill_data.get("udhaar_adjustment", 0), 2)
 
-        # Cash mode: if walk-in and cash field untouched (0), assume exact payment
+        # Cash mode: a walk-in must pay the full amount in cash — there is no
+        # customer record to hold a shortfall against.
         mode = self.payment_mode_var.get()
         if mode == "Cash":
             try:
                 paid = float(self.cash_var.get() or 0)
             except ValueError:
                 paid = 0
-            if paid == 0 and is_walk_in:
-                # Walk-in exact cash — no prompt needed
-                bill_data["amount_paid"] = total_to_collect
-                bill_data["change_due"]  = 0.0
-            elif paid < total_to_collect:
+            if paid < total_to_collect:
                 if is_walk_in:
-                    # Walk-in underpayment — can't save as credit without a customer
+                    # Blocks both an empty/zero cash field and an amount that is
+                    # less than the total. The cashier must enter the cash actually
+                    # received (>= total), or attach a saved customer for credit.
                     messagebox.showwarning(
-                        "Underpayment",
-                        f"Cash received ₹{paid:.2f} is less than total ₹{total_to_collect:.2f}.\n\n"
-                        f"Please enter the correct cash amount, or select a saved customer to save as credit.",
+                        "Cash Received Required",
+                        f"Cash received ₹{paid:.2f} is less than the total ₹{total_to_collect:.2f}.\n\n"
+                        f"Enter the full cash amount received, or select a saved "
+                        f"customer to save the balance as credit (Udhaar).",
                         parent=self.winfo_toplevel()
                     )
                     self.cash_entry.focus_set()
@@ -1623,9 +1649,21 @@ class BillingScreen(ctk.CTkFrame):
             self.customer_entry.focus_set()
             return
 
-        bill_id = self.db.save_bill(
-            bill_data, self.cart, self.current_user["user_id"]
-        )
+        self._saving = True
+        try:
+            bill_id = self.db.save_bill(
+                bill_data, self.cart, self.current_user["user_id"]
+            )
+        except Exception as e:
+            messagebox.showerror(
+                "Save Failed",
+                f"Could not save the bill:\n{e}\n\nNo bill was recorded. "
+                f"Please check the Next Bill Number setting and try again.",
+                parent=self.winfo_toplevel())
+            self._set_status("⚠  Bill NOT saved.")
+            return
+        finally:
+            self._saving = False
 
         # If this was a resumed draft, delete the original draft now
         if getattr(self, "_draft_bill_id", None):
@@ -1645,6 +1683,8 @@ class BillingScreen(ctk.CTkFrame):
             self.app.screens["dashboard"].on_show()
 
     def _hold_bill(self):
+        # Dismiss any floating search-suggestion overlay before showing dialogs.
+        self._dismiss_search_overlays()
         if not self.cart:
             messagebox.showwarning("Empty Cart",
                                    "Nothing to hold — cart is empty.",

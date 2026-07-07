@@ -9,12 +9,14 @@ from PIL import Image
 import customtkinter as ctk
 import tkinter as tk
 from config import COLORS, FONTS, APP_TITLE, SHOP_NAME, resource_path
+from lang import t
 
 
 class LoginScreen(ctk.CTkFrame):
     def __init__(self, parent, on_success_callback):
         super().__init__(parent, fg_color="#1A237E", corner_radius=0)
         self.on_success = on_success_callback
+        self._lang = getattr(self.winfo_toplevel(), "current_lang", "English") or "English"
         self._build()
 
     def _build(self):
@@ -63,21 +65,22 @@ class LoginScreen(ctk.CTkFrame):
         form = ctk.CTkFrame(card, fg_color="transparent")
         form.pack(fill="both", expand=True, padx=40, pady=20)
 
-        ctk.CTkLabel(form, text="Welcome Back! 👋",
+        L = self._lang
+        ctk.CTkLabel(form, text=t("Welcome Back!", L) + " 👋",
                      font=("Segoe UI", 22, "bold"),
                      text_color=COLORS["text_dark"]).pack(pady=(10, 4))
-        ctk.CTkLabel(form, text="Please sign in to continue",
+        ctk.CTkLabel(form, text=t("Please sign in to continue", L),
                      font=("Segoe UI", 15),
                      text_color=COLORS["text_muted"]).pack(pady=(0, 20))
 
         # Username
-        ctk.CTkLabel(form, text="Username",
+        ctk.CTkLabel(form, text=t("Username", L),
                      font=FONTS["label_form"],
                      text_color=COLORS["text_dark"],
                      anchor="w").pack(fill="x")
         self.username_entry = ctk.CTkEntry(
             form,
-            placeholder_text="Enter your username",
+            placeholder_text=t("Enter your username", L),
             font=FONTS["input"],
             height=50,
             border_width=2,
@@ -89,13 +92,13 @@ class LoginScreen(ctk.CTkFrame):
         self.username_entry.pack(fill="x", pady=(4, 14))
 
         # Password
-        ctk.CTkLabel(form, text="Password",
+        ctk.CTkLabel(form, text=t("Password", L),
                      font=FONTS["label_form"],
                      text_color=COLORS["text_dark"],
                      anchor="w").pack(fill="x")
         self.password_entry = ctk.CTkEntry(
             form,
-            placeholder_text="Enter your password",
+            placeholder_text=t("Enter your password", L),
             show="●",
             font=FONTS["input"],
             height=50,
@@ -117,7 +120,7 @@ class LoginScreen(ctk.CTkFrame):
         # Login button (gradient-inspired)
         self.login_btn = ctk.CTkButton(
             form,
-            text="🔓   Sign In",
+            text="🔓   " + t("Sign In", L),
             font=("Segoe UI", 18, "bold"),
             fg_color=COLORS["btn_primary"],
             hover_color=COLORS["btn_primary_h"],
@@ -130,10 +133,17 @@ class LoginScreen(ctk.CTkFrame):
         )
         self.login_btn.pack(fill="x", pady=(5, 10))
 
-        # Hint
-        ctk.CTkLabel(form, text="Default: admin / admin123",
-                     font=("Segoe UI", 13),
-                     text_color="#94A3B8").pack()
+        # Hint — only while the seeded default admin password is still in place,
+        # so we don't advertise credentials that no longer work (or that a
+        # security-conscious owner has already changed).
+        try:
+            show_hint = self.winfo_toplevel().db.is_default_admin_active()
+        except Exception:
+            show_hint = False
+        if show_hint:
+            ctk.CTkLabel(form, text=t("Default: admin / admin123", L),
+                         font=("Segoe UI", 13),
+                         text_color="#94A3B8").pack()
 
         # Keyboard bindings
         self.username_entry.bind("<Return>", lambda e: self.password_entry.focus())
@@ -152,11 +162,12 @@ class LoginScreen(ctk.CTkFrame):
                 self.bg_label.configure(image=self.bg_image)
 
     def _do_login(self):
+        L = self._lang
         username = self.username_entry.get().strip()
         password = self.password_entry.get().strip()
 
         if not username or not password:
-            self.error_label.configure(text="⚠  Please enter username and password.")
+            self.error_label.configure(text="⚠  " + t("Please enter username and password.", L))
             return
 
         # Import db from parent
@@ -167,6 +178,6 @@ class LoginScreen(ctk.CTkFrame):
             self.error_label.configure(text="")
             self.on_success(user)
         else:
-            self.error_label.configure(text="❌  Wrong username or password. Try again.")
+            self.error_label.configure(text="❌  " + t("Wrong username or password. Try again.", L))
             self.password_entry.delete(0, "end")
             self.password_entry.focus()

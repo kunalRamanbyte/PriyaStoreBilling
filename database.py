@@ -5,14 +5,44 @@ Uses raw sqlite3 (no ORM) for simplicity and speed.
 
 import sqlite3
 import hashlib
+import hmac
 import os
 from contextlib import contextmanager
 from datetime import datetime, date
 from config import DB_PATH
 
+_PBKDF2_ITERATIONS = 200_000
+
 
 def hash_password(password: str) -> str:
+    """Salted PBKDF2-HMAC-SHA256 hash, stored as pbkdf2_sha256$iters$salt$hash."""
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, _PBKDF2_ITERATIONS)
+    return f"pbkdf2_sha256${_PBKDF2_ITERATIONS}${salt.hex()}${dk.hex()}"
+
+
+def _legacy_sha256(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
+
+
+def verify_password(password: str, stored: str) -> bool:
+    """Verify against either the new PBKDF2 format or a legacy bare SHA-256 hash."""
+    if not stored:
+        return False
+    if stored.startswith("pbkdf2_sha256$"):
+        try:
+            _, iters, salt_hex, hash_hex = stored.split("$")
+            dk = hashlib.pbkdf2_hmac(
+                "sha256", password.encode(), bytes.fromhex(salt_hex), int(iters))
+            return hmac.compare_digest(dk.hex(), hash_hex)
+        except Exception:
+            return False
+    # Legacy unsalted SHA-256 (constant-time compare)
+    return hmac.compare_digest(_legacy_sha256(password), stored)
+
+
+def is_legacy_hash(stored: str) -> bool:
+    return bool(stored) and not stored.startswith("pbkdf2_sha256$")
 
 
 class Database:
@@ -348,15 +378,32 @@ class Database:
     # ─── Auth ──────────────────────────────────────────────────
 
     def authenticate(self, username: str, password: str):
-        """Returns user dict or None."""
+        """Returns user dict (without password_hash) or None."""
         with self.get_conn() as conn:
             row = conn.execute(
                 "SELECT * FROM users WHERE username=? AND is_active=1",
                 (username,)
             ).fetchone()
-            if row and row["password_hash"] == hash_password(password):
-                return dict(row)
-        return None
+            if not row or not verify_password(password, row["password_hash"]):
+                return None
+            # Transparently upgrade a legacy unsalted SHA-256 hash on successful login.
+            if is_legacy_hash(row["password_hash"]):
+                conn.execute(
+                    "UPDATE users SET password_hash=? WHERE user_id=?",
+                    (hash_password(password), row["user_id"])
+                )
+                conn.commit()
+            user = dict(row)
+            user.pop("password_hash", None)  # never expose the hash to the UI layer
+            return user
+
+    def is_default_admin_active(self) -> bool:
+        """True if the seeded admin account still uses the default password."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT password_hash FROM users WHERE username='admin' AND is_active=1"
+            ).fetchone()
+        return bool(row) and verify_password("admin123", row["password_hash"])
 
     # ─── Settings ─────────────────────────────────────────────
 
@@ -378,6 +425,17 @@ class Database:
             n      = int(self.get_setting("next_bill_no", "1"))
             prefix = self.get_setting("bill_prefix", "BILL")
             return f"{prefix}-{n:05d}"
+
+    def max_bill_sequence(self) -> int:
+        """Highest numeric suffix already used by an existing bill (0 if none).
+        Used to validate that a new 'Next Bill Number' will not collide."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """SELECT COALESCE(MAX(
+                       CAST(substr(bill_number, instr(bill_number, '-') + 1) AS INTEGER)
+                   ), 0) FROM bills"""
+            ).fetchone()
+            return int(row[0] or 0)
 
     def increment_bill_number(self):
         """Atomically increment the bill counter in a single SQL statement."""
@@ -761,7 +819,9 @@ class Database:
 
     def get_bills(self, search="", date_from=None, date_to=None, status=None, limit=200):
         with self.get_conn() as conn:
-            q = "SELECT * FROM bills WHERE 1=1"
+            q = ("SELECT *, (SELECT COUNT(*) FROM bill_items bi "
+                 "WHERE bi.bill_id = bills.bill_id) AS item_count "
+                 "FROM bills WHERE 1=1")
             params = []
             if search:
                 q += " AND (bill_number LIKE ? OR customer_name LIKE ?)"
@@ -794,10 +854,23 @@ class Database:
             ).fetchall()
             return dict(bill), [dict(i) for i in items]
 
+    def bill_has_returns(self, bill_id: int) -> bool:
+        """True if any sales return has been recorded against this bill."""
+        with self.get_conn() as conn:
+            n = conn.execute(
+                "SELECT COUNT(*) FROM sales_returns WHERE bill_id=?", (bill_id,)
+            ).fetchone()[0]
+        return bool(n)
+
     def void_bill(self, bill_id: int, reason: str, user_id: int):
         """Void a bill, reverse stock, and reverse credit balance for Udhaar bills."""
         bill, items = self.get_bill_by_id(bill_id)
         if not bill or bill["status"] != "Active":
+            return False
+        # A bill that already has returns cannot be cleanly voided: the returned
+        # lines have already restocked and refunded, so reversing the full
+        # original quantities/amounts here would double-count. Refuse instead.
+        if self.bill_has_returns(bill_id):
             return False
         with self.get_conn() as conn:
             conn.execute(
@@ -1339,6 +1412,22 @@ class Database:
             ).fetchone()
             return dict(row) if row else None
 
+    def find_customer_by_phone(self, phone: str, exclude_id: int = None):
+        """Return an existing customer dict with this exact phone, or None."""
+        if not phone:
+            return None
+        with self.get_conn() as conn:
+            if exclude_id:
+                row = conn.execute(
+                    "SELECT * FROM customers WHERE phone=? AND customer_id<>?",
+                    (phone, exclude_id)
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT * FROM customers WHERE phone=?", (phone,)
+                ).fetchone()
+            return dict(row) if row else None
+
     def add_customer(self, data: dict) -> int:
         with self.get_conn() as conn:
             cur = conn.execute(
@@ -1622,18 +1711,22 @@ class Database:
 
     def report_profit_margin(self, date_from: str, date_to: str):
         with self.get_conn() as conn:
+            # Revenue is the net line_total (already discount-adjusted); do NOT
+            # use unit_price, which is the pre-discount price and overstates
+            # profit whenever a per-line discount was given.
             rows = conn.execute("""
                 SELECT bi.product_name,
                        SUM(bi.quantity)               AS qty_sold,
-                       ROUND(AVG(bi.unit_price),2)    AS sell_price,
+                       ROUND(SUM(bi.line_total) / NULLIF(SUM(bi.quantity),0), 2) AS sell_price,
                        ROUND(p.purchase_price,2)      AS cost_price,
-                       ROUND(AVG(bi.unit_price) - p.purchase_price, 2) AS margin_per_unit,
+                       ROUND(SUM(bi.line_total) / NULLIF(SUM(bi.quantity),0)
+                             - p.purchase_price, 2)   AS margin_per_unit,
                        ROUND(
-                         (AVG(bi.unit_price) - p.purchase_price) /
-                         NULLIF(AVG(bi.unit_price),0) * 100, 1
+                         (SUM(bi.line_total) - SUM(bi.quantity) * p.purchase_price) /
+                         NULLIF(SUM(bi.line_total),0) * 100, 1
                        )                              AS margin_pct,
-                       ROUND(SUM(bi.quantity) *
-                         (AVG(bi.unit_price) - p.purchase_price), 2) AS total_profit
+                       ROUND(SUM(bi.line_total) - SUM(bi.quantity) * p.purchase_price, 2)
+                                                      AS total_profit
                 FROM bill_items bi
                 JOIN bills b    ON bi.bill_id    = b.bill_id
                 JOIN products p ON bi.product_id = p.product_id
@@ -1712,13 +1805,33 @@ class Database:
         except Exception as e:
             return False, str(e)
 
-    def update_user(self, user_id: int, name: str, role: str):
+    def count_active_admins(self) -> int:
+        with self.get_conn() as conn:
+            return conn.execute(
+                "SELECT COUNT(*) FROM users WHERE role='admin' AND is_active=1"
+            ).fetchone()[0]
+
+    def _would_remove_last_admin(self, user_id: int) -> bool:
+        """True if demoting/deactivating this user would leave zero active admins."""
+        with self.get_conn() as conn:
+            row = conn.execute(
+                "SELECT role, is_active FROM users WHERE user_id=?", (user_id,)
+            ).fetchone()
+        if not row or row["role"] != "admin" or not row["is_active"]:
+            return False
+        return self.count_active_admins() <= 1
+
+    def update_user(self, user_id: int, name: str, role: str) -> tuple:
+        """Returns (True, "") or (False, error_msg). Refuses to demote the last admin."""
+        if role != "admin" and self._would_remove_last_admin(user_id):
+            return False, "Cannot change role: at least one active admin must remain."
         with self.get_conn() as conn:
             conn.execute(
                 "UPDATE users SET name=?, role=? WHERE user_id=?",
                 (name.strip(), role, user_id)
             )
             conn.commit()
+        return True, ""
 
     def change_password(self, user_id: int, new_password: str):
         with self.get_conn() as conn:
@@ -1728,13 +1841,17 @@ class Database:
             )
             conn.commit()
 
-    def deactivate_user(self, user_id: int):
+    def deactivate_user(self, user_id: int) -> tuple:
+        """Returns (True, "") or (False, error_msg). Refuses to deactivate the last admin."""
+        if self._would_remove_last_admin(user_id):
+            return False, "Cannot deactivate: at least one active admin must remain."
         with self.get_conn() as conn:
             conn.execute(
                 "UPDATE users SET is_active=0 WHERE user_id=?",
                 (user_id,)
             )
             conn.commit()
+        return True, ""
 
     def reactivate_user(self, user_id: int):
         with self.get_conn() as conn:

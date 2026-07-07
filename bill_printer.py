@@ -8,9 +8,46 @@ Handles:
 
 import os
 import sys
+import time
 import tempfile
 import subprocess
 from datetime import datetime
+
+_TEMP_SUBDIR = "priyastore_prints"
+
+
+def _temp_dir() -> str:
+    d = os.path.join(tempfile.gettempdir(), _TEMP_SUBDIR)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _prune_temp(days: int = 7):
+    """Delete previously generated print files older than `days` so bill PDFs
+    (which contain customer data) don't accumulate forever in %TEMP%."""
+    try:
+        cutoff = time.time() - days * 86400
+        d = os.path.join(tempfile.gettempdir(), _TEMP_SUBDIR)
+        if not os.path.isdir(d):
+            return
+        for f in os.listdir(d):
+            p = os.path.join(d, f)
+            try:
+                if os.path.isfile(p) and os.path.getmtime(p) < cutoff:
+                    os.remove(p)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _new_temp(suffix: str, text: bool = False):
+    """NamedTemporaryFile in a dedicated, self-pruning app temp folder."""
+    _prune_temp()
+    kwargs = dict(suffix=suffix, delete=False, dir=_temp_dir())
+    if text:
+        kwargs.update(mode="w", encoding="utf-8", errors="replace")
+    return tempfile.NamedTemporaryFile(**kwargs)
 
 
 def open_file(path: str):
@@ -44,7 +81,7 @@ def generate_pdf_bill(bill: dict, items: list, settings: dict,
     from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 
     if not output_path:
-        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        tmp = _new_temp(".pdf")
         output_path = tmp.name
         tmp.close()
 
@@ -93,7 +130,7 @@ def generate_pdf_bill(bill: dict, items: list, settings: dict,
         addr_line = ", ".join(filter(None, [shop_addr, shop_city]))
         story.append(Paragraph(addr_line, h2))
     if shop_phone:
-        story.append(Paragraph(f"📞 {shop_phone}", h3))
+        story.append(Paragraph(f"Ph: {shop_phone}", h3))
     if shop_gst:
         story.append(Paragraph(f"GST: {shop_gst}", h3))
     inv_style = ParagraphStyle("inv", fontSize=11, fontName="Helvetica-Bold",
@@ -126,9 +163,9 @@ def generate_pdf_bill(bill: dict, items: list, settings: dict,
         Paragraph("<b>Product</b>",      ParagraphStyle("th", fontSize=10, fontName="Helvetica-Bold", textColor=WHITE)),
         Paragraph("<b>Unit</b>",         ParagraphStyle("th", fontSize=10, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_CENTER)),
         Paragraph("<b>Qty</b>",          ParagraphStyle("th", fontSize=10, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
-        Paragraph("<b>Rate ₹</b>",       ParagraphStyle("th", fontSize=10, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
-        Paragraph("<b>Disc ₹</b>",       ParagraphStyle("th", fontSize=10, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
-        Paragraph("<b>Total ₹</b>",      ParagraphStyle("th", fontSize=10, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
+        Paragraph("<b>Rate Rs.</b>",       ParagraphStyle("th", fontSize=10, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
+        Paragraph("<b>Disc Rs.</b>",       ParagraphStyle("th", fontSize=10, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
+        Paragraph("<b>Total Rs.</b>",      ParagraphStyle("th", fontSize=10, fontName="Helvetica-Bold", textColor=WHITE, alignment=TA_RIGHT)),
     ]]
 
     r_style = ParagraphStyle("r", fontSize=9, fontName="Helvetica", textColor=BLACK)
@@ -148,7 +185,6 @@ def generate_pdf_bill(bill: dict, items: list, settings: dict,
 
     col_w = [10*mm, 68*mm, 18*mm, 18*mm, 22*mm, 18*mm, 22*mm]
     item_tbl = Table(tbl_data, colWidths=col_w, repeatRows=1)
-    row_bgs = [LGRAY if i % 2 == 0 else WHITE for i in range(len(tbl_data))]
     item_tbl.setStyle(TableStyle([
         ("BACKGROUND",    (0,0), (-1,0),  BLUE),
         ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHITE, LGRAY]),
@@ -181,33 +217,33 @@ def generate_pdf_bill(bill: dict, items: list, settings: dict,
                                textColor=colors.HexColor("#C2410C"), alignment=TA_RIGHT)
 
     totals_data = [
-        [Paragraph("Subtotal:", tot_lbl), Paragraph(f"₹ {subtotal:,.2f}", tot_val)],
+        [Paragraph("Subtotal:", tot_lbl), Paragraph(f"Rs. {subtotal:,.2f}", tot_val)],
     ]
     if discount:
         totals_data.append(
-            [Paragraph("Discount:", tot_lbl), Paragraph(f"- ₹ {discount:,.2f}", tot_val)]
+            [Paragraph("Discount:", tot_lbl), Paragraph(f"- Rs. {discount:,.2f}", tot_val)]
         )
     if change_adj > 0:
         totals_data.append(
-            [Paragraph("Change Used:", tot_lbl), Paragraph(f"- ₹ {change_adj:,.2f}", tot_val)]
+            [Paragraph("Change Used:", tot_lbl), Paragraph(f"- Rs. {change_adj:,.2f}", tot_val)]
         )
     if udhaar_adj > 0:
         totals_data.append(
-            [Paragraph("Prev. Udhaar:", tot_lbl), Paragraph(f"+ ₹ {udhaar_adj:,.2f}", warn_val)]
+            [Paragraph("Prev. Udhaar:", tot_lbl), Paragraph(f"+ Rs. {udhaar_adj:,.2f}", warn_val)]
         )
     totals_data.append(
-        [Paragraph("<b>GRAND TOTAL:</b>", gt_lbl), Paragraph(f"<b>₹ {total_collect:,.2f}</b>", gt_val)]
+        [Paragraph("<b>GRAND TOTAL:</b>", gt_lbl), Paragraph(f"<b>Rs. {total_collect:,.2f}</b>", gt_val)]
     )
     totals_data.append(
-        [Paragraph("Amount Paid:", tot_lbl), Paragraph(f"₹ {amount_paid:,.2f}", tot_val)]
+        [Paragraph("Amount Paid:", tot_lbl), Paragraph(f"Rs. {amount_paid:,.2f}", tot_val)]
     )
     if change_due > 0:
         totals_data.append(
-            [Paragraph("Change Due:", tot_lbl), Paragraph(f"₹ {change_due:,.2f}", tot_val)]
+            [Paragraph("Change Due:", tot_lbl), Paragraph(f"Rs. {change_due:,.2f}", tot_val)]
         )
     if balance_due > 0:
         totals_data.append(
-            [Paragraph("<b>Balance Due:</b>", tot_lbl), Paragraph(f"<b>₹ {balance_due:,.2f}</b>", warn_val)]
+            [Paragraph("<b>Balance Due:</b>", tot_lbl), Paragraph(f"<b>Rs. {balance_due:,.2f}</b>", warn_val)]
         )
     if bill.get("payment_mode") == "Credit (Udhaar)":
         credit_lbl = ParagraphStyle("cl", fontSize=11, fontName="Helvetica-Bold",
@@ -231,7 +267,7 @@ def generate_pdf_bill(bill: dict, items: list, settings: dict,
     story.append(Spacer(1, 6*mm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=GRAY))
     story.append(Spacer(1, 3*mm))
-    story.append(Paragraph("Thank you for shopping with us! 🙏", foot))
+    story.append(Paragraph("Thank you for shopping with us!", foot))
     story.append(Paragraph(f"Printed: {datetime.now().strftime('%d %b %Y  %I:%M %p')}", foot))
 
     doc.build(story)
@@ -260,7 +296,7 @@ def generate_return_pdf(return_doc: dict, items: list, settings: dict,
     from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 
     if not output_path:
-        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        tmp = _new_temp(".pdf")
         output_path = tmp.name
         tmp.close()
 
@@ -325,7 +361,7 @@ def generate_return_pdf(return_doc: dict, items: list, settings: dict,
             "th", fontSize=10, fontName="Helvetica-Bold", textColor=WHITE, alignment=al))
 
     tbl_data = [[th("#", TA_CENTER), th("Product", TA_LEFT), th("Unit", TA_CENTER),
-                 th("Qty"), th("Rate ₹"), th("Refund ₹"), th("Restock", TA_CENTER)]]
+                 th("Qty"), th("Rate Rs."), th("Refund Rs."), th("Restock", TA_CENTER)]]
     r_style = ParagraphStyle("r",  fontSize=9, fontName="Helvetica", textColor=BLACK)
     r_num   = ParagraphStyle("rn", fontSize=9, fontName="Helvetica", textColor=BLACK, alignment=TA_RIGHT)
     r_ctr   = ParagraphStyle("rc", fontSize=9, fontName="Helvetica", textColor=BLACK, alignment=TA_CENTER)
@@ -355,7 +391,7 @@ def generate_return_pdf(return_doc: dict, items: list, settings: dict,
     total = float(return_doc.get("total_amount") or 0)
     gt_lbl = ParagraphStyle("gl", fontSize=13, fontName="Helvetica-Bold", textColor=DRED, alignment=TA_RIGHT)
     tot_tbl = Table([[Paragraph("<b>TOTAL REFUND:</b>", gt_lbl),
-                      Paragraph(f"<b>₹ {total:,.2f}</b>", gt_lbl)]],
+                      Paragraph(f"<b>Rs. {total:,.2f}</b>", gt_lbl)]],
                     colWidths=[130*mm, 46*mm])
     tot_tbl.setStyle(TableStyle([
         ("LINEABOVE",     (0,0), (-1,0), 1.2, RED),
@@ -393,6 +429,10 @@ _NON_THERMAL_PRINTERS = (
     "microsoft print to pdf", "microsoft xps document writer", "xps document",
     "onenote", "send to onenote", "fax", "pdfcreator", "cutepdf", "foxit",
     "adobe pdf", "print to pdf",
+    # Common physical laser/inkjet families — these would spew ESC/POS control
+    # codes as garbage pages, so route them to the readable text preview too.
+    "laserjet", "officejet", "deskjet", "inkjet", "laser", "ecosys",
+    "pixma", "workforce", "envy", "smart tank",
 )
 
 
@@ -407,8 +447,7 @@ def _thermal_text_preview(rows: list, width: int, default_name: str) -> tuple:
     virtual (Print-to-PDF etc.), so the user still sees the exact receipt instead
     of an unopenable file. Returns (True, message)."""
     txt = "\n".join(_render_plain_lines(rows, width))
-    tmp = tempfile.NamedTemporaryFile(suffix=".txt", delete=False, mode="w",
-                                      encoding="utf-8", errors="replace")
+    tmp = _new_temp(".txt", text=True)
     tmp.write(txt)
     tmp.close()
     open_file(tmp.name)
@@ -630,6 +669,7 @@ def print_thermal(bill: dict, items: list, settings: dict,
         return _thermal_text_preview(rows, char_width, _default_name)
 
     # ── Try python-escpos: render to a buffer, then one atomic RAW write ──
+    wrote = False   # set once bytes are on the wire, to avoid a double-print
     try:
         from escpos.printer import Dummy
         import win32print
@@ -646,6 +686,7 @@ def print_thermal(bill: dict, items: list, settings: dict,
             try:
                 win32print.StartPagePrinter(hPrinter)
                 win32print.WritePrinter(hPrinter, data)
+                wrote = True   # job spooled; a later cleanup error must NOT re-print
                 win32print.EndPagePrinter(hPrinter)
             finally:
                 win32print.EndDocPrinter(hPrinter)
@@ -655,8 +696,15 @@ def print_thermal(bill: dict, items: list, settings: dict,
 
     except ImportError:
         pass   # python-escpos / pywin32 not installed — fall through
-    except Exception:
-        pass   # printer/runtime error — fall through to plain-text fallback
+    except Exception as escpos_err:
+        # If the receipt bytes already reached the printer, a post-write cleanup
+        # failure must not trigger the fallback (that would print a 2nd copy).
+        if wrote:
+            return True, _default_name or "printer"
+        try:
+            print(f"[bill_printer] ESC/POS path failed, using plain-text fallback: {escpos_err}")
+        except Exception:
+            pass
 
     # Plain-text fallback via Windows print spooler (RAW mode)
     txt = "\n".join(_render_plain_lines(rows, char_width))
@@ -668,8 +716,11 @@ def print_thermal(bill: dict, items: list, settings: dict,
             hJob = win32print.StartDocPrinter(hPrinter, 1, (f"Bill_{bill['bill_number']}", None, "RAW"))
             try:
                 win32print.StartPagePrinter(hPrinter)
-                # Convert text to bytes
-                raw_bytes = (txt + "\n\n\n\n\x1dV\x42\x00").encode("utf-8", errors="replace")
+                # ESC/POS printers interpret a single-byte codepage (CP437), not
+                # UTF-8. Encoding as cp437 degrades unsupported glyphs to '?'
+                # one-for-one so column alignment is preserved (UTF-8 would emit
+                # multi-byte mojibake and shift every following column).
+                raw_bytes = (txt + "\n\n\n\n\x1dV\x42\x00").encode("cp437", errors="replace")
                 win32print.WritePrinter(hPrinter, raw_bytes)
                 win32print.EndPagePrinter(hPrinter)
             finally:
@@ -682,10 +733,7 @@ def print_thermal(bill: dict, items: list, settings: dict,
         try:
             import win32api
             default = win32print.GetDefaultPrinter()
-            tmp = tempfile.NamedTemporaryFile(
-                suffix=".txt", delete=False, mode="w",
-                encoding="utf-8", errors="replace"
-            )
+            tmp = _new_temp(".txt", text=True)
             tmp.write(txt)
             tmp.close()
             win32api.ShellExecute(
@@ -827,6 +875,7 @@ def print_thermal_return(return_doc: dict, items: list, settings: dict,
     if _default_name and _looks_non_thermal(_default_name):
         return _thermal_text_preview(rows, char_width, _default_name)
 
+    wrote = False   # set once bytes are on the wire, to avoid a double-print
     try:
         from escpos.printer import Dummy
         import win32print
@@ -844,6 +893,7 @@ def print_thermal_return(return_doc: dict, items: list, settings: dict,
             try:
                 win32print.StartPagePrinter(hPrinter)
                 win32print.WritePrinter(hPrinter, data)
+                wrote = True   # job spooled; a later cleanup error must NOT re-print
                 win32print.EndPagePrinter(hPrinter)
             finally:
                 win32print.EndDocPrinter(hPrinter)
@@ -853,8 +903,13 @@ def print_thermal_return(return_doc: dict, items: list, settings: dict,
 
     except ImportError:
         pass
-    except Exception:
-        pass   # printer/runtime error — fall through to plain-text fallback
+    except Exception as escpos_err:
+        if wrote:
+            return True, _default_name or "printer"
+        try:
+            print(f"[bill_printer] ESC/POS return path failed, using fallback: {escpos_err}")
+        except Exception:
+            pass
 
     # Plain-text fallback via Windows spooler (RAW), then notepad
     txt = "\n".join(_render_plain_lines(rows, char_width))
@@ -867,7 +922,8 @@ def print_thermal_return(return_doc: dict, items: list, settings: dict,
                 hPrinter, 1, (f"Return_{return_doc.get('return_number','')}", None, "RAW"))
             try:
                 win32print.StartPagePrinter(hPrinter)
-                raw_bytes = (txt + "\n\n\n\n\x1dV\x42\x00").encode("utf-8", errors="replace")
+                # cp437 (single-byte ESC/POS codepage), not UTF-8 — see print_thermal.
+                raw_bytes = (txt + "\n\n\n\n\x1dV\x42\x00").encode("cp437", errors="replace")
                 win32print.WritePrinter(hPrinter, raw_bytes)
                 win32print.EndPagePrinter(hPrinter)
             finally:

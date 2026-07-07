@@ -13,16 +13,36 @@ import tkinter as tk
 from tkinter import messagebox, filedialog
 import os
 import shutil
+import sqlite3
 from datetime import datetime
 from config import COLORS, FONTS
 from lang import LANGUAGES, LANG_DB_VALUES, t
+
+
+def _is_valid_sqlite(path: str) -> bool:
+    """True if `path` is a readable SQLite database file."""
+    try:
+        if not os.path.isfile(path) or os.path.getsize(path) < 100:
+            return False
+        with open(path, "rb") as fh:
+            if fh.read(16) != b"SQLite format 3\x00":
+                return False
+        con = sqlite3.connect(path)
+        try:
+            con.execute("PRAGMA schema_version;").fetchone()
+        finally:
+            con.close()
+        return True
+    except Exception:
+        return False
 
 
 class SettingsScreen(ctk.CTkFrame):
 
     FIELDS = [
         # (key, label, placeholder, section)
-        ("shop_name",    "Shop Name *",        "e.g. Kunal's FMCG Grocery Shop",   "shop"),
+        # shop_name is intentionally omitted: main.py enforces it to "Priya Store"
+        # on every startup, so an editable field here would silently revert.
         ("shop_address", "Address",            "Street / Area",                     "shop"),
         ("shop_city",    "City",               "e.g. Mumbai",                       "shop"),
         ("shop_phone",   "Phone",              "+91 XXXXX XXXXX",                   "shop"),
@@ -79,7 +99,7 @@ class SettingsScreen(ctk.CTkFrame):
             fg_color=COLORS["bg_input"], button_color=COLORS["btn_primary"],
             button_hover_color="#005BBE",
             text_color=COLORS["text_dark"],
-            dropdown_fg_color="#FFFFFF", dropdown_text_color="#334155",
+            dropdown_fg_color=COLORS["bg_card"], dropdown_text_color=COLORS["text_dark"],
             command=self._change_language,
         )
         self._lang_menu.grid(row=0, column=1, padx=(0, 18), pady=10, sticky="w")
@@ -97,7 +117,7 @@ class SettingsScreen(ctk.CTkFrame):
             fg_color=COLORS["bg_input"], button_color=COLORS["btn_primary"],
             button_hover_color="#005BBE",
             text_color=COLORS["text_dark"],
-            dropdown_fg_color="#FFFFFF", dropdown_text_color="#334155",
+            dropdown_fg_color=COLORS["bg_card"], dropdown_text_color=COLORS["text_dark"],
             command=self._change_theme,
         )
         self._theme_menu.grid(row=1, column=1, padx=(0, 18), pady=10, sticky="w")
@@ -291,15 +311,34 @@ class SettingsScreen(ctk.CTkFrame):
         self._auto_backup_var.set(auto == "1")
 
     def _save(self):
-        shop_name = self._entries["shop_name"].get().strip()
-        if not shop_name:
-            messagebox.showwarning("Required", "Shop Name is required.")
-            return
+        L = self.app.current_lang
         bill_prefix = self._entries["bill_prefix"].get().strip() or "BILL"
         next_no = self._entries["next_bill_no"].get().strip()
         if not next_no.isdigit() or int(next_no) < 1:
-            messagebox.showwarning("Invalid", "Next Bill Number must be a positive number.")
+            messagebox.showwarning(t("Invalid", L),
+                                   t("Next Bill Number must be a positive number.", L))
             return
+        # Must be strictly greater than the highest bill number already issued,
+        # otherwise the next checkout would generate a duplicate bill_number and
+        # every subsequent save would fail on the UNIQUE constraint.
+        max_seq = self.db.max_bill_sequence()
+        if int(next_no) <= max_seq:
+            messagebox.showwarning(
+                t("Invalid", L),
+                t("Next Bill Number must be greater than the highest used", L)
+                + f" ({max_seq}).")
+            return
+
+        # Normalise/validate paper width — only 58mm or 80mm are meaningful.
+        paper_ent = self._entries.get("paper_width")
+        if paper_ent is not None:
+            pw = paper_ent.get().strip().lower().replace(" ", "")
+            if pw not in ("58mm", "80mm"):
+                messagebox.showwarning(t("Invalid", L),
+                                       t("Thermal paper width must be 58mm or 80mm.", L))
+                return
+            paper_ent.delete(0, "end")
+            paper_ent.insert(0, pw)
 
         data = {k: ent.get().strip() for k, ent in self._entries.items()}
         data["bill_prefix"] = bill_prefix
@@ -369,12 +408,30 @@ class SettingsScreen(ctk.CTkFrame):
         if not src_file:
             return
 
+        # Validate that the chosen file is actually a readable SQLite database
+        # BEFORE we overwrite the live DB — otherwise a wrong pick bricks the app.
+        if not _is_valid_sqlite(src_file):
+            messagebox.showerror(
+                "Invalid Backup",
+                "The selected file is not a valid SQLite database.\n"
+                "No changes were made.",
+                parent=self.winfo_toplevel())
+            return
+
         try:
             # 1. Safety-backup the current DB before overwriting
             _run_backup(self.db, label="pre_restore")
 
-            # 2. Overwrite the live DB with the chosen backup
+            # 2. Overwrite the live DB with the chosen backup, then clear any stale
+            #    WAL/SHM sidecars so the OLD db's uncheckpointed frames are not
+            #    replayed into the freshly restored file on next open.
             shutil.copy2(src_file, self.db.db_path)
+            for sidecar in (self.db.db_path + "-wal", self.db.db_path + "-shm"):
+                try:
+                    if os.path.exists(sidecar):
+                        os.remove(sidecar)
+                except Exception:
+                    pass
 
             # 3. Re-run init_db so new tables / migrations apply
             self.db.init_db()
@@ -437,15 +494,20 @@ def _run_backup(db, label: str = None) -> str:
     dst = os.path.join(backup_dir, fname)
     shutil.copy2(db.db_path, dst)
 
-    # Prune: keep only 10 most recent backups in same folder
+    # Prune: keep only the 10 most recent of OUR OWN backups in this folder.
+    # Only touch files matching our naming pattern (never unrelated .db files
+    # that may live in a user-chosen USB/Drive folder), and rank by real
+    # modification time rather than by filename.
     try:
-        all_bak = sorted(
-            [f for f in os.listdir(backup_dir) if f.endswith(".db")],
-            reverse=True
-        )
-        for old in all_bak[10:]:
+        ours = [
+            os.path.join(backup_dir, f)
+            for f in os.listdir(backup_dir)
+            if f.startswith("billing_backup_") and f.endswith(".db")
+        ]
+        ours.sort(key=os.path.getmtime, reverse=True)
+        for old in ours[10:]:
             try:
-                os.remove(os.path.join(backup_dir, old))
+                os.remove(old)
             except Exception:
                 pass
     except Exception:

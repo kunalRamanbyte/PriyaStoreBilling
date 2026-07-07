@@ -94,7 +94,7 @@ class BillHistoryScreen(ctk.CTkFrame):
                 "discount", "grand_total", "mode", "status")
         self.tree = ttk.Treeview(
             tbl_frame, columns=cols, show="headings",
-            style="Hist.Treeview", selectmode="browse"
+            style="Bill.Treeview", selectmode="browse"
         )
         heads  = (t("Bill No.", L), t("Date & Time", L), t("Customer", L),
                   t("Items", L), f"{t('Subtotal', L)} ₹",
@@ -156,6 +156,39 @@ class BillHistoryScreen(ctk.CTkFrame):
         self._sort_asc  = False
         self._all_bills = []
 
+    def _sort_by(self, col):
+        """Sort the loaded bills by the clicked column and re-render."""
+        if not self._all_bills:
+            return
+        if self._sort_col == col:
+            self._sort_asc = not self._sort_asc
+        else:
+            self._sort_col = col
+            self._sort_asc = True
+
+        numeric = {"subtotal", "discount", "grand_total"}
+        key_map = {
+            "bill_number": "bill_number",
+            "date":        "bill_date",
+            "customer":    "customer_name",
+            "subtotal":    "subtotal",
+            "discount":    "discount",
+            "grand_total": "grand_total",
+            "mode":        "payment_mode",
+            "status":      "status",
+        }
+        key = key_map.get(col)
+        if not key:
+            return  # non-sortable column (e.g. items)
+
+        if col in numeric:
+            def sort_key(b): return float(b.get(key) or 0)
+        else:
+            def sort_key(b): return str(b.get(key) or "").lower()
+
+        self._all_bills = sorted(self._all_bills, key=sort_key, reverse=not self._sort_asc)
+        self._render_table(self._all_bills)
+
     def on_show(self):
         self._load_bills()
 
@@ -166,18 +199,37 @@ class BillHistoryScreen(ctk.CTkFrame):
         self._load_bills()
 
     def _filter_all(self):
-        self.from_var.set("2020-01-01")
+        self.from_var.set("")          # no lower bound — show the full history
         self.to_var.set(str(date.today()))
         self._load_bills()
 
+    _LIMIT = 500
+
     def _load_bills(self):
+        L = self.app.current_lang
         search    = self.search_var.get().strip()
         date_from = self.from_var.get().strip() or None
         date_to   = self.to_var.get().strip()   or None
-        bills = self.db.get_bills(search=search, date_from=date_from, date_to=date_to, limit=500)
+        # Validate any supplied date so a typo doesn't silently return 0 rows.
+        for label, val in (("From", date_from), ("To", date_to)):
+            if val:
+                try:
+                    date.fromisoformat(val)
+                except ValueError:
+                    messagebox.showwarning(
+                        t("Invalid Date", L),
+                        t("Enter dates in YYYY-MM-DD format.", L) + f"  ({label}: {val})",
+                        parent=self.winfo_toplevel())
+                    return
+        bills = self.db.get_bills(search=search, date_from=date_from,
+                                  date_to=date_to, limit=self._LIMIT)
         self._all_bills = bills
         self._render_table(bills)
-        self.count_label.configure(text=f"{len(bills)} bill(s) found")
+        if len(bills) >= self._LIMIT:
+            self.count_label.configure(
+                text=t("Showing latest", L) + f" {self._LIMIT} " + t("bill(s) found", L))
+        else:
+            self.count_label.configure(text=f"{len(bills)} " + t("bill(s) found", L))
 
     def _render_table(self, bills):
         self.tree.delete(*self.tree.get_children())
@@ -195,7 +247,7 @@ class BillHistoryScreen(ctk.CTkFrame):
                 b["bill_number"],
                 b["bill_date"][:16] if b["bill_date"] else "",
                 b.get("customer_name", "Walk-in"),
-                "",                                 # items count filled below
+                b.get("item_count", ""),
                 f"{b['subtotal']:,.2f}",
                 f"{b['discount']:,.2f}",
                 f"{b['grand_total']:,.2f}",
@@ -225,7 +277,7 @@ class BillHistoryScreen(ctk.CTkFrame):
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title(f"Bill — {bill['bill_number']}")
-        place_popup(dlg, 520, 600)
+        place_popup(dlg, 520, 600, self.winfo_toplevel())
         dlg.grab_set()
         dlg.attributes("-topmost", True)
 
@@ -311,10 +363,13 @@ class BillHistoryScreen(ctk.CTkFrame):
         bill, items = self.db.get_bill_by_id(bill_id)
         if not bill:
             return
-        if bill["status"] == "Void":
-            messagebox.showwarning("Voided Bill",
-                                   "This bill has been voided and cannot be reprinted.",
-                                   parent=self.winfo_toplevel())
+        if bill["status"] != "Active":
+            # Never reprint a Void or Draft bill as a real customer receipt —
+            # a Draft was never completed (no stock/payment recorded).
+            messagebox.showwarning(
+                "Cannot Reprint",
+                f"Only Active bills can be reprinted.\nThis bill is '{bill['status']}'.",
+                parent=self.winfo_toplevel())
             return
         try:
             from bill_printer import print_thermal
@@ -350,6 +405,15 @@ class BillHistoryScreen(ctk.CTkFrame):
                                    f"Only Active bills can be voided.\n"
                                    f"This bill is '{bill['status']}'.",
                                    parent=self.winfo_toplevel())
+            return
+
+        if self.db.bill_has_returns(bill_id):
+            messagebox.showwarning(
+                "Cannot Void",
+                "This bill already has one or more returns recorded against it.\n"
+                "Voiding it would double-restore stock and double-refund the customer.\n\n"
+                "Reverse or reconcile the returns instead of voiding.",
+                parent=self.winfo_toplevel())
             return
 
         reason = simpledialog.askstring(

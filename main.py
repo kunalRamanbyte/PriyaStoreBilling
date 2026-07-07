@@ -377,6 +377,11 @@ class BillingApp(ctk.CTk):
             ("📋", "Activity Log", "activity_log", ["admin"]),
         ]
 
+        # Authoritative screen→roles map, consulted by navigate_to() so that
+        # non-sidebar entry points (dashboard quick actions, resume-draft, etc.)
+        # cannot escalate a role past what the sidebar allows.
+        self._screen_roles = {key: roles for _, _, key, roles in NAV}
+
         # ── App brand block (premium) ────────────────────
         brand = ctk.CTkFrame(sidebar, fg_color="transparent")
         brand.pack(fill="x", padx=18, pady=(12, 6)) # Reduced padding to fit small screens
@@ -478,6 +483,24 @@ class BillingApp(ctk.CTk):
     # Navigation
     # ─────────────────────────────────────────────────────────────
     def navigate_to(self, screen_name: str):
+        # Enforce role-based access on every navigation, not just the sidebar.
+        allowed = getattr(self, "_screen_roles", {}).get(screen_name)
+        if allowed is not None and self.current_role not in allowed:
+            messagebox.showwarning(
+                "Access Denied",
+                "You do not have permission to open this screen.",
+                parent=self)
+            return
+
+        # Let the outgoing screen tear down any floating overlays (e.g. the
+        # billing/GRN search-suggestion Toplevels, which otherwise stay on top).
+        prev = self.screens.get(getattr(self, "current_screen", None))
+        if prev is not None and hasattr(prev, "on_hide"):
+            try:
+                prev.on_hide()
+            except Exception:
+                pass
+
         for name, btn in self.nav_buttons.items():
             is_active = name == screen_name
             btn.configure(

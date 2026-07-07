@@ -795,6 +795,101 @@ T = {
         "শুধু অ্যাক্টিভ বিল রিটার্ন করা যায়। এই বিল '{status}'।",
         "केवल एक्टिव बिल रिटर्न हो सकते हैं। यह बिल '{status}' है।"
     ],
+
+    # ══════════════════════════════════════════════════════════════
+    # Added during code-review remediation
+    # ══════════════════════════════════════════════════════════════
+    "Added":            ["Added",             "অ্যাড হয়েছে",        "ऐड हो गया"],
+    "Deleted":          ["Deleted",           "ডিলিট হয়েছে",       "डिलीट हो गया"],
+    "Invalid":          ["Invalid",           "ভুল",               "गलत"],
+    "Invalid Date":     ["Invalid Date",      "ভুল তারিখ",         "गलत तारीख"],
+    "Cannot Delete":    ["Cannot Delete",     "ডিলিট করা যাবে না",  "डिलीट नहीं हो सकता"],
+    "You cannot deactivate your own account.": [
+        "You cannot deactivate your own account.",
+        "নিজের অ্যাকাউন্ট ডিঅ্যাক্টিভেট করা যায় না।",
+        "आप अपना खुद का अकाउंट डिएक्टिवेट नहीं कर सकते।"],
+    "A customer with this phone already exists.": [
+        "A customer with this phone already exists.",
+        "এই ফোন নম্বরের কাস্টমার আগে থেকেই আছে।",
+        "इस फोन नंबर का कस्टमर पहले से मौजूद है।"],
+    "Customer updated.": ["Customer updated.", "কাস্টমার আপডেট হয়েছে।", "कस्टमर अपडेट हो गया।"],
+    "Customer added.":   ["Customer added.",   "কাস্টমার অ্যাড হয়েছে।", "कस्टमर ऐड हो गया।"],
+    "This customer has an outstanding balance": [
+        "This customer has an outstanding balance",
+        "এই কাস্টমারের বকেয়া আছে",
+        "इस कस्टमर का बकाया है"],
+    "Settle the balance to zero before deleting.": [
+        "Settle the balance to zero before deleting.",
+        "ডিলিট করার আগে বকেয়া শূন্য করুন।",
+        "डिलीट करने से पहले बकाया शून्य करें।"],
+    "Payment of":       ["Payment of",        "পেমেন্ট",           "पेमेंट"],
+    "Udhaar of":        ["Udhaar of",         "উধার",              "उधार"],
+    "recorded.":        ["recorded.",         "রেকর্ড হয়েছে।",      "रिकॉर्ड हो गया।"],
+    "Enter a valid amount greater than 0.": [
+        "Enter a valid amount greater than 0.",
+        "0-এর বেশি সঠিক অ্যামাউন্ট দিন।",
+        "0 से ज़्यादा सही अमाउंट डालें।"],
+    "Amount exceeds balance": [
+        "Amount exceeds balance", "অ্যামাউন্ট ব্যালেন্সের বেশি", "अमाउंट बैलेंस से ज़्यादा है"],
+    "recorded successfully.": [
+        "recorded successfully.", "সফলভাবে রেকর্ড হয়েছে।", "सफलतापूर्वक रिकॉर्ड हो गया।"],
+    "Payment Recorded": ["Payment Recorded",  "পেমেন্ট রেকর্ড হয়েছে", "पेमेंट रिकॉर्ड हुआ"],
+    "Delete Supplier":  ["Delete Supplier",   "সাপ্লায়ার ডিলিট করো", "सप्लायर डिलीट करो"],
+    "Delete supplier confirm": [
+        "Delete '{name}'?\n\nIf they have purchase records they will be deactivated instead.",
+        "'{name}' ডিলিট করবেন?\n\nপারচেজ রেকর্ড থাকলে ডিঅ্যাক্টিভেট হয়ে যাবে।",
+        "'{name}' डिलीट करें?\n\nअगर परचेज रिकॉर्ड हैं तो डिएक्टिवेट हो जाएगा।"],
+    "Supplier name is required.": [
+        "Supplier name is required.", "সাপ্লায়ারের নাম দরকার।", "सप्लायर का नाम ज़रूरी है।"],
+    "updated.":         ["updated.",          "আপডেট হয়েছে।",       "अपडेट हो गया।"],
+    "added.":           ["added.",            "অ্যাড হয়েছে।",        "ऐड हो गया।"],
+    "Select Supplier":  ["Select Supplier",   "সাপ্লায়ার সিলেক্ট করো", "सप्लायर सिलेक्ट करो"],
+    "Please select a supplier first.": [
+        "Please select a supplier first.",
+        "আগে একটা সাপ্লায়ার সিলেক্ট করুন।",
+        "पहले एक सप्लायर सिलेक्ट करें।"],
+    "No Outstanding Bills": ["No Outstanding Bills", "কোনো বকেয়া বিল নেই", "कोई बकाया बिल नहीं"],
+    "No unpaid invoices found for": [
+        "No unpaid invoices found for",
+        "কোনো অপরিশোধিত ইনভয়েস পাওয়া যায়নি —",
+        "कोई अनपेड इनवॉइस नहीं मिली —"],
+    "Already Inactive": ["Already Inactive",  "আগে থেকেই ইনঅ্যাক্টিভ", "पहले से इनएक्टिव"],
+    "is already inactive.": [
+        "is already inactive.", "আগে থেকেই ইনঅ্যাক্টিভ।", "पहले से इनएक्टिव है।"],
+    "Enter dates in YYYY-MM-DD format.": [
+        "Enter dates in YYYY-MM-DD format.",
+        "তারিখ YYYY-MM-DD ফরম্যাটে দিন।",
+        "तारीख YYYY-MM-DD फॉर्मेट में डालें।"],
+    "Showing latest":   ["Showing latest",    "সর্বশেষ দেখাচ্ছে",   "नवीनतम दिखा रहे हैं"],
+    "Next Bill Number must be a positive number.": [
+        "Next Bill Number must be a positive number.",
+        "নেক্সট বিল নম্বর একটা পজিটিভ সংখ্যা হতে হবে।",
+        "नेक्स्ट बिल नंबर एक पॉज़िटिव संख्या होनी चाहिए।"],
+    "Next Bill Number must be greater than the highest used": [
+        "Next Bill Number must be greater than the highest used",
+        "নেক্সট বিল নম্বর ব্যবহৃত সর্বোচ্চ নম্বরের চেয়ে বড় হতে হবে",
+        "नेक्स्ट बिल नंबर इस्तेमाल हुए सबसे बड़े नंबर से ज़्यादा होना चाहिए"],
+    "Thermal paper width must be 58mm or 80mm.": [
+        "Thermal paper width must be 58mm or 80mm.",
+        "থার্মাল পেপার উইথ 58mm বা 80mm হতে হবে।",
+        "थर्मल पेपर विड्थ 58mm या 80mm होनी चाहिए।"],
+    "Welcome Back!":    ["Welcome Back!",     "আবার স্বাগতম!",      "फिर से स्वागत है!"],
+    "Please sign in to continue": [
+        "Please sign in to continue", "চালিয়ে যেতে সাইন ইন করুন", "जारी रखने के लिए साइन इन करें"],
+    "Enter your username": ["Enter your username", "আপনার ইউজারনেম দিন", "अपना यूज़रनेम डालें"],
+    "Enter your password": ["Enter your password", "আপনার পাসওয়ার্ড দিন", "अपना पासवर्ड डालें"],
+    "Please enter username and password.": [
+        "Please enter username and password.",
+        "ইউজারনেম আর পাসওয়ার্ড দিন।",
+        "यूज़रनेम और पासवर्ड डालें।"],
+    "Wrong username or password. Try again.": [
+        "Wrong username or password. Try again.",
+        "ভুল ইউজারনেম বা পাসওয়ার্ড। আবার চেষ্টা করুন।",
+        "गलत यूज़रनेम या पासवर्ड। फिर कोशिश करें।"],
+    "Default: admin / admin123": [
+        "Default: admin / admin123",
+        "ডিফল্ট: admin / admin123",
+        "डिफ़ॉल्ट: admin / admin123"],
 }
 
 # ── Internal index map ─────────────────────────────────────────────
