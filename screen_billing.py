@@ -332,6 +332,24 @@ class BillingScreen(ctk.CTkFrame):
         self.lbl_change_adj.grid(row=0, column=1, sticky="e", padx=10, pady=6)
         self.change_row_frame = change_row   # shown/hidden dynamically; do NOT pack yet
 
+        # Round-off row — shown only when the total has a decimal component
+        roundoff_row = ctk.CTkFrame(
+            panel,
+            fg_color=COLORS.get("bg_summary_card", "#FFFFFF"),
+            corner_radius=12,
+            border_width=1,
+            border_color=COLORS.get("border_summary_card", "#E9D5FF")
+        )
+        roundoff_row.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(roundoff_row, text=t("Round Off :", self.app.current_lang), font=_font_lbl,
+                     text_color=COLORS["text_muted"], anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
+        self.lbl_roundoff = ctk.CTkLabel(
+            roundoff_row, text="₹ 0.00", font=_font_val,
+            text_color="#6B7280", anchor="e"
+        )
+        self.lbl_roundoff.grid(row=0, column=1, sticky="e", padx=10, pady=6)
+        self.roundoff_row_frame = roundoff_row   # shown/hidden dynamically; do NOT pack yet
+
         self._totals_divider = ctk.CTkFrame(panel, fg_color=COLORS.get("border_summary_card", "#E9D5FF"), height=2)
         self._totals_divider.pack(fill="x", padx=10, pady=4)
 
@@ -342,7 +360,7 @@ class BillingScreen(ctk.CTkFrame):
                      font=("Segoe UI", 13, "bold"),
                      text_color="white").grid(row=0, column=0, padx=10, pady=8, sticky="w")
         self.lbl_grand_total = ctk.CTkLabel(
-            gt_frame, text="₹  0.00",
+            gt_frame, text="₹  0",
             font=_font_total, text_color="white", anchor="e"
         )
         self.lbl_grand_total.grid(row=0, column=1, padx=10, pady=8, sticky="e")
@@ -1452,7 +1470,11 @@ class BillingScreen(ctk.CTkFrame):
         bill_total  = max(0, round(subtotal - discount, 2))
         udhaar      = self._pending_udhaar
         change_adj  = min(self._change_adjusted, bill_total)
-        grand_total = round(bill_total + udhaar - change_adj, 2)
+        exact_total = round(bill_total + udhaar - change_adj, 2)
+
+        # Round off to nearest integer (e.g. 152.30→152, 152.60→153)
+        grand_total = round(exact_total)
+        roundoff    = round(grand_total - exact_total, 2)
 
         self.lbl_subtotal.configure(text=f"₹ {subtotal:,.2f}")
         self.lbl_discount.configure(text=f"₹ {discount:,.2f}")
@@ -1471,7 +1493,16 @@ class BillingScreen(ctk.CTkFrame):
         else:
             self.change_row_frame.pack_forget()
 
-        self.lbl_grand_total.configure(text=f"₹  {grand_total:,.2f}")
+        # Show round-off row only when there's a fractional part
+        if roundoff != 0:
+            sign = "+" if roundoff > 0 else "-"
+            self.lbl_roundoff.configure(text=f"{sign} ₹ {abs(roundoff):,.2f}")
+            self.roundoff_row_frame.pack(fill="x", padx=12, pady=3,
+                                         before=self._totals_divider)
+        else:
+            self.roundoff_row_frame.pack_forget()
+
+        self.lbl_grand_total.configure(text=f"₹  {grand_total:,}")
 
         self._calc_change()
 
@@ -1481,8 +1512,8 @@ class BillingScreen(ctk.CTkFrame):
             cash  = float(self.cash_var.get() or 0)
         except ValueError:
             cash = grand = 0
-        change = max(0, round(cash - grand, 2))
-        self.lbl_change.configure(text=f"₹  {change:,.2f}",
+        change = max(0, round(cash - grand))
+        self.lbl_change.configure(text=f"₹  {change:,}",
                                    text_color="white")
         if self._selected_customer_id:
             if cash < grand and cash > 0:
@@ -1510,12 +1541,13 @@ class BillingScreen(ctk.CTkFrame):
         bill_total       = max(0, round(subtotal - discount, 2))
         udhaar_adj       = self._pending_udhaar
         change_adj       = min(self._change_adjusted, bill_total)
-        total_to_collect = round(bill_total + udhaar_adj - change_adj, 2)
+        exact_total      = round(bill_total + udhaar_adj - change_adj, 2)
+        total_to_collect = round(exact_total)       # rounded to nearest ₹
         try:
             amount_paid = float(self.cash_var.get() or 0)
         except ValueError:
             amount_paid = total_to_collect
-        change_due  = max(0, round(amount_paid - total_to_collect, 2))
+        change_due  = max(0, round(amount_paid - total_to_collect))
         mode        = self.payment_mode_var.get()
         customer_name = self.customer_entry.get().strip() or "Walk-in Customer"
         customer_id = (
@@ -1539,7 +1571,7 @@ class BillingScreen(ctk.CTkFrame):
             "customer_name"    : customer_name,
             "subtotal"         : subtotal,
             "discount"         : discount,
-            "grand_total"      : bill_total,         # items total only (no udhaar inflation)
+            "grand_total"      : round(bill_total),  # rounded items total (no udhaar inflation)
             "udhaar_adjustment": udhaar_adj,
             "change_adjustment": change_adj,
             "payment_mode"     : mode,

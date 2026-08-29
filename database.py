@@ -1921,7 +1921,98 @@ class Database:
                 )
             conn.commit()
 
+    # ─── Factory Reset ────────────────────────────────────────
+
+    def factory_reset(self, keep_settings: bool = True):
+        """Wipe ALL transactional and master data from the database.
+
+        Tables deleted (in FK-safe order):
+            sales_return_items, sales_returns,
+            bill_items, bills,
+            supplier_payments, purchase_items, purchase_entries,
+            stock_adjustments,
+            customer_transactions, customers,
+            products,
+            suppliers,
+            categories,
+            activity_log
+
+        Also deletes all non-admin users (cashiers, stock managers).
+        Admin accounts are always preserved.
+        Optionally preserves `settings`.
+        Always resets `next_bill_no` → 1 in settings.
+        Runs VACUUM afterwards to reclaim disk space.
+        """
+        with self.get_conn() as conn:
+            conn.execute("PRAGMA foreign_keys=OFF")
+
+            # --- Transactional tables (deepest children first) ---
+            conn.execute("DELETE FROM sales_return_items")
+            conn.execute("DELETE FROM sales_returns")
+            conn.execute("DELETE FROM bill_items")
+            conn.execute("DELETE FROM bills")
+            conn.execute("DELETE FROM supplier_payments")
+            conn.execute("DELETE FROM purchase_items")
+            conn.execute("DELETE FROM purchase_entries")
+            conn.execute("DELETE FROM stock_adjustments")
+            conn.execute("DELETE FROM customer_transactions")
+            conn.execute("DELETE FROM customers")
+            conn.execute("DELETE FROM products")
+            conn.execute("DELETE FROM suppliers")
+
+            # --- Categories: wipe ---
+            conn.execute("DELETE FROM categories")
+
+            # --- Activity log ---
+            conn.execute("DELETE FROM activity_log")
+
+            # --- Reset AUTOINCREMENT sequences ---
+            for tbl in [
+                "sales_return_items", "sales_returns",
+                "bill_items", "bills",
+                "supplier_payments", "purchase_items", "purchase_entries",
+                "stock_adjustments", "customer_transactions",
+                "customers", "products", "suppliers", "categories",
+                "activity_log",
+            ]:
+                try:
+                    conn.execute(
+                        "DELETE FROM sqlite_sequence WHERE name=?", (tbl,)
+                    )
+                except Exception:
+                    pass  # sqlite_sequence may not exist if table was never inserted into
+
+            # --- Delete all non-admin users (keep only admin accounts) ---
+            conn.execute("DELETE FROM users WHERE role != 'admin'")
+
+            if not keep_settings:
+                conn.execute("DELETE FROM settings")
+            else:
+                # Always reset bill/return counters to 1
+                conn.execute(
+                    "UPDATE settings SET value='1' WHERE key='next_bill_no'"
+                )
+                conn.execute(
+                    "INSERT OR IGNORE INTO settings (key, value) VALUES ('next_bill_no','1')"
+                )
+                conn.execute(
+                    "UPDATE settings SET value='1' WHERE key='next_return_no'"
+                )
+                conn.execute(
+                    "INSERT OR IGNORE INTO settings (key, value) VALUES ('next_return_no','1')"
+                )
+
+            conn.execute("PRAGMA foreign_keys=ON")
+
+        # VACUUM must run outside a transaction
+        raw = sqlite3.connect(self.db_path)
+        try:
+            raw.execute("VACUUM")
+        finally:
+            raw.close()
+
     # ─── P1 Missing Reports ────────────────────────────────────
+
 
     def report_slow_moving(self, days: int = 30):
         """Products with zero sales in the last N days."""

@@ -248,6 +248,50 @@ class SettingsScreen(ctk.CTkFrame):
             height=52, width=240,
             command=self._save,
         ).pack(side="left", padx=4)
+        row += 1
+
+        # ── Danger Zone (admin only) ─────────────────────────────
+        if self.current_user.get("role") == "admin":
+            self._section(body, row, "⚠️  Danger Zone")
+            row += 1
+
+            danger_card = ctk.CTkFrame(
+                body,
+                fg_color="#FFF5F5",
+                corner_radius=16,
+                border_width=2,
+                border_color="#FF4444",
+            )
+            danger_card.grid(row=row, column=0, sticky="ew", pady=4, padx=4)
+            danger_card.grid_columnconfigure(1, weight=1)
+
+            ctk.CTkLabel(
+                danger_card,
+                text="Factory Reset / Format Data",
+                font=FONTS["label_form"],
+                text_color="#CC0000",
+                width=220,
+                anchor="w",
+            ).grid(row=0, column=0, padx=18, pady=(14, 2), sticky="w")
+            ctk.CTkLabel(
+                danger_card,
+                text="Permanently delete ALL bills, products, categories, customers, suppliers,\n"
+                     "stock data and non-admin users. Only admin accounts and settings are kept.",
+                font=FONTS["small"],
+                text_color="#AA2200",
+                anchor="w",
+                justify="left",
+            ).grid(row=1, column=0, columnspan=2, padx=18, pady=(0, 14), sticky="w")
+            ctk.CTkButton(
+                danger_card,
+                text="🗑️  Format Data",
+                font=FONTS["button"],
+                fg_color=COLORS["btn_danger"],
+                hover_color="#AA0000",
+                height=42,
+                width=180,
+                command=self._do_format_data,
+            ).grid(row=0, column=2, padx=18, pady=12)
 
         self._load()
 
@@ -468,6 +512,80 @@ class SettingsScreen(ctk.CTkFrame):
         self.db.set_setting("app_theme", theme_name)
         if hasattr(self.app, "apply_theme"):
             self.app.apply_theme(theme_name)
+
+    # ── Format / Factory Reset ───────────────────────────────
+    def _do_format_data(self):
+        """Two-step confirmation before wiping all data."""
+        # Step 1: warning dialog
+        step1 = messagebox.askyesno(
+            "⚠️ Format All Data?",
+            "This will PERMANENTLY DELETE:\n"
+            "  • All bills and bill items\n"
+            "  • All products and categories\n"
+            "  • All customers and their balances\n"
+            "  • All suppliers and purchases\n"
+            "  • All stock adjustments\n"
+            "  • All non-admin users (cashiers, stock managers)\n"
+            "  • Activity log\n\n"
+            "Only admin accounts and settings will be KEPT.\n"
+            "Bill number will be reset to 1.\n\n"
+            "A safety backup will be created automatically first.\n\n"
+            "Are you absolutely sure you want to continue?",
+            icon="warning",
+            parent=self.winfo_toplevel(),
+        )
+        if not step1:
+            return
+
+        # Step 2: type-to-confirm dialog
+        dialog = ctk.CTkInputDialog(
+            text='Type  CONFIRM  (all caps) to proceed with the factory reset:',
+            title="Confirm Format Data",
+        )
+        typed = dialog.get_input()
+        if not typed or typed.strip().upper() != "CONFIRM":
+            messagebox.showinfo(
+                "Cancelled",
+                "Format cancelled. No data was changed.",
+                parent=self.winfo_toplevel(),
+            )
+            return
+
+        # ── Execute reset ──────────────────────────────────────
+        try:
+            # 1. Safety backup before wiping
+            dst = _run_backup(self.db, label="pre_format")
+
+            # 2. Wipe all data
+            self.db.factory_reset(keep_settings=True)
+
+            # 3. Log (fresh log table, so this will be entry #1)
+            self.db.log_activity(
+                self.current_user["user_id"],
+                "FORMAT_DATA",
+                f"Factory reset performed by {self.current_user['name']}. "
+                f"Pre-format backup: {dst}",
+            )
+
+            messagebox.showinfo(
+                "Format Complete",
+                f"All data has been reset successfully.\n\n"
+                f"Safety backup saved to:\n{dst}\n\n"
+                "Please restart the app for all screens to refresh fully.",
+                parent=self.winfo_toplevel(),
+            )
+
+            # Rebuild settings screen to reflect fresh state
+            if hasattr(self.app, "rebuild_screen"):
+                self.app.rebuild_screen("settings")
+
+        except Exception as exc:
+            messagebox.showerror(
+                "Format Failed",
+                f"An error occurred during the reset:\n{exc}\n\n"
+                "No data has been changed.",
+                parent=self.winfo_toplevel(),
+            )
 
     def on_show(self):
         self._load()
