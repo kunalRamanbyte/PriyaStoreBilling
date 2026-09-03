@@ -8,7 +8,8 @@ import sys as _sys, os as _os
 
 # ─── App Info ───────────────────────────────────────────────
 APP_TITLE   = "Priya Store — Billing System"
-APP_VERSION = "1.0"
+# Keep in step with AppVersion / OutputBaseFilename in PriyaStore_installer.iss
+APP_VERSION = "5.0"
 SHOP_NAME   = "Priya Store"
 
 # ─── DB Path — always absolute & writable ───────────────────
@@ -138,6 +139,24 @@ LIGHT_COLORS = {
         "#E0F7FA",   # Light Teal
         "#FCE4EC",   # Light Pink
     ],
+
+    # ── Activity-log row colors, keyed by action PREFIX (Light) ──
+    # Matched with str.startswith(), first hit wins — so a key must be at or
+    # shorter than the action it catches ("BILL_VOID" catches "BILL_VOIDED").
+    # Only list prefixes some code actually writes via db.log_activity().
+    "LOG_ROW_COLORS": {
+        "LOGIN"                 : ("#E8F5E9", "#1A1A2E"),   # Green
+        "LOGOUT"                : ("#EEEEEE", "#1A1A2E"),   # Grey
+        "BILL_SAVED"            : ("#DBEAFE", "#1A1A2E"),   # Blue
+        "BILL_VOID"             : ("#FFEBEE", "#1A1A2E"),   # Red
+        "RETURN_SAVED"          : ("#FFEDD5", "#1A1A2E"),   # Orange
+        "CUSTOMER_CHANGE_CLEAR" : ("#FCE4EC", "#1A1A2E"),   # Pink — money movement
+        "USER_"                 : ("#F3E5F5", "#1A1A2E"),   # Purple
+        "SETTINGS_SAVED"        : ("#E0F7FA", "#1A1A2E"),   # Teal
+        "PWD_CHANGED"           : ("#FFF3E0", "#1A1A2E"),   # Amber
+        "FORMAT_DATA"           : ("#FFCDD2", "#1A1A2E"),   # Strong red — factory reset
+    },
+    "LOG_ROW_DEFAULT" : ("white", "#1A1A2E"),
 
     # ── Table row alert/tag colors (Light) ───────────────────
     "row_expired"     : "#FFEBEE",
@@ -270,6 +289,23 @@ DARK_COLORS = {
         "#173A3C",   # Muted Teal
         "#3C1D2A",   # Muted Pink
     ],
+
+    # ── Activity-log row colors, keyed by action PREFIX (Dark) ───
+    # Same keys as LIGHT_COLORS["LOG_ROW_COLORS"] — keep the two in step.
+    "LOG_ROW_COLORS": {
+        "LOGIN"                 : ("#143A26", "#F8FAFC"),   # Muted Green
+        "LOGOUT"                : ("#374151", "#F8FAFC"),   # Muted Slate
+        "BILL_SAVED"            : ("#1E293B", "#F8FAFC"),   # Blue-Slate
+        "BILL_VOID"             : ("#5F1E24", "#F8FAFC"),   # Muted Red
+        "RETURN_SAVED"          : ("#4A2410", "#F8FAFC"),   # Orange-Brown
+        "CUSTOMER_CHANGE_CLEAR" : ("#3C1D2A", "#F8FAFC"),   # Muted Pink
+        "USER_"                 : ("#3A1E5C", "#F8FAFC"),   # Muted Purple
+        "SETTINGS_SAVED"        : ("#173A3C", "#F8FAFC"),   # Muted Cyan
+        "PWD_CHANGED"           : ("#3D271A", "#F8FAFC"),   # Muted Orange
+        "FORMAT_DATA"           : ("#7F1D1D", "#F8FAFC"),   # Strong red — factory reset
+    },
+    # Distinct from BILL_SAVED: an unmapped action must not look like a saved bill.
+    "LOG_ROW_DEFAULT" : ("#0F172A", "#F8FAFC"),
 
     # ── Table row alert/tag colors (Dark) ────────────────────
     "row_expired"     : "#5F1E24",

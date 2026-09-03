@@ -31,7 +31,7 @@ except Exception:
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
 
-from config import (COLORS, FONTS, RADII, APP_TITLE, SHOP_NAME,
+from config import (COLORS, FONTS, RADII, APP_TITLE, APP_VERSION, SHOP_NAME,
                     WINDOW_WIDTH, WINDOW_HEIGHT, SIDEBAR_WIDTH, resource_path)
 from database import Database
 from lang import t
@@ -82,7 +82,8 @@ class BillingApp(ctk.CTk):
     # Window setup
     # ─────────────────────────────────────────────────────────────
     def _setup_window(self):
-        self.title(APP_TITLE)
+        # Version in the title bar so a shop can report which build it runs
+        self.title(f"{APP_TITLE}   v{APP_VERSION}")
 
         # ── Responsive fit: adapt to the real screen work area ──
         # Supported range: 1280x720 (floor) up to 3840x2160 / 4K (ceiling),

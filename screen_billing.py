@@ -567,14 +567,37 @@ class BillingScreen(ctk.CTkFrame):
     # ─────────────────────────────────────────────────────────────
     # Keyboard bindings
     # ─────────────────────────────────────────────────────────────
-    def _bind_keys(self):
+    def _root_key_bindings(self):
+        """(sequence, handler) pairs bound on the toplevel while this screen is shown."""
+        return (
+            ("<F2>",        lambda e: self._focus_search()),
+            ("<F8>",        lambda e: self._hold_bill()),
+            ("<F10>",       lambda e: self._save_and_print()),
+            ("<Escape>",    lambda e: self._close_popup_or_clear()),
+            ("<Control-n>", lambda e: self._new_bill_shortcut()),
+            ("<Control-N>", lambda e: self._new_bill_shortcut()),
+        )
+
+    def _bind_root_keys(self):
+        """Arm the accelerators. Called from on_show() — NOT from __init__ —
+        because screens are cached and never destroyed: a binding left on the
+        toplevel keeps firing on every other screen, so F10 would save and
+        print a bill, and Escape would silently clear the cart, while the user
+        is looking at Products or Settings."""
         root = self.winfo_toplevel()
-        root.bind("<F2>",        lambda e: self._focus_search())
-        root.bind("<F8>",        lambda e: self._hold_bill())
-        root.bind("<F10>",       lambda e: self._save_and_print())
-        root.bind("<Escape>",    lambda e: self._close_popup_or_clear())
-        root.bind("<Control-n>", lambda e: self._new_bill_shortcut())
-        root.bind("<Control-N>", lambda e: self._new_bill_shortcut())
+        for seq, handler in self._root_key_bindings():
+            root.bind(seq, handler)
+
+    def _unbind_root_keys(self):
+        """Disarm the accelerators when navigating away. Only this screen binds
+        on the toplevel, so unbinding the sequence outright is safe."""
+        root = self.winfo_toplevel()
+        for seq, _ in self._root_key_bindings():
+            root.unbind(seq)
+
+    def _bind_keys(self):
+        # Widget-level bindings die with the widget, so they belong here.
+        # Toplevel accelerators are armed in on_show() / disarmed in on_hide().
         self.search_entry.bind("<Down>",   lambda e: self._focus_popup())
         self.search_entry.bind("<Return>", self._on_search_enter)
 
@@ -594,13 +617,17 @@ class BillingScreen(ctk.CTkFrame):
         """Called each time we navigate to this screen."""
         if not hasattr(self, "_draft_bill_id"):
             self._draft_bill_id = None
+        self._bind_root_keys()
         self._refresh_bill_number()
         self._focus_search()
 
     def on_hide(self):
         """Called when navigating away — tear down floating search overlays
-        (Toplevels) that would otherwise stay on top of the next screen."""
+        (Toplevels) that would otherwise stay on top of the next screen, and
+        disarm the toplevel accelerators so F8/F10/Esc/Ctrl+N stop firing into
+        this (still-alive, just hidden) screen from elsewhere in the app."""
         self._dismiss_search_overlays()
+        self._unbind_root_keys()
 
     # ─────────────────────────────────────────────────────────────
     # Draft resume (called from Bill History)

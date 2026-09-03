@@ -1,10 +1,9 @@
 import subprocess
 import sys
 import os
-import shutil
 
-# Change to the project directory
-project_dir = r'C:\Users\Admin\Desktop\billing'
+# Project directory = wherever this script lives (never a hardcoded path)
+project_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(project_dir)
 
 print("Starting PyInstaller build using PriyaStore.spec...")
@@ -17,19 +16,35 @@ result = subprocess.run(
     text=True
 )
 
-# Post-build copying of database
+
+def seed_fresh_db(dst_db):
+    """Create a brand-new, empty database at `dst_db`.
+
+    NEVER copy the live billing_data.db here: the installer packages whatever
+    sits in dist/PriyaStore/, so copying it would ship this shop's real bills,
+    customer names and phone numbers, udhaar balances and the users table
+    (password hashes included) inside every Setup .exe we hand out.
+    init_db() creates the schema and seeds the default admin/cashier accounts.
+    """
+    for suffix in ("", "-wal", "-shm"):
+        stale = dst_db + suffix
+        if os.path.exists(stale):
+            os.remove(stale)
+
+    from database import Database
+    db = Database()
+    db.db_path = dst_db          # Database() defaults to the live config.DB_PATH
+    db.init_db()
+
+
+# Post-build database seeding
 if result.returncode == 0:
-    print("PyInstaller build successful! Copying database and setting up directory...")
+    print("PyInstaller build successful! Seeding database and setting up directory...")
     try:
-        # Copy the pre-populated database file next to PriyaStore.exe
-        src_db = os.path.join(project_dir, "billing_data.db")
         dst_db = os.path.join(project_dir, "dist", "PriyaStore", "billing_data.db")
-        if os.path.exists(src_db):
-            shutil.copy2(src_db, dst_db)
-            print(f"Copied {src_db} to {dst_db}")
-        else:
-            print("Warning: billing_data.db not found in root folder to copy.")
-            
+        seed_fresh_db(dst_db)
+        print(f"Seeded a fresh empty database at {dst_db}")
+
         # Create backups directory inside build folder
         backups_dir = os.path.join(project_dir, "dist", "PriyaStore", "backups")
         os.makedirs(backups_dir, exist_ok=True)

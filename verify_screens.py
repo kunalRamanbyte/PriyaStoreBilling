@@ -32,7 +32,10 @@ root = ctk.CTk()
 root.withdraw()          # hidden window — no display needed for widget creation
 setup_ttk_styles()
 db   = Database()
-user = {"user_id": 1, "username": "admin", "role": "admin"}
+# "name" is part of the current_user contract — screens read it (e.g.
+# screen_settings save/factory-reset log lines), so leaving it out turns a
+# real assertion failure into a confusing KeyError.
+user = {"user_id": 1, "username": "admin", "name": "Admin", "role": "admin"}
 
 # Fake app with navigate_to stub
 class FakeApp:
@@ -290,6 +293,40 @@ def test_row_colors_config():
     assert len(COLORS["ROW_COLORS"]) == 6, f"Expected 6 colours, got {len(COLORS['ROW_COLORS'])}"
 
 check("config.py — ROW_COLORS list (6 colours)", test_row_colors_config)
+
+# ── 16. Every treeview uses a REGISTERED style name ───────────────────────────
+def test_tree_styles_registered():
+    """ttk silently falls back to the base Treeview style for an unknown name,
+    so a screen with style="Xyz.Treeview" and no matching STYLE_NAMES entry
+    just renders wrong (grey clam header, default row height) instead of
+    raising. Walk every tree built by the tests above and catch it here."""
+    from tkinter import ttk
+    from styles import STYLE_NAMES
+
+    def walk(widget):
+        yield widget
+        for child in widget.winfo_children():
+            yield from walk(child)
+
+    trees = [w for w in walk(root) if isinstance(w, ttk.Treeview)]
+    assert trees, "No treeviews found — screen construction must run first"
+
+    unknown = set()
+    for tree in trees:
+        style = str(tree.cget("style") or "")
+        if not style:
+            unknown.add("<no style= passed>")
+            continue
+        prefix = style.split(".")[0]
+        if prefix not in STYLE_NAMES:
+            unknown.add(style)
+
+    assert not unknown, (
+        f"Style name(s) not in styles.STYLE_NAMES: {sorted(unknown)} — "
+        f"add them or the table renders unstyled"
+    )
+
+check("styles.py — every treeview style is registered", test_tree_styles_registered)
 
 # ── Print results ─────────────────────────────────────────────────────────────
 root.destroy()

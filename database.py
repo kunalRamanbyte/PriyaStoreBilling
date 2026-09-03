@@ -437,15 +437,10 @@ class Database:
             ).fetchone()
             return int(row[0] or 0)
 
-    def increment_bill_number(self):
-        """Atomically increment the bill counter in a single SQL statement."""
-        with self.get_conn() as conn:
-            conn.execute(
-                """UPDATE settings
-                   SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT)
-                   WHERE key = 'next_bill_no'""",
-            )
-            conn.commit()
+    # NOTE: there is deliberately no increment_bill_number() here. Bumping the
+    # counter in its own transaction after the bill commits lets two tills
+    # claim the same number. _claim_number() below does it inside the bill's
+    # own BEGIN IMMEDIATE transaction instead — keep it that way.
 
     def _claim_number(self, conn, setting_key: str, prefix: str, fallback_sql: str = None) -> str:
         """Claim the next document number inside an active write transaction."""

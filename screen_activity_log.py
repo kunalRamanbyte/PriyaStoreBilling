@@ -22,43 +22,24 @@ import csv
 from config import COLORS, FONTS
 from lang import t
 
-def _row_colors(action: str, mode: str = "light") -> tuple[str, str]:
-    if mode.lower() == "dark":
-        ACTION_COLORS_DARK = {
-            "LOGIN"           : ("#143A26", "#F8FAFC"),      # Muted Dark Green
-            "LOGOUT"          : ("#374151", "#F8FAFC"),      # Muted Slate
-            "BILL_SAVED"      : ("#1E293B", "#F8FAFC"),      # Dark Blue-Slate
-            "BILL_VOIDED"     : ("#5F1E24", "#F8FAFC"),      # Muted Dark Red
-            "RETURN_SAVED"    : ("#4A2410", "#F8FAFC"),      # Muted Dark Orange-Brown
-            "GRN_SAVED"       : ("#1C2035", "#F8FAFC"),      # Muted Indigo
-            "PRODUCT_"        : ("#5C4E15", "#F8FAFC"),      # Muted Gold
-            "USER_"           : ("#3A1E5C", "#F8FAFC"),      # Muted Dark Purple
-            "SETTINGS_SAVED"  : ("#173A3C", "#F8FAFC"),      # Muted Dark Cyan
-            "BACKUP"          : ("#173A3C", "#F8FAFC"),
-            "PWD_CHANGED"     : ("#3D271A", "#F8FAFC"),      # Muted Dark Orange
-        }
-        for prefix, colors in ACTION_COLORS_DARK.items():
-            if action.startswith(prefix):
-                return colors
-        return ("#1E293B", "#F8FAFC")
-    else:
-        ACTION_COLORS_LIGHT = {
-            "LOGIN"           : ("#E8F5E9", "#1A1A2E"),
-            "LOGOUT"          : ("#EEEEEE", "#1A1A2E"),
-            "BILL_SAVED"      : ("#DBEAFE", "#1A1A2E"),
-            "BILL_VOIDED"     : ("#FFEBEE", "#1A1A2E"),
-            "RETURN_SAVED"    : ("#FFEDD5", "#1A1A2E"),
-            "GRN_SAVED"       : ("#E8EAF6", "#1A1A2E"),
-            "PRODUCT_"        : ("#FFF8E1", "#1A1A2E"),
-            "USER_"           : ("#F3E5F5", "#1A1A2E"),
-            "SETTINGS_SAVED"  : ("#E0F7FA", "#1A1A2E"),
-            "BACKUP"          : ("#E0F7FA", "#1A1A2E"),
-            "PWD_CHANGED"     : ("#FFF3E0", "#1A1A2E"),
-        }
-        for prefix, colors in ACTION_COLORS_LIGHT.items():
-            if action.startswith(prefix):
-                return colors
-        return ("white", "#1A1A2E")
+def _row_colors(action: str) -> tuple[str, str]:
+    """Background/foreground for a log row, matched by PREFIX on the action.
+
+    The palette lives in `COLORS["LOG_ROW_COLORS"]` (config.py), which
+    `apply_theme_mode()` swaps between the light and dark tables — so there is
+    one map to edit per theme and no colours hardcoded in this screen.
+
+    Keys are prefixes, not exact strings — the first key that `action`
+    starts with wins. Keep each key at or shorter than the action string it
+    must catch: `database.void_bill()` writes "BILL_VOID", so the key there is
+    "BILL_VOID" (which also catches a longer "BILL_VOIDED" should one ever be
+    written). Lengthening it to "BILL_VOIDED" would stop matching entirely and
+    silently drop voided bills back to the default row colour.
+    """
+    for prefix, colors in COLORS["LOG_ROW_COLORS"].items():
+        if action.startswith(prefix):
+            return colors
+    return COLORS["LOG_ROW_DEFAULT"]
 
 
 class ActivityLogScreen(ctk.CTkFrame):
@@ -214,10 +195,9 @@ class ActivityLogScreen(ctk.CTkFrame):
 
         # Register unique color tags
         seen_tags = set()
-        mode = ctk.get_appearance_mode().lower()
         for r in rows:
             action = str(r.get("action", ""))
-            bg_color, fg_color = _row_colors(action, mode)
+            bg_color, fg_color = _row_colors(action)
             tag    = f"clr_{bg_color.replace('#','')}_{fg_color.replace('#','')}"
             if tag not in seen_tags:
                 self.tree.tag_configure(tag, background=bg_color, foreground=fg_color)

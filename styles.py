@@ -14,6 +14,33 @@ from tkinter import ttk
 from config import COLORS, FONTS
 
 
+# ── Every named style used in the app ────────────────────────
+# Every name a screen passes as style="X.Treeview" MUST appear here.
+# ttk resolves an unregistered name to the base Treeview style without
+# raising, so a missing entry silently loses the 48px rows and the dark
+# header — it looks wrong rather than failing loudly. verify_screens.py
+# walks the built screens and fails on any tree whose style is not listed.
+STYLE_NAMES = [
+    "Dash",        # Dashboard recent bills
+    "Bill",        # Bill History
+    "Prod",        # Products
+    "Inv",         # Inventory
+    "Adj",         # Inventory — stock adjustment history
+    "Sup",         # Suppliers
+    "Cust",        # Customers
+    "Rpt",         # Reports
+    "Purch",       # Purchase/GRN
+    "Pur",         # Purchase/GRN — GRN cart
+    "GRN",         # Purchase/GRN — GRN history
+    "User",        # Users
+    "Log",         # Activity Log
+    "Cat",         # Categories
+    "Exp",         # Expiry alert panel (dashboard)
+    "Cart",        # POS Cart
+    "Led",         # Customer Ledger
+]
+
+
 def setup_ttk_styles(mode="light"):
     """Register every Treeview and Scrollbar style used across the app."""
     s = ttk.Style()
@@ -44,24 +71,7 @@ def setup_ttk_styles(mode="light"):
         foreground=[("selected", COLORS["text_dark"])],
     )
 
-    # ── Register every named style used in the app ────────────
-    STYLE_NAMES = [
-        "Dash",        # Dashboard recent bills
-        "Bill",        # Bill History
-        "Prod",        # Products
-        "Inv",         # Inventory
-        "Sup",         # Suppliers
-        "Cust",        # Customers
-        "Rpt",         # Reports
-        "Purch",       # Purchase/GRN
-        "User",        # Users
-        "Log",         # Activity Log
-        "Cat",         # Categories
-        "Exp",         # Expiry alert panel (dashboard)
-        "Cart",        # POS Cart
-        "Led",         # Customer Ledger
-    ]
-
+    # ── Register every named style used in the app (see STYLE_NAMES above) ──
     for name in STYLE_NAMES:
         tv  = f"{name}.Treeview"
         hdr = f"{name}.Treeview.Heading"

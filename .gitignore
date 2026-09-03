@@ -11,6 +11,8 @@ build/
 dist/
 *.egg-info/
 installer/*.zip
+installer/*.exe
+output/
 
 # PyInstaller
 # Keep .spec files if they are needed to build the project
