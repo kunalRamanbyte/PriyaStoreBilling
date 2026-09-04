@@ -470,6 +470,19 @@ T = {
                             ["Replace current data with a previous backup file (.db)",
                              "এখনকার ডাটা পাল্টে আগের ব্যাকআপ ফাইল (.db) বসাবে",
                              "अभी का डेटा हटाकर पुरानी बैकअप फ़ाइल (.db) लगाएगा"],
+
+    # Direction B POS
+    "New bill":             ["New bill",                 "নতুন বিল",           "नया बिल"],
+    "New":                  ["New",                      "নতুন",                "नया"],
+    "Cash":                 ["Cash",                     "ক্যাশ",                "कैश"],
+    "UPI":                  ["UPI",                      "ইউপিআই",             "यूपीआई"],
+    "Card":                 ["Card",                     "কার্ড",                "कार्ड"],
+    "Udhaar":               ["Udhaar",                   "ধার",                  "उधार"],
+    "Line discounts":       ["Line discounts",           "আইটেম ডিসকাউন্ট",   "आइटम डिस्काउंट"],
+    "Tap a row to edit quantity · Del removes a line":
+                            ["Tap a row to edit quantity · Del removes a line",
+                             "রোয়ে ট্যাপ করে কোয়ান্টিটি বদলাও · Del দিলে লাইন মুছে যাবে",
+                             "रो पर टैप करके क्वांटिटी बदलें · Del से लाइन हटेगी"],
     "Saved":                ["Saved",                    "সেভ হয়েছে",          "सेव हो गया"],
     "Settings saved successfully!":
         ["Settings saved successfully!",

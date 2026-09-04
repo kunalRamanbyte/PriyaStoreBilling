@@ -8,7 +8,7 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
-from config import COLORS, FONTS, PAYMENT_MODES
+from config import COLORS, FONTS, RADII, METRICS, PAYMENT_MODES
 from ui_utils import place_popup
 from lang import t
 from webcam_scanner import WebcamScanner
@@ -50,121 +50,120 @@ class BillingScreen(ctk.CTkFrame):
         self._build_body()
         self._build_status_bar()
 
+    # -- Direction B primitives ------------------------------
+    def _card(self, parent, **kw):
+        return ctk.CTkFrame(parent, fg_color=COLORS["bg_card"],
+                            corner_radius=RADII["card"], border_width=1,
+                            border_color=COLORS["hairline"], **kw)
+
+    def _pill(self, parent, text, kind="plain", command=None, width=None,
+              height=None, font=None):
+        tints = {
+            "primary": (COLORS["accent_action"], COLORS["btn_primary_h"], COLORS["on_accent"]),
+            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_deep"]),
+            "counts":  (COLORS["accent_counts_tint"], COLORS["accent_counts_tint"], COLORS["accent_counts_fg"]),
+            "money":   (COLORS["accent_money"], COLORS["btn_success_h"], COLORS["on_accent"]),
+            "money_tint": (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money"]),
+            "expiry":  (COLORS["accent_expiry_tint"], COLORS["accent_expiry_tint"], COLORS["accent_expiry_fg"]),
+            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger_tint"], COLORS["accent_danger"]),
+            "plain":   (COLORS["bg_white"], COLORS["bg_main"], COLORS["text_dark"]),
+        }
+        fg, hov, ink = tints.get(kind, tints["plain"])
+        h = height or METRICS["control"]
+        kw = {"width": width} if width else {}
+        return ctk.CTkButton(parent, text=text, font=font or FONTS["button"],
+                             fg_color=fg, hover_color=hov, text_color=ink,
+                             height=h, corner_radius=h // 2, border_width=0,
+                             command=command, **kw)
+
     def _build_top_bar(self):
-        top = ctk.CTkFrame(self, fg_color=COLORS.get("bg_header", "#FDFBFF"), corner_radius=0, height=58)
-        top.grid(row=0, column=0, sticky="ew")
+        """Direction B header: the screen title and the live bill number on the
+        left, the customer controls on the right. The brand and the signed-in
+        user moved to the app sidebar, so neither is repeated here."""
+        L = self.app.current_lang
+        top = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0,
+                           height=72)
+        top.grid(row=0, column=0, sticky="ew", padx=24)
         top.grid_propagate(False)
-        top.grid_columnconfigure(1, weight=1)
         self.top_bar = top
 
-        title_box = ctk.CTkFrame(top, fg_color="transparent")
-        title_box.grid(row=0, column=0, padx=16, pady=8, sticky="w")
-        ctk.CTkLabel(
-            title_box, text="Priya Store",
-            font=("Segoe UI Semibold", 15, "bold"), text_color="#F43F8C"
-        ).pack(anchor="w")
-        L = self.app.current_lang
-        ctk.CTkLabel(
-            title_box, text=t("Bright Billing Dashboard", L),
-            font=("Segoe UI", 11), text_color="#64748B"
-        ).pack(anchor="w")
+        left = ctk.CTkFrame(top, fg_color="transparent")
+        left.pack(side="left", fill="y")
+        ctk.CTkLabel(left, text=t("New bill", L),
+                     font=("Segoe UI Semibold", 24, "bold"),
+                     text_color=COLORS["text_dark"]).pack(side="left", pady=18)
+
+        self.bill_no_label = self._make_chip(
+            left, self.db.next_bill_number(), "action", 30)
+        self.bill_no_label.pack(side="left", padx=(12, 0))
 
         self.clock_label = ctk.CTkLabel(
-            top,
-            text="",
-            font=("Segoe UI", 12),
-            text_color=COLORS.get("text_muted", "#475569"),
-        )
-        self.clock_label.grid(row=0, column=1, padx=8, sticky="e")
+            top, text="", font=FONTS["caption"],
+            text_color=COLORS["text_muted"])
+        self.clock_label.pack(side="left", padx=16)
         self._update_clock()
 
-        _user_name = self.current_user.get("name") or self.current_user.get("username", "User")
-        _user_role = (self.current_user.get("role") or "").title()
-        self.user_badge = ctk.CTkLabel(
-            top,
-            text=f"◉  {_user_name}  •  {_user_role}",
-            font=("Segoe UI", 12, "bold"),
-            text_color="white",
-            fg_color="#A855F7",
-            corner_radius=14,
-            padx=14,
-            pady=7,
-        )
-        self.user_badge.grid(row=0, column=2, padx=16, pady=10, sticky="e")
-
     def _build_body(self):
+        L = self.app.current_lang
         body = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
-        body.grid(row=1, column=0, sticky="nsew", padx=12, pady=8)
+        body.grid(row=1, column=0, sticky="nsew", padx=24, pady=(0, 8))
         body.grid_columnconfigure(0, weight=1)
         body.grid_columnconfigure(1, weight=0)
         body.grid_rowconfigure(2, weight=1)
         self.body_frame = body
 
+        # -- Customer row -------------------------------------
         self.context_frame = ctk.CTkFrame(body, fg_color="transparent")
-        self.context_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        self.context_frame.grid(row=0, column=0, columnspan=2, sticky="ew",
+                                pady=(0, 12))
         self.context_frame.grid_columnconfigure(0, weight=1)
         self.context_left = ctk.CTkFrame(self.context_frame, fg_color="transparent")
         self.context_left.grid(row=0, column=0, sticky="w")
 
-        bill_no = self.db.next_bill_number()
-        self.bill_no_label = self._make_chip(
-            self.context_left, f"Bill: {bill_no}", "#0EA5E9", "white", 44
-        )
-        self.bill_no_label.pack(side="left", padx=(0, 8))
-
         self.customer_entry = ctk.CTkEntry(
             self.context_left,
-            placeholder_text=t("Customer: Search or type customer name...", self.app.current_lang),
-            font=("Segoe UI", 14),
-            width=260,
-            height=42,
+            placeholder_text=t("Customer: Search or type customer name...", L),
+            font=FONTS["label_form"],
+            width=280,
+            height=METRICS["control"],
             border_width=1,
-            border_color=COLORS.get("border_customer_entry", "#99F6E4"),
-            fg_color=COLORS.get("bg_customer_entry", "#F8FFFE"),
+            border_color=COLORS["hairline"],
+            fg_color=COLORS["bg_white"],
             text_color=COLORS["text_dark"],
-            corner_radius=14,
+            corner_radius=RADII["input"],
         )
-        self.customer_entry.pack(side="left", fill="x", expand=False, padx=(0, 8))
+        self.customer_entry.pack(side="left", padx=(0, 10))
         self.customer_entry.bind("<KeyRelease>", self._on_customer_search)
         self.customer_entry.bind("<Down>", lambda e: self._focus_cust_popup())
 
-        ctk.CTkButton(
-            self.context_left,
-            text="+ New",
-            font=("Segoe UI", 11, "bold"),
-            fg_color="#10B981",
-            hover_color="#059669",
-            height=42,
-            width=72,
-            corner_radius=14,
-            command=self._add_new_customer_dialog,
-        ).pack(side="left", padx=(0, 8))
+        self._pill(self.context_left, "\uff0b  " + t("New", L), kind="counts",
+                   width=92, command=self._add_new_customer_dialog
+                   ).pack(side="left", padx=(0, 10))
 
-        # Walk-in indicator — shown when no saved customer is linked
+        # Walk-in indicator - shown when no saved customer is linked
         self.walkin_badge = self._make_chip(
-            self.context_left, "Walk-in", "#94A3B8", "white", 44
-        )
-        self.walkin_badge.pack(side="left", padx=(0, 4))
+            self.context_left, t("Walk-in", L), "neutral", METRICS["control"])
+        self.walkin_badge.pack(side="left")
 
-        # Gridded dynamically in _select_customer; hidden until a credit customer is picked
-        self.udhaar_badge = self._make_chip(
-            self.context_frame, "", "#FF9800", "white", 42
-        )
+        # Gridded dynamically in _select_customer; hidden until a credit
+        # customer is picked
+        self.udhaar_badge = self._make_chip(self.context_frame, "", "expiry", 40)
+        # Hidden until the customer has a change balance
+        self.change_badge = self._make_chip(self.context_frame, "", "money", 40)
 
-        # Gridded dynamically in _select_customer; hidden until customer has change balance
-        self.change_badge = self._make_chip(
-            self.context_frame, "", "#10B981", "white", 42
-        )
-
+        # -- Product search -----------------------------------
+        # The artboard's 56px search bar: a real blue ring, because this is
+        # where every bill starts.
         search_frame = ctk.CTkFrame(
             body,
-            fg_color=COLORS.get("bg_summary_panel", "#FFF8FB"),
-            corner_radius=18,
-            height=62,
-            border_width=1,
-            border_color=COLORS.get("border_summary_panel", "#E9D5FF"),
+            fg_color=COLORS["bg_white"],
+            corner_radius=RADII["pill_lg"],
+            height=METRICS["control_lg"],
+            border_width=2,
+            border_color=COLORS["accent_action"],
         )
-        search_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        search_frame.grid(row=1, column=0, sticky="ew", pady=(0, 12),
+                          padx=(0, 12))
         search_frame.grid_propagate(False)
         search_frame.grid_columnconfigure(0, weight=1)
         self.search_frame = search_frame
@@ -174,38 +173,40 @@ class BillingScreen(ctk.CTkFrame):
         self.search_entry = ctk.CTkEntry(
             search_frame,
             textvariable=self.search_var,
-            placeholder_text=t("Scan barcode or search product…   (F2)", self.app.current_lang),
-            font=("Segoe UI", 15),
+            placeholder_text=t("Scan barcode or search product\u2026   (F2)", L),
+            font=("Segoe UI", 17),
             height=44,
-            border_width=1,
-            border_color=COLORS.get("border_summary_card", "#E9D5FF"),
-            fg_color=COLORS.get("bg_summary_card", "#FFFFFF"),
-            text_color=COLORS.get("text_summary_row", "#1A1A2E"),
-            corner_radius=16,
+            border_width=0,
+            fg_color=COLORS["bg_white"],
+            text_color=COLORS["text_dark"],
+            corner_radius=22,
         )
-        self.search_entry.grid(row=0, column=0, sticky="ew", padx=12, pady=9)
+        self.search_entry.grid(row=0, column=0, sticky="ew", padx=(20, 8), pady=6)
 
+        ctk.CTkLabel(search_frame, text="F2", font=FONTS["caption"],
+                     fg_color=COLORS["accent_action_tint"],
+                     text_color=COLORS["accent_action_deep"],
+                     corner_radius=12, padx=10, pady=4
+                     ).grid(row=0, column=1, padx=(0, 14))
+
+        # Camera scan sits outside the bar as its own round button.
         self.scan_btn = ctk.CTkButton(
-            search_frame,
-            text=t("Scan", self.app.current_lang),
-            font=("Segoe UI", 13, "bold"),
-            fg_color=COLORS.get("btn_primary", "#3B82F6"),
-            hover_color="#2563EB",
-            width=100,
-            height=44,
-            corner_radius=16,
-            command=self._open_webcam_scanner
-        )
-        self.scan_btn.grid(row=0, column=1, padx=(0, 12), pady=9)
-
-        cart_frame = ctk.CTkFrame(
             body,
-            fg_color=COLORS.get("bg_summary_card", "#FFFFFF"),
-            corner_radius=18,
-            border_width=1,
-            border_color=COLORS.get("border_summary_card", "#DDD6FE")
+            text="\U0001F4F7",
+            font=("Segoe UI", 20),
+            fg_color=COLORS["accent_money"],
+            hover_color=COLORS["btn_success_h"],
+            text_color=COLORS["on_accent"],
+            width=METRICS["control_lg"],
+            height=METRICS["control_lg"],
+            corner_radius=RADII["pill_lg"],
+            command=self._open_webcam_scanner,
         )
-        cart_frame.grid(row=2, column=0, sticky="nsew", padx=(0, 10))
+        self.scan_btn.grid(row=1, column=1, sticky="e", pady=(0, 12))
+
+        # -- Cart ---------------------------------------------
+        cart_frame = self._card(body)
+        cart_frame.grid(row=2, column=0, sticky="nsew", padx=(0, 12))
         cart_frame.grid_rowconfigure(0, weight=1)
         cart_frame.grid_columnconfigure(0, weight=1)
         self.cart_frame = cart_frame
@@ -213,7 +214,8 @@ class BillingScreen(ctk.CTkFrame):
         self._build_cart_table(cart_frame)
         self._build_action_buttons(body)
 
-        right_panel = ctk.CTkFrame(body, fg_color="transparent", corner_radius=0, width=290)
+        right_panel = ctk.CTkFrame(body, fg_color="transparent",
+                                   corner_radius=0, width=340)
         right_panel.grid(row=2, column=1, rowspan=2, sticky="nsew")
         right_panel.grid_propagate(False)
         right_panel.grid_rowconfigure(0, weight=1)
@@ -252,258 +254,240 @@ class BillingScreen(ctk.CTkFrame):
         # Cart empty label
         self.cart_empty_label = ctk.CTkLabel(
             parent, text=t("Cart is empty.\nSearch and add products above.", self.app.current_lang),
-            font=("Segoe UI", 16), text_color="#BDBDBD",
+            font=FONTS["body"], text_color=COLORS["text_muted"],
             justify="center"
         )
 
     def _build_totals_panel(self, parent):
-        panel = ctk.CTkFrame(
-            parent,
-            fg_color=COLORS.get("bg_summary_panel", "#FFF4F8"),
-            corner_radius=18,
-            border_width=1,
-            border_color=COLORS.get("border_summary_panel", "#F5D0FE"),
-        )
+        """Direction B right rail: a quiet card of components, then the one
+        loud blue Total panel, then payment."""
+        L = self.app.current_lang
+        panel = ctk.CTkFrame(parent, fg_color="transparent")
         panel.grid(row=0, column=0, sticky="nsew", pady=(0, 8))
         panel.grid_columnconfigure(0, weight=1)
         self.summary_panel = panel
 
-        _font_lbl = ("Segoe UI", 12)
-        _font_lbl_b = ("Segoe UI", 12, "bold")
-        _font_val = ("Segoe UI", 13, "bold")
-        _font_total = ("Segoe UI Semibold", 20, "bold")
-        _font_entry = ("Segoe UI", 12, "bold")
+        def money_row(parent_card, label, attr, ink=None):
+            f = ctk.CTkFrame(parent_card, fg_color="transparent")
+            f.pack(fill="x", padx=20, pady=6)
+            ctk.CTkLabel(f, text=label, font=FONTS["body"],
+                         text_color=COLORS["text_secondary"], anchor="w"
+                         ).pack(side="left")
+            w = ctk.CTkLabel(f, text="\u20b9 0.00", font=FONTS["body"],
+                             text_color=ink or COLORS["text_dark"], anchor="e")
+            w.pack(side="right")
+            setattr(self, attr, w)
 
-        header = ctk.CTkFrame(panel, fg_color="transparent")
-        header.pack(fill="x", padx=12, pady=(10, 2))
-        ctk.CTkLabel(header, text=t("Summary", self.app.current_lang), font=("Segoe UI", 15, "bold"),
-                     text_color="#F43F8C").pack(side="left")
-        ctk.CTkFrame(panel, fg_color=COLORS.get("border_summary_panel", "#F5D0FE"), height=2).pack(fill="x", padx=10)
+        # -- Components card ----------------------------------
+        comp = self._card(panel)
+        comp.pack(fill="x", pady=(0, 10))
+        ctk.CTkFrame(comp, fg_color="transparent", height=6).pack()
+        money_row(comp, t("Subtotal :", L), "lbl_subtotal")
+        money_row(comp, t("Line discounts", L), "lbl_discount",
+                  COLORS["accent_money"])
 
-        def row(lbl, val_attr, color=None):
-            if color is None:
-                color = COLORS.get("text_summary_row", "#1A1A2E")
-            f = ctk.CTkFrame(panel, fg_color=COLORS.get("bg_summary_card", "#FFFFFF"), corner_radius=12, border_width=1,
-                             border_color=COLORS.get("border_summary_card", "#E9D5FF"))
-            f.pack(fill="x", padx=12, pady=3)
-            f.grid_columnconfigure(1, weight=1)
-            ctk.CTkLabel(f, text=lbl, font=_font_lbl, text_color=COLORS["text_muted"],
-                         anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
-            lbl_w = ctk.CTkLabel(f, text="₹ 0.00", font=_font_val, text_color=color, anchor="e")
-            lbl_w.grid(row=0, column=1, sticky="e", padx=10, pady=6)
-            setattr(self, val_attr, lbl_w)
-
-        row(t("Subtotal :", self.app.current_lang), "lbl_subtotal")
-        row(t("Discount (₹) :", self.app.current_lang), "lbl_discount", "#EF4444")
-
-        # Udhaar row — hidden until a customer with pending udhaar is selected
-        udhaar_row = ctk.CTkFrame(
-            panel,
-            fg_color=COLORS.get("bg_summary_udhaar", "#FFF7ED"),
-            corner_radius=12,
-            border_width=1,
-            border_color=COLORS.get("border_summary_udhaar", "#FED7AA")
-        )
-        udhaar_row.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(udhaar_row, text=t("Prev. Udhaar", self.app.current_lang), font=_font_lbl,
-                     text_color=COLORS.get("text_summary_udhaar", "#C2410C"), anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
-        self.lbl_udhaar_adj = ctk.CTkLabel(
-            udhaar_row, text="₹ 0.00", font=_font_val,
-            text_color=COLORS.get("text_summary_udhaar", "#C2410C"), anchor="e"
-        )
-        self.lbl_udhaar_adj.grid(row=0, column=1, sticky="e", padx=10, pady=6)
-        self.udhaar_row_frame = udhaar_row   # shown/hidden dynamically; do NOT pack yet
-
-        # Change Used row — hidden until a customer with change balance is selected and adjusted
-        change_row = ctk.CTkFrame(
-            panel,
-            fg_color=COLORS.get("bg_summary_change", "#F0FDF4"),
-            corner_radius=12,
-            border_width=1,
-            border_color=COLORS.get("border_summary_change", "#BBF7D0")
-        )
-        change_row.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(change_row, text=t("Change Used", self.app.current_lang), font=_font_lbl,
-                     text_color=COLORS.get("text_summary_change", "#15803D"), anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
-        self.lbl_change_adj = ctk.CTkLabel(
-            change_row, text="₹ 0.00", font=_font_val,
-            text_color=COLORS.get("text_summary_change", "#15803D"), anchor="e"
-        )
-        self.lbl_change_adj.grid(row=0, column=1, sticky="e", padx=10, pady=6)
-        self.change_row_frame = change_row   # shown/hidden dynamically; do NOT pack yet
-
-        # Round-off row — shown only when the total has a decimal component
-        roundoff_row = ctk.CTkFrame(
-            panel,
-            fg_color=COLORS.get("bg_summary_card", "#FFFFFF"),
-            corner_radius=12,
-            border_width=1,
-            border_color=COLORS.get("border_summary_card", "#E9D5FF")
-        )
-        roundoff_row.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(roundoff_row, text=t("Round Off :", self.app.current_lang), font=_font_lbl,
-                     text_color=COLORS["text_muted"], anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
-        self.lbl_roundoff = ctk.CTkLabel(
-            roundoff_row, text="₹ 0.00", font=_font_val,
-            text_color="#6B7280", anchor="e"
-        )
-        self.lbl_roundoff.grid(row=0, column=1, sticky="e", padx=10, pady=6)
-        self.roundoff_row_frame = roundoff_row   # shown/hidden dynamically; do NOT pack yet
-
-        self._totals_divider = ctk.CTkFrame(panel, fg_color=COLORS.get("border_summary_card", "#E9D5FF"), height=2)
-        self._totals_divider.pack(fill="x", padx=10, pady=4)
-
-        gt_frame = ctk.CTkFrame(panel, fg_color="#B91CFF", corner_radius=14)
-        gt_frame.pack(fill="x", padx=10, pady=3)
-        gt_frame.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(gt_frame, text=t("TOTAL", self.app.current_lang),
-                     font=("Segoe UI", 13, "bold"),
-                     text_color="white").grid(row=0, column=0, padx=10, pady=8, sticky="w")
-        self.lbl_grand_total = ctk.CTkLabel(
-            gt_frame, text="₹  0",
-            font=_font_total, text_color="white", anchor="e"
-        )
-        self.lbl_grand_total.grid(row=0, column=1, padx=10, pady=8, sticky="e")
-
-        disc_f = ctk.CTkFrame(
-            panel,
-            fg_color=COLORS.get("bg_summary_card", "#FFFFFF"),
-            corner_radius=12,
-            border_width=1,
-            border_color=COLORS.get("border_summary_entry", "#FDE68A")
-        )
-        disc_f.pack(fill="x", padx=12, pady=(6, 3))
-        disc_f.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(disc_f, text=t("Bill Discount (₹):", self.app.current_lang), font=_font_lbl,
-                     text_color=COLORS["text_dark"], anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
+        disc_f = ctk.CTkFrame(comp, fg_color="transparent")
+        disc_f.pack(fill="x", padx=20, pady=(6, 14))
+        ctk.CTkLabel(disc_f, text=t("Bill Discount (\u20b9):", L),
+                     font=FONTS["body"], text_color=COLORS["text_secondary"],
+                     anchor="w").pack(side="left")
         self.discount_var = tk.StringVar(value="0")
         self.discount_var.trace_add("write", lambda *_: self._recalculate())
         self.discount_entry = ctk.CTkEntry(
             disc_f, textvariable=self.discount_var,
-            height=30, width=84, font=_font_entry,
-            border_width=0,
-            fg_color=COLORS.get("fg_summary_entry", "#FEFCE8"),
-            text_color=COLORS.get("text_summary_row", "#1A1A2E"),
-            justify="right"
-        )
-        self.discount_entry.grid(row=0, column=1, sticky="e", padx=(8, 10), pady=6)
+            height=42, width=110, font=FONTS["input"],
+            border_width=0, corner_radius=21,
+            fg_color=COLORS["bg_input"],
+            text_color=COLORS["text_dark"], justify="right")
+        self.discount_entry.pack(side="right")
 
-        pm_f = ctk.CTkFrame(
-            panel,
-            fg_color=COLORS.get("bg_summary_card", "#FFFFFF"),
-            corner_radius=12,
-            border_width=1,
-            border_color=COLORS.get("border_summary_card", "#E9D5FF")
-        )
-        pm_f.pack(fill="x", padx=12, pady=3)
-        pm_f.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(pm_f, text=t("Payment Mode", self.app.current_lang), font=_font_lbl,
-                     text_color=COLORS["text_dark"], anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
+        # -- Adjustment rows (packed before the divider on demand) --
+        def tint_row(bg, ink, label, attr):
+            f = ctk.CTkFrame(panel, fg_color=bg, corner_radius=18)
+            inner = ctk.CTkFrame(f, fg_color="transparent")
+            inner.pack(fill="x", padx=18, pady=12)
+            ctk.CTkLabel(inner, text=label, font=FONTS["label_form"],
+                         text_color=ink, anchor="w").pack(side="left")
+            w = ctk.CTkLabel(inner, text="\u20b9 0.00", font=FONTS["body_bold"],
+                             text_color=ink, anchor="e")
+            w.pack(side="right")
+            setattr(self, attr, w)
+            return f
+
+        self.udhaar_row_frame = tint_row(
+            COLORS["accent_expiry_tint"], COLORS["accent_expiry_fg"],
+            t("Prev. Udhaar", L), "lbl_udhaar_adj")
+        self.change_row_frame = tint_row(
+            COLORS["accent_money_tint"], COLORS["accent_money"],
+            t("Change Used", L), "lbl_change_adj")
+        self.roundoff_row_frame = tint_row(
+            COLORS["bg_input"], COLORS["text_muted"],
+            t("Round Off :", L), "lbl_roundoff")
+
+        # Zero-height anchor: the three rows above pack before it, so they
+        # always land between the components card and the Total panel.
+        self._totals_divider = ctk.CTkFrame(panel, fg_color="transparent",
+                                            height=1)
+        self._totals_divider.pack(fill="x")
+
+        # -- Total ---------------------------------------------
+        gt_frame = ctk.CTkFrame(panel, fg_color=COLORS["accent_action_deep"],
+                                corner_radius=RADII["card"])
+        gt_frame.pack(fill="x", pady=(10, 10))
+        gt_inner = ctk.CTkFrame(gt_frame, fg_color="transparent")
+        gt_inner.pack(fill="x", padx=20, pady=18)
+        ctk.CTkLabel(gt_inner, text=t("TOTAL", L),
+                     font=("Segoe UI Semibold", 15, "bold"),
+                     text_color=COLORS["on_accent_soft"]).pack(side="left")
+        self.lbl_grand_total = ctk.CTkLabel(
+            gt_inner, text="\u20b9 0", font=FONTS["num_xl"],
+            text_color=COLORS["on_accent"], anchor="e")
+        self.lbl_grand_total.pack(side="right")
+
+        # -- Payment -------------------------------------------
+        pay = self._card(panel)
+        pay.pack(fill="x")
+        ctk.CTkFrame(pay, fg_color="transparent", height=6).pack()
+
+        ctk.CTkLabel(pay, text=t("Payment Mode", L), font=FONTS["small"],
+                     text_color=COLORS["text_muted"], anchor="w"
+                     ).pack(fill="x", padx=20, pady=(6, 6))
+
+        seg = ctk.CTkFrame(pay, fg_color=COLORS["bg_input"], corner_radius=22)
+        seg.pack(fill="x", padx=20)
         self.payment_mode_var = tk.StringVar(value="Cash")
-        self.payment_mode_menu = ctk.CTkOptionMenu(
-            pm_f, variable=self.payment_mode_var,
-            values=PAYMENT_MODES,
-            font=_font_lbl, height=30, width=116, corner_radius=10,
-            fg_color=COLORS.get("fg_summary_pm_btn", "#FFFFFF"),
-            button_color=COLORS.get("fg_summary_pm_btn", "#FFFFFF"),
-            button_hover_color=COLORS.get("border_summary_card", "#F3E8FF"),
-            text_color=COLORS.get("text_summary_pm_btn", "#7C3AED"),
-            dropdown_fg_color=COLORS.get("dropdown_fg_summary_pm", "#FFFFFF"),
-            dropdown_text_color=COLORS.get("dropdown_text_summary_pm", "#334155"),
-            command=self._on_payment_mode_change,
-        )
-        self.payment_mode_menu.grid(row=0, column=1, sticky="e", padx=(8, 10), pady=6)
+        self._pm_chips = {}
+        # Short labels for the chips; the stored value stays the full
+        # PAYMENT_MODES string every save path already expects.
+        short = {"Credit (Udhaar)": "Udhaar"}
+        for mode in PAYMENT_MODES:
+            chip = ctk.CTkButton(
+                seg, text=t(short.get(mode, mode), L), font=FONTS["small"],
+                fg_color="transparent", hover_color=COLORS["glass_glow"],
+                text_color=COLORS["text_secondary"], height=38, width=10,
+                corner_radius=19, border_width=0,
+                command=lambda m=mode: self._pick_payment_mode(m),
+            )
+            chip.pack(side="left", fill="x", expand=True, padx=2, pady=4)
+            self._pm_chips[mode] = chip
+        # Draft loading and _clear_cart set the var directly, so repaint from
+        # the variable rather than only from the click.
+        self.payment_mode_var.trace_add("write",
+                                        lambda *_: self._paint_payment_chips())
 
-        self.cash_frame = ctk.CTkFrame(
-            panel,
-            fg_color=COLORS.get("bg_summary_card", "#FFFFFF"),
-            corner_radius=12,
-            border_width=1,
-            border_color=COLORS.get("border_summary_cash", "#A7F3D0")
-        )
-        self.cash_frame.pack(fill="x", padx=12, pady=3)
-        self.cash_frame.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(self.cash_frame, text=t("Cash Received (₹)", self.app.current_lang), font=_font_lbl,
-                     text_color=COLORS["text_dark"], anchor="w").grid(row=0, column=0, sticky="w", padx=10, pady=6)
+        self.cash_frame = ctk.CTkFrame(pay, fg_color="transparent")
+        self.cash_frame.pack(fill="x", padx=20, pady=(14, 0))
+        ctk.CTkLabel(self.cash_frame, text=t("Cash Received (\u20b9)", L),
+                     font=FONTS["body"], text_color=COLORS["text_secondary"],
+                     anchor="w").pack(side="left")
         self.cash_var = tk.StringVar(value="0")
         self.cash_var.trace_add("write", lambda *_: self._calc_change())
         self.cash_entry = ctk.CTkEntry(
             self.cash_frame, textvariable=self.cash_var,
-            height=30, width=84, font=_font_entry,
-            border_width=0,
-            fg_color=COLORS.get("bg_summary_cash", "#ECFDF5"),
-            text_color=COLORS.get("text_summary_cash", "#059669"),
-            justify="right"
-        )
-        self.cash_entry.grid(row=0, column=1, sticky="e", padx=(8, 10), pady=6)
+            height=44, width=130, font=("Segoe UI Semibold", 17, "bold"),
+            border_width=0, corner_radius=22,
+            fg_color=COLORS["accent_money_tint"],
+            text_color=COLORS["accent_money"], justify="right")
+        self.cash_entry.pack(side="right")
 
-        change_f = ctk.CTkFrame(panel, fg_color="#14CBA8", corner_radius=12)
-        change_f.pack(fill="x", padx=10, pady=(5, 8))
-        change_f.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(change_f, text=t("Change Due :", self.app.current_lang), font=_font_lbl_b,
-                     text_color="white", anchor="w").grid(row=0, column=0, padx=10, pady=6, sticky="w")
-        self.lbl_change = ctk.CTkLabel(change_f, text="₹  0.00",
-                                       font=("Segoe UI Semibold", 16, "bold"), text_color="white",
-                                       anchor="e")
-        self.lbl_change.grid(row=0, column=1, padx=10, pady=8, sticky="e")
+        change_f = ctk.CTkFrame(pay, fg_color=COLORS["accent_money_tint"],
+                                corner_radius=18)
+        change_f.pack(fill="x", padx=20, pady=(14, 18))
+        # _on_payment_mode_change re-packs cash_frame when Cash is reselected;
+        # without an anchor pack() would append it after this panel.
+        self._change_panel = change_f
+        self._cash_pack = dict(fill="x", padx=20, pady=(14, 0))
+        ch_inner = ctk.CTkFrame(change_f, fg_color="transparent")
+        ch_inner.pack(fill="x", padx=16, pady=12)
+        ctk.CTkLabel(ch_inner, text=t("Change Due :", L),
+                     font=FONTS["body_bold"],
+                     text_color=COLORS["accent_money"]).pack(side="left")
+        self.lbl_change = ctk.CTkLabel(
+            ch_inner, text="\u20b9 0.00",
+            font=("Segoe UI Semibold", 24, "bold"),
+            text_color=COLORS["accent_money"], anchor="e")
+        self.lbl_change.pack(side="right")
 
+        self._paint_payment_chips()
+
+    def _pick_payment_mode(self, mode):
+        self.payment_mode_var.set(mode)     # trace repaints the chips
+        self._on_payment_mode_change(mode)
+
+    def _paint_payment_chips(self):
+        current = self.payment_mode_var.get()
+        for mode, chip in self._pm_chips.items():
+            on = mode == current
+            chip.configure(
+                fg_color=COLORS["accent_action"] if on else "transparent",
+                text_color=(COLORS["on_accent"] if on
+                            else COLORS["text_secondary"]),
+                hover_color=(COLORS["accent_action"] if on
+                             else COLORS["glass_glow"]),
+                font=FONTS["small_bold"] if on else FONTS["small"],
+            )
 
     def _build_action_buttons(self, parent):
         btn_panel = ctk.CTkFrame(parent, fg_color="transparent")
-        btn_panel.grid(row=3, column=0, sticky="ew", padx=(0, 10), pady=(10, 0))
+        btn_panel.grid(row=3, column=0, sticky="ew", padx=(0, 12), pady=(12, 0))
         self.action_panel = btn_panel
 
         L = self.app.current_lang
-        btns = [
-            (t("F10 Print & Save", L), "#10B981", "#059669", self._save_and_print),
-            (t("F8 Hold Bill", L), "#F59E0B", "#D97706", self._hold_bill),
-            (t("ESC Clear Cart", L), "#F43F5E", "#E11D48", self._clear_cart),
+        # Print & save is the commit action, so it takes money-in teal; hold
+        # is amber (paused, not done); clear is destructive.
+        specs = [
+            (t("F10 Print & Save", L), "money",  self._save_and_print),
+            (t("F8 Hold Bill", L),     "expiry", self._hold_bill),
+            (t("ESC Clear Cart", L),   "danger", self._clear_cart),
         ]
         self.action_buttons = []
-        for text, fg, hov, cmd in btns:
-            btn = ctk.CTkButton(
-                btn_panel, text=text,
-                font=("Segoe UI", 13, "bold"),
-                fg_color=fg, hover_color=hov,
-                height=44, corner_radius=14,
-                command=cmd
-            )
-            self.action_buttons.append(btn)
+        for text, kind, cmd in specs:
+            self.action_buttons.append(
+                self._pill(btn_panel, text, kind=kind,
+                           height=METRICS["control_lg"], command=cmd))
 
         self._layout_action_buttons(stacked=False)
 
     def _build_status_bar(self):
-        bar = ctk.CTkFrame(self, fg_color="#7E22CE", corner_radius=0, height=30)
+        """A quiet hairline strip. Direction B has no coloured chrome band,
+        but the shortcut legend is real help for a keyboard-first till."""
+        bar = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0,
+                           height=34)
         bar.grid(row=2, column=0, sticky="ew")
         bar.grid_propagate(False)
+        ctk.CTkFrame(bar, fg_color=COLORS["hairline"], height=1,
+                     corner_radius=0).pack(fill="x", side="top")
 
-        shortcuts = "  |  ".join([f"{k} = {v}" for k, v in {
+        shortcuts = "   \u00b7   ".join([f"{k} {v}" for k, v in {
             "F2": "Search",  "F8": "Hold",
             "F10": "Print & Save",  "ESC": "Clear Cart",
             "Del": "Remove Item",  "Ctrl+N": "New Bill"
         }.items()])
-        ctk.CTkLabel(
-            bar, text=f"Shortcuts:  {shortcuts}",
-            font=("Segoe UI", 11), text_color="#E9D5FF"
-        ).pack(side="left", padx=16)
+        ctk.CTkLabel(bar, text=shortcuts, font=FONTS["caption"],
+                     text_color=COLORS["text_muted"]).pack(side="left", padx=24)
 
         self.status_label = ctk.CTkLabel(
-            bar, text="Ready", font=("Segoe UI", 11, "bold"), text_color="#A7F3D0"
-        )
-        self.status_label.pack(side="right", padx=16)
+            bar, text="Ready", font=FONTS["caption"],
+            text_color=COLORS["accent_money"])
+        self.status_label.pack(side="right", padx=24)
 
-    def _make_chip(self, parent, text, fg_color, text_color, height):
+    def _make_chip(self, parent, text, kind="neutral", height=40):
+        """Direction B chip: a pale tint with the dark ink of the same hue.
+        `kind` names the meaning, never a raw colour."""
+        tints = {
+            "action":  (COLORS["accent_action_tint"], COLORS["accent_action_deep"]),
+            "counts":  (COLORS["accent_counts_tint"], COLORS["accent_counts_fg"]),
+            "money":   (COLORS["accent_money_tint"], COLORS["accent_money"]),
+            "expiry":  (COLORS["accent_expiry_tint"], COLORS["accent_expiry_fg"]),
+            "stock":   (COLORS["accent_stock_tint"], COLORS["accent_stock_fg"]),
+            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger"]),
+            "neutral": (COLORS["bg_input"], COLORS["text_secondary"]),
+        }
+        bg, ink = tints.get(kind, tints["neutral"])
         return ctk.CTkLabel(
-            parent,
-            text=text,
-            font=("Segoe UI", 12, "bold"),
-            text_color=text_color,
-            fg_color=fg_color,
-            corner_radius=14,
-            height=height,
-            padx=14,
-            pady=6,
-        )
+            parent, text=text, font=FONTS["small_bold"],
+            text_color=ink, fg_color=bg,
+            corner_radius=height // 2, height=height, padx=14, pady=6)
 
     def _on_resize(self, _event=None):
         # Debounce: a resize drag fires <Configure> continuously; coalesce into
@@ -537,14 +521,14 @@ class BillingScreen(ctk.CTkFrame):
             self.cart_frame.grid_configure(row=2, column=0, columnspan=1, padx=(0, 10), pady=(0, 0))
             self.right_panel.grid_configure(row=2, column=1, columnspan=1, rowspan=2, sticky="nsew", pady=(0, 0))
             self.action_panel.grid_configure(row=3, column=0, columnspan=1, padx=(0, 10), pady=(10, 0))
-            self.right_panel.configure(width=290)
+            self.right_panel.configure(width=340)
 
         if width < 980:
             self.context_left.grid_configure(row=0, column=0, sticky="ew")
-            self.customer_entry.configure(width=220)
+            self.customer_entry.configure(width=240)
         else:
             self.context_left.grid_configure(row=0, column=0, sticky="w")
-            self.customer_entry.configure(width=260)
+            self.customer_entry.configure(width=280)
 
         self._layout_action_buttons(stacked=buttons_stacked)
 
@@ -1232,15 +1216,15 @@ class BillingScreen(ctk.CTkFrame):
             self.cart_tree,
             font=("Segoe UI", 15),
             justify="right",
-            bg="#FEFCE8",
-            fg="#1A1A2E",
+            bg=COLORS["bg_input"],
+            fg=COLORS["text_dark"],
             relief="solid",
             bd=1,
             highlightthickness=2,
-            highlightcolor="#A855F7",
-            highlightbackground="#E9D5FF",
-            selectbackground="#DDD6FE",
-            selectforeground="#1A1A2E",
+            highlightcolor=COLORS["accent_action"],
+            highlightbackground=COLORS["hairline"],
+            selectbackground=COLORS["accent_action_tint"],
+            selectforeground=COLORS["text_dark"],
         )
 
         # Format display value
@@ -1508,14 +1492,14 @@ class BillingScreen(ctk.CTkFrame):
 
         if udhaar > 0:
             self.lbl_udhaar_adj.configure(text=f"₹ {udhaar:,.2f}")
-            self.udhaar_row_frame.pack(fill="x", padx=12, pady=3,
+            self.udhaar_row_frame.pack(fill="x", pady=(0, 10),
                                        before=self._totals_divider)
         else:
             self.udhaar_row_frame.pack_forget()
 
         if change_adj > 0:
             self.lbl_change_adj.configure(text=f"₹ {change_adj:,.2f}")
-            self.change_row_frame.pack(fill="x", padx=12, pady=3,
+            self.change_row_frame.pack(fill="x", pady=(0, 10),
                                        before=self._totals_divider)
         else:
             self.change_row_frame.pack_forget()
@@ -1524,7 +1508,7 @@ class BillingScreen(ctk.CTkFrame):
         if roundoff != 0:
             sign = "+" if roundoff > 0 else "-"
             self.lbl_roundoff.configure(text=f"{sign} ₹ {abs(roundoff):,.2f}")
-            self.roundoff_row_frame.pack(fill="x", padx=12, pady=3,
+            self.roundoff_row_frame.pack(fill="x", pady=(0, 10),
                                          before=self._totals_divider)
         else:
             self.roundoff_row_frame.pack_forget()
@@ -1550,7 +1534,7 @@ class BillingScreen(ctk.CTkFrame):
 
     def _on_payment_mode_change(self, mode):
         if mode == "Cash":
-            self.cash_frame.pack(fill="x", padx=12, pady=3)
+            self.cash_frame.pack(before=self._change_panel, **self._cash_pack)
         else:
             self.cash_frame.pack_forget()
         # Warn immediately if Udhaar chosen with no linked customer
@@ -1821,7 +1805,11 @@ class BillingScreen(ctk.CTkFrame):
         except Exception:
             pass
 
-        BLUE, GREEN, MUTED, DARK = "#1D4ED8", "#16A34A", "#64748B", "#1A1A2E"
+        # Receipt preview colours come from the palette, like everywhere else.
+        BLUE  = COLORS["accent_action_deep"]
+        GREEN = COLORS["accent_money"]
+        MUTED = COLORS["text_muted"]
+        DARK  = COLORS["text_dark"]
 
         dlg = ctk.CTkToplevel(self.winfo_toplevel())
         dlg.title("Bill Receipt")
@@ -1829,7 +1817,7 @@ class BillingScreen(ctk.CTkFrame):
         dlg.grab_set()
         dlg.attributes("-topmost", True)
 
-        scroll = ctk.CTkScrollableFrame(dlg, fg_color="#FFFFFF")
+        scroll = ctk.CTkScrollableFrame(dlg, fg_color=COLORS["bg_card"])
         scroll.pack(fill="both", expand=True, padx=2, pady=2)
 
         def hline(color=BLUE, h=2, pady=(8, 8)):
@@ -1862,7 +1850,7 @@ class BillingScreen(ctk.CTkFrame):
         meta_row(f"Customer: {bill.get('customer_name', 'Walk-in Customer')}",
                  bill.get("payment_mode", "Cash"), rcolor=BLUE)
 
-        hline(color="#E2E8F0", h=1, pady=(10, 4))
+        hline(color=COLORS["hairline"], h=1, pady=(10, 4))
 
         # Items table
         tbl = ctk.CTkFrame(scroll, fg_color="transparent")
@@ -1889,7 +1877,7 @@ class BillingScreen(ctk.CTkFrame):
             ctk.CTkLabel(tbl, text=f"{it['line_total']:.2f}", font=("Segoe UI", 12, "bold"),
                          text_color=DARK, anchor="e").grid(row=r, column=4, sticky="e", padx=(6, 0))
 
-        hline(color="#E2E8F0", h=1, pady=(8, 6))
+        hline(color=COLORS["hairline"], h=1, pady=(8, 6))
 
         def tot_row(lbl, val, color=DARK, bold=False):
             f = ctk.CTkFrame(scroll, fg_color="transparent")
@@ -1901,14 +1889,15 @@ class BillingScreen(ctk.CTkFrame):
 
         tot_row("Subtotal:", f"\u20b9 {bill['subtotal']:,.2f}")
         if bill.get("discount"):
-            tot_row("Discount:", f"\u2212 \u20b9 {bill['discount']:,.2f}", color="#EF4444")
+            tot_row("Discount:", f"\u2212 \u20b9 {bill['discount']:,.2f}", color=COLORS["accent_danger"])
         udhaar_adj = float(bill.get("udhaar_adjustment") or 0)
         if udhaar_adj > 0:
             tot_row("Bill Total:", f"\u20b9 {bill['grand_total']:,.2f}")
-            tot_row(f"\u26a0\ufe0f  Prev. Udhaar Cleared:", f"+ \u20b9 {udhaar_adj:,.2f}", color="#C2410C")
+            tot_row(f"\u26a0\ufe0f  Prev. Udhaar Cleared:", f"+ \u20b9 {udhaar_adj:,.2f}", color=COLORS["accent_stock_fg"])
 
         total_display = round(bill['grand_total'] + udhaar_adj, 2)
-        gt = ctk.CTkFrame(scroll, fg_color="#DBEAFE", corner_radius=10)
+        gt = ctk.CTkFrame(scroll, fg_color=COLORS["accent_action_tint"],
+                          corner_radius=RADII["badge"])
         gt.pack(fill="x", padx=24, pady=(6, 6))
         ctk.CTkLabel(gt, text="TOTAL TO COLLECT:" if udhaar_adj > 0 else "GRAND TOTAL:",
                      font=("Segoe UI", 14, "bold"),
@@ -1959,12 +1948,9 @@ class BillingScreen(ctk.CTkFrame):
 
         btn_row = ctk.CTkFrame(dlg, fg_color="transparent")
         btn_row.pack(fill="x", padx=16, pady=(4, 12))
-        ctk.CTkButton(btn_row, text="\U0001F5A8  Thermal Print", font=("Segoe UI", 13, "bold"),
-                      fg_color="#3B82F6", hover_color="#2563EB", height=46, corner_radius=12,
-                      command=_thermal).pack(side="left", fill="x", expand=True, padx=(0, 6))
-        ctk.CTkButton(btn_row, text="\U0001F4C4  PDF / A4", font=("Segoe UI", 13, "bold"),
-                      fg_color="#A855F7", hover_color="#9333EA", height=46, corner_radius=12,
-                      command=_pdf).pack(side="left", fill="x", expand=True, padx=(0, 6))
-        ctk.CTkButton(btn_row, text="\u2705  Done", font=("Segoe UI", 13, "bold"),
-                      fg_color="#22C55E", hover_color="#16A34A", height=46, corner_radius=12,
-                      command=dlg.destroy).pack(side="left", fill="x", expand=True)
+        self._pill(btn_row, "\U0001F5A8  Thermal Print", kind="primary", height=46,
+                   command=_thermal).pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self._pill(btn_row, "\U0001F4C4  PDF / A4", kind="counts", height=46,
+                   command=_pdf).pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self._pill(btn_row, "\u2705  Done", kind="money", height=46,
+                   command=dlg.destroy).pack(side="left", fill="x", expand=True)
