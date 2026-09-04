@@ -62,6 +62,19 @@ def setup_ttk_styles(mode="light"):
     s = ttk.Style()
     s.theme_use("clam")   # clam allows the most colour overrides
 
+    # Scrollbars resolve to the bare TScrollbar name unless a screen passes
+    # style=, and most do not — so the shared look has to live on the base.
+    _scroll = dict(
+        background=COLORS["hairline"],
+        troughcolor=COLORS["bg_card"],
+        bordercolor=COLORS["bg_card"],
+        lightcolor=COLORS["hairline"],
+        darkcolor=COLORS["hairline"],
+        arrowcolor=COLORS["text_muted"],
+        arrowsize=12,
+        borderwidth=0, relief="flat",
+    )
+
     # ── Shared heading style (all tables) ────────────────────
     # Direction B: the header is part of the card, not a band across it.
     _heading = dict(
@@ -114,14 +127,13 @@ def setup_ttk_styles(mode="light"):
         s.map(tv, **_select)
         s.map(hdr, **_heading_map)
 
-        # Scrollbar — thin, hairline, no arrows competing for attention
-        sb = f"{name}.Vertical.TScrollbar"
-        s.configure(sb,
-            background=COLORS["glass_border"],
-            troughcolor=COLORS["bg_main"],
-            arrowcolor=COLORS["text_muted"],
-            borderwidth=0, relief="flat",
-        )
+        # Scrollbar — thin, hairline, no arrows competing for attention.
+        # Both orientations: there was no horizontal style at all, so every
+        # horizontal bar in the app fell back to clam's grey 3-D default.
+        for orient in ("Vertical", "Horizontal"):
+            sb = f"{name}.{orient}.TScrollbar"
+            s.configure(sb, **_scroll)
+            s.map(sb, background=[("active", COLORS["text_muted"])])
 
     # ── Expiry panel — the one deliberate header override ────
     # Expiry owns amber in Direction B, so the panel sits on the amber
@@ -150,13 +162,10 @@ def setup_ttk_styles(mode="light"):
         relief=[("active", "flat"), ("pressed", "flat")],
     )
 
-    # ── Global Scrollbar (horizontal + vertical fallback) ─────
-    s.configure("TScrollbar",
-        background=COLORS["glass_border"],
-        troughcolor=COLORS["bg_main"],
-        arrowcolor=COLORS["text_muted"],
-        borderwidth=0, relief="flat",
-    )
+    # ── Global Scrollbar (what an unstyled bar actually gets) ─
+    for base in ("TScrollbar", "Vertical.TScrollbar", "Horizontal.TScrollbar"):
+        s.configure(base, **_scroll)
+        s.map(base, background=[("active", COLORS["text_muted"])])
 
     # ── Combobox / OptionMenu base ────────────────────────────
     s.configure("TCombobox",

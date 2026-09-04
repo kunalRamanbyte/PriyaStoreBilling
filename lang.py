@@ -431,6 +431,9 @@ T = {
     # Direction B reports
     "Generate":             ["Generate",                 "তৈরি করো",            "बनाओ"],
     "Export":               ["Export",                    "এক্সপোর্ট",            "एक्सपोर्ट"],
+    "Sell":                 ["Sell",                     "বিক্রয়",              "बिक्री"],
+    "Cost":                 ["Cost",                     "কেনা দাম",            "लागत"],
+    "Search products…":     ["Search products…",         "প্রোডাক্ট সার্চ করো…",   "प्रोडक्ट सर्च करें…"],
     "Excel":                ["Excel",                    "এক্সেল",              "एक्सेल"],
     "CSV":                  ["CSV",                      "সিএসভি",              "सीएसवी"],
     "PDF":                  ["PDF",                      "পিডিএফ",              "पीडीएफ"],

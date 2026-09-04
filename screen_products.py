@@ -7,13 +7,15 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import date
-from config import COLORS, FONTS, UNITS
+from config import COLORS, FONTS, RADII, METRICS, UNITS, GUTTERS
+from responsive import (ResponsiveMixin, fit_columns, widget_scaling,
+                        autohide_scrollbar)
 from ui_utils import place_popup, open_date_picker
 from lang import t
 from webcam_scanner import WebcamScanner
 
 
-class ProductScreen(ctk.CTkFrame):
+class ProductScreen(ResponsiveMixin, ctk.CTkFrame):
     def __init__(self, parent, db, current_user, app):
         super().__init__(parent, fg_color=COLORS["bg_main"], corner_radius=0)
         self.db           = db
@@ -22,80 +24,128 @@ class ProductScreen(ctk.CTkFrame):
         self._editing_id  = None   # None = add mode, int = edit mode
         self._build()
 
+    # -- Direction B primitives ------------------------------
+    def _card(self, parent, **kw):
+        return ctk.CTkFrame(parent, fg_color=COLORS["bg_card"],
+                            corner_radius=RADII["card"], border_width=1,
+                            border_color=COLORS["hairline"], **kw)
+
+    def _pill(self, parent, text, kind="plain", command=None, width=None,
+              height=None):
+        tints = {
+            "primary": (COLORS["accent_action"], COLORS["btn_primary_h"], COLORS["on_accent"]),
+            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_fg"]),
+            "expiry":  (COLORS["accent_expiry_tint"], COLORS["accent_expiry_tint"], COLORS["accent_expiry_fg"]),
+            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger_tint"], COLORS["accent_danger_fg"]),
+            "plain":   (COLORS["bg_main"], COLORS["glass_glow"], COLORS["text_dark"]),
+        }
+        fg, hov, ink = tints.get(kind, tints["plain"])
+        h = height or METRICS["control"]
+        kw = {"width": width} if width else {}
+        return ctk.CTkButton(parent, text=text, font=FONTS["button"],
+                             fg_color=fg, hover_color=hov, text_color=ink,
+                             height=h, corner_radius=h // 2, border_width=0,
+                             command=command, **kw)
+
     def _build(self):
+        L = self.app.current_lang
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
-        # ── Header ───────────────────────────────────────────
-        header = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0, height=70)
-        header.grid(row=0, column=0, sticky="ew")
+        # -- Header band (transparent, like every other screen) --
+        header = ctk.CTkFrame(self, fg_color="transparent",
+                              height=METRICS["header"])
+        self._header = header
+        header.grid(row=0, column=0, sticky="ew", padx=28)
         header.grid_propagate(False)
-        L = self.app.current_lang
-        ctk.CTkLabel(header, text=t("Product Master", L),
-                     font=FONTS["heading"], text_color=COLORS["text_dark"]
-                    ).pack(side="left", padx=25, pady=15)
-        ctk.CTkButton(header, text=t("Add New Product", L),
-                      font=FONTS["button"], fg_color=COLORS["btn_success"],
-                      height=44, corner_radius=10,
-                      command=self._open_add_form
-                     ).pack(side="right", padx=20, pady=13)
 
-        # ── Body ─────────────────────────────────────────────
+        titles = ctk.CTkFrame(header, fg_color="transparent")
+        titles.pack(side="left", fill="y")
+        ctk.CTkLabel(titles, text=t("Product Master", L),
+                     font=("Segoe UI Semibold", 26, "bold"),
+                     text_color=COLORS["text_dark"], anchor="w"
+                     ).pack(anchor="w", pady=(16, 0))
+        self.count_label = ctk.CTkLabel(
+            titles, text="", font=FONTS["small"],
+            text_color=COLORS["text_muted"], anchor="w")
+        self.count_label.pack(anchor="w")
+
+        # Create is an action, so it takes the action blue - not the
+        # money-in teal it used to wear.
+        self._pill(header, "\uff0b  " + t("Add New Product", L),
+                   kind="primary", width=190, height=46,
+                   command=self._open_add_form).pack(side="right", pady=15)
+
+        # -- Body ---------------------------------------------
         body = ctk.CTkFrame(self, fg_color="transparent")
-        body.grid(row=1, column=0, sticky="nsew", padx=12, pady=8)
+        self._body = body
+        body.grid(row=1, column=0, sticky="nsew", padx=28, pady=(0, 12))
         body.grid_rowconfigure(1, weight=1)
         body.grid_columnconfigure(0, weight=1)
 
-        # Filter bar
-        fbar = ctk.CTkFrame(body, fg_color=COLORS["bg_card"], corner_radius=16, height=58)
-        fbar.grid(row=0, column=0, sticky="ew", pady=(0, 8))
-        fbar.grid_propagate(False)
-        fbar.grid_columnconfigure(1, weight=1)
+        # -- Filter row ----------------------------------------
+        fbar = ctk.CTkFrame(body, fg_color="transparent")
+        fbar.grid(row=0, column=0, sticky="ew", pady=(0, 12))
 
-        ctk.CTkLabel(fbar, text="🔍", font=FONTS["body"],
-                     text_color=COLORS["btn_primary"]).grid(row=0, column=0, padx=(16, 4), pady=9)
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self._load_products())
-        ctk.CTkEntry(fbar, textvariable=self.search_var,
-                     placeholder_text=t("Search products by name, code, or brand…", L),
-                     font=FONTS["input"], height=40,
-                     border_color=COLORS["border_focus"], fg_color=COLORS["bg_input"]
-                    ).grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=9)
+        self.search_entry = ctk.CTkEntry(
+            fbar, textvariable=self.search_var,
+            font=FONTS["label_form"], width=320,
+            height=METRICS["control"], corner_radius=RADII["input"],
+            border_width=1, border_color=COLORS["hairline"],
+            fg_color=COLORS["bg_white"], text_color=COLORS["text_dark"])
+        self.search_entry.pack(side="left")
+        # A textvariable suppresses CTkEntry's placeholder, so draw the hint.
+        self._search_hint = ctk.CTkLabel(
+            self.search_entry,
+            text="\U0001F50D  " + t("Search products\u2026", L),
+            font=FONTS["label_form"], text_color=COLORS["text_muted"],
+            fg_color="transparent")
+        self._search_hint.place(x=18, rely=0.5, anchor="w")
+        self._search_hint.bind("<Button-1>",
+                               lambda _e: self.search_entry.focus_set())
 
-        ctk.CTkLabel(fbar, text=t("Category:", L),
-                     font=FONTS["body"], text_color=COLORS["text_dark"]
-                    ).grid(row=0, column=2, padx=(0, 6))
+        # A filter is not the loudest thing on the screen: neutral surface,
+        # not the solid blue that used to outshout every real action here.
         self.cat_filter_var = tk.StringVar(value=t("All Categories", L))
         self.cat_filter_menu = ctk.CTkOptionMenu(
             fbar, variable=self.cat_filter_var,
             values=[t("All Categories", L)],
-            font=FONTS["body"], height=40, width=170,
-            fg_color=COLORS["btn_primary"], button_color=COLORS["btn_primary_h"],
-            command=lambda _: self._load_products()
-        )
-        self.cat_filter_menu.grid(row=0, column=3, padx=(0, 12), pady=9)
+            font=FONTS["label_form"], height=METRICS["control"], width=190,
+            corner_radius=RADII["input"],
+            fg_color=COLORS["bg_white"],
+            button_color=COLORS["bg_white"],
+            button_hover_color=COLORS["glass_glow"],
+            text_color=COLORS["text_dark"],
+            dropdown_fg_color=COLORS["bg_card"],
+            dropdown_text_color=COLORS["text_dark"],
+            dropdown_hover_color=COLORS["accent_action_tint"],
+            command=lambda _: self._load_products())
+        self.cat_filter_menu.pack(side="left", padx=(10, 0))
 
-        # Stock filter
+        # Low stock is a stock-risk filter, so it wears coral - the hue that
+        # already means stock risk. It was destructive red, which taught the
+        # operator that red can mean "filter".
         self.low_stock_var = tk.BooleanVar(value=False)
         ctk.CTkCheckBox(fbar, text=t("Low Stock Only", L),
                         variable=self.low_stock_var,
-                        font=FONTS["small"], text_color=COLORS["text_dark"],
-                        fg_color=COLORS["btn_danger"],
+                        font=FONTS["label_form"],
+                        text_color=COLORS["text_dark"],
+                        fg_color=COLORS["accent_stock"],
+                        hover_color=COLORS["accent_stock_fg"],
+                        checkmark_color=COLORS["on_accent"],
+                        border_color=COLORS["hairline"],
+                        corner_radius=6,
                         command=self._load_products
-                       ).grid(row=0, column=4, padx=(0, 16), pady=9)
+                        ).pack(side="left", padx=(14, 0))
 
-        # Product count
-        self.count_label = ctk.CTkLabel(fbar, text="",
-                                         font=FONTS["small"], text_color=COLORS["text_muted"])
-        self.count_label.grid(row=0, column=5, padx=(0, 16))
-
-        # ── Table ─────────────────────────────────────────────
-        tbl_frame = ctk.CTkFrame(body, fg_color=COLORS["bg_card"], corner_radius=16)
+        # -- Table ---------------------------------------------
+        tbl_frame = self._card(body)
+        self._tbl = tbl_frame
         tbl_frame.grid(row=1, column=0, sticky="nsew")
         tbl_frame.grid_rowconfigure(0, weight=1)
         tbl_frame.grid_columnconfigure(0, weight=1)
-
-        # ttk styles applied globally via styles.py
 
         cols = ("code", "name", "category", "brand", "unit",
                 "sell_price", "buy_price", "stock", "reorder", "expiry", "status")
@@ -103,44 +153,88 @@ class ProductScreen(ctk.CTkFrame):
             tbl_frame, columns=cols, show="headings",
             style="Prod.Treeview", selectmode="browse"
         )
-        heads  = (t("Code", L), t("Product Name", L), t("Category", L), t("Brand", L), t("Unit", L),
-                  t("Sell ₹", L), t("Cost ₹", L), t("Stock", L), t("Reorder", L), t("Expiry Date", L), t("Status", L))
-        widths = (120, 280, 160, 140, 70, 90, 90, 80, 80, 130, 80)
-        stretch_cols = {"name", "category"}
-        for col, head, w in zip(cols, heads, widths):
-            self.tree.heading(col, text=head)
-            anch = "e" if col in ("sell_price","buy_price","stock","reorder") else "w"
-            self.tree.column(col, width=w, anchor=anch, minwidth=50,
-                             stretch=(col in stretch_cols))
+        heads = (t("Code", L), t("Product Name", L), t("Category", L),
+                 t("Brand", L), t("Unit", L), t("Sell", L), t("Cost", L),
+                 t("Stock", L), t("Reorder", L), t("Expiry Date", L),
+                 t("Status", L))
+        # Name and category absorb the surplus; every other column keeps a
+        # floor wide enough for its widest real value.
+        self.PROD_COLSPEC = [
+            ("code", 0, 100), ("name", 3, 180), ("category", 1, 130),
+            ("brand", 1, 110), ("unit", 0, 62), ("sell_price", 0, 82),
+            ("buy_price", 0, 82), ("stock", 0, 74), ("reorder", 0, 82),
+            ("expiry", 0, 104), ("status", 0, 104),
+        ]
+        for (col, _w, m), head in zip(self.PROD_COLSPEC, heads):
+            anch = "e" if col in ("sell_price", "buy_price", "stock", "reorder") else "w"
+            # Heading shares its column's alignment; ttk centres by default,
+            # which left every left-aligned column with a centred label.
+            self.tree.heading(col, text=head, anchor=anch)
+            self.tree.column(col, width=m, anchor=anch, minwidth=m,
+                             stretch=(col in ("name", "category")))
 
-        vsb = ttk.Scrollbar(tbl_frame, orient="vertical",   command=self.tree.yview)
+        vsb = ttk.Scrollbar(tbl_frame, orient="vertical",
+                            command=self.tree.yview, style="Prod.Vertical.TScrollbar")
         hsb = ttk.Scrollbar(tbl_frame, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-        self.tree.grid(row=0, column=0, sticky="nsew", padx=(6,0), pady=(6,0))
-        vsb.grid(row=0, column=1, sticky="ns",  pady=(6,0))
-        hsb.grid(row=1, column=0, sticky="ew",  padx=(6,0))
+        _hgrid = dict(row=1, column=0, sticky="ew", padx=(10, 0), pady=(0, 8))
+        self.tree.configure(
+            yscrollcommand=vsb.set,
+            xscrollcommand=autohide_scrollbar(self.tree, hsb, _hgrid))
+        self.tree.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=(10, 0))
+        vsb.grid(row=0, column=1, sticky="ns", pady=(10, 0), padx=(0, 8))
 
         self.tree.bind("<Double-1>", lambda e: self._open_edit_form())
+        tbl_frame.bind("<Configure>", lambda _e: self._fit_prod_columns(), add="+")
 
-        # ── Action bar ───────────────────────────────────────
-        act = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0, height=58)
+        # -- Footer action bar ---------------------------------
+        # Same pattern as Bill History: destructive packed first so it always
+        # keeps its place, then the safe actions from the left.
+        act = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0,
+                           height=METRICS["header"])
         act.grid(row=2, column=0, sticky="ew")
         act.grid_propagate(False)
-        ctk.CTkButton(act, text=t("✏️  Edit", L),
-                      font=FONTS["button"], fg_color=COLORS["btn_primary"],
-                      height=42, width=100, corner_radius=10,
-                      command=self._open_edit_form
-                     ).pack(side="left", padx=(20, 6), pady=8)
-        ctk.CTkButton(act, text="🚫  " + t("Deactivate", L),
-                      font=FONTS["button"], fg_color=COLORS["btn_warning"],
-                      height=42, width=130, corner_radius=10,
-                      command=self._deactivate_product
-                     ).pack(side="left", padx=(0, 6), pady=8)
-        ctk.CTkButton(act, text=t("🗑️  Delete", L),
-                      font=FONTS["button"], fg_color=COLORS["btn_danger"],
-                      height=42, width=100, corner_radius=10,
-                      command=self._delete_product
-                     ).pack(side="left", padx=(0, 6), pady=8)
+        ctk.CTkFrame(act, fg_color=COLORS["hairline"], height=1,
+                     corner_radius=0).pack(fill="x", side="top")
+
+        self._pill(act, t("\U0001F5D1\uFE0F  Delete", L), kind="danger",
+                   width=118, height=46, command=self._delete_product
+                   ).pack(side="right", padx=(0, 28), pady=15)
+        self._pill(act, t("\u270F\uFE0F  Edit", L), kind="primary", width=108,
+                   height=46, command=self._open_edit_form
+                   ).pack(side="left", padx=(28, 8), pady=15)
+        self._pill(act, "\U0001F6AB  " + t("Deactivate", L), kind="expiry",
+                   width=140, height=46, command=self._deactivate_product
+                   ).pack(side="left", pady=15)
+
+        self.bind_responsive()
+
+    def _fit_prod_columns(self):
+        tree = getattr(self, "tree", None)
+        if tree is None or tree.winfo_width() <= 1:
+            return
+        spec = getattr(self, "_visible_colspec", None) or self.PROD_COLSPEC
+        fit_columns(tree, spec, tree.winfo_width(), widget_scaling(self))
+
+    # Secondary columns by breakpoint. Eleven columns cannot fit ~1000px
+    # without every one of them clipping, and the honest answer is fewer
+    # columns, not narrower ones. A shopkeeper scanning stock needs name,
+    # price and stock; brand and reorder level are reference data.
+    _HIDE = {
+        "compact":  ("brand", "reorder", "buy_price"),
+        "standard": ("brand", "reorder"),
+        "wide":     (),
+    }
+
+    def on_breakpoint(self, bp, logical_w):
+        g = GUTTERS[bp]
+        self._header.grid_configure(padx=g)
+        self._body.grid_configure(padx=g)
+        self.search_entry.configure(width=240 if bp == "compact" else 320)
+        hidden = self._HIDE[bp]
+        self._visible_colspec = [(c, w, m) for c, w, m in self.PROD_COLSPEC
+                                 if c not in hidden]
+        self.tree.configure(displaycolumns=[c for c, _w, _m in self._visible_colspec])
+        self._fit_prod_columns()
 
     def on_show(self):
         self._load_categories_filter()

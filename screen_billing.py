@@ -270,8 +270,8 @@ class BillingScreen(ResponsiveMixin, ctk.CTkFrame):
             ("total", 0, 90), ("action", 0, 40),
         ]
         for (col, _w, m), h in zip(self.CART_COLSPEC, heads):
-            self.cart_tree.heading(col, text=h)
             anch = "e" if col in ("qty", "price", "disc", "total") else "center"
+            self.cart_tree.heading(col, text=h, anchor=anch)
             self.cart_tree.column(col, width=m, anchor=anch, minwidth=m,
                                   stretch=(col == "product"))
 
@@ -505,7 +505,11 @@ class BillingScreen(ResponsiveMixin, ctk.CTkFrame):
         grid, not pack: pack will not shrink a chip below its natural width,
         so the fourth one used to fall off the rail entirely.
         """
-        cols = 2 if bp == "compact" else 4
+        # Measured, not guessed: the "Credit (Udhaar)" chip requires 107px,
+        # so four across needs ~360px of rail. Only the wide rail (380) has
+        # it; everything else goes two-by-two rather than clipping a payment
+        # mode to "Jdhaa".
+        cols = 4 if bp == "wide" else 2
         for c in self._pm_chips.values():
             c.grid_forget()
         for i in range(4):
@@ -1915,13 +1919,13 @@ class BillingScreen(ResponsiveMixin, ctk.CTkFrame):
                      font=("Segoe UI Semibold", 22, "bold"), text_color=BLUE).pack(pady=(16, 0))
         addr = ", ".join([p for p in (settings["shop_address"], settings["shop_city"]) if p])
         if addr:
-            ctk.CTkLabel(scroll, text=addr, font=("Segoe UI", 12), text_color=MUTED).pack()
+            ctk.CTkLabel(scroll, text=addr, font=("Segoe UI", 14), text_color=MUTED).pack()
         if settings["shop_phone"]:
             ctk.CTkLabel(scroll, text=f"\U0001F4DE  {settings['shop_phone']}",
-                         font=("Segoe UI", 12), text_color=MUTED).pack(pady=(2, 0))
+                         font=("Segoe UI", 14), text_color=MUTED).pack(pady=(2, 0))
         if settings["shop_gst"]:
             ctk.CTkLabel(scroll, text=f"GSTIN: {settings['shop_gst']}",
-                         font=("Segoe UI", 11), text_color=MUTED).pack()
+                         font=("Segoe UI", 13), text_color=MUTED).pack()
 
         hline()
 
@@ -1947,21 +1951,21 @@ class BillingScreen(ResponsiveMixin, ctk.CTkFrame):
             tbl.grid_columnconfigure(c, weight=0, minsize=56)
 
         for c, h in enumerate(["Item", "Qty", "Rate", "Disc", "Amt"]):
-            ctk.CTkLabel(tbl, text=h, font=("Segoe UI", 12, "bold"), text_color=MUTED,
+            ctk.CTkLabel(tbl, text=h, font=("Segoe UI", 14, "bold"), text_color=MUTED,
                          anchor="w" if c == 0 else "e").grid(
                 row=0, column=c, sticky="w" if c == 0 else "e",
                 pady=(0, 4), padx=(0, 0) if c == 0 else (6, 0))
 
         for r, it in enumerate(items, start=1):
-            ctk.CTkLabel(tbl, text=it["product_name"], font=("Segoe UI", 12),
+            ctk.CTkLabel(tbl, text=it["product_name"], font=("Segoe UI", 14),
                          text_color=DARK, anchor="w").grid(row=r, column=0, sticky="w", pady=2)
-            ctk.CTkLabel(tbl, text=f"{it['quantity']:g}", font=("Segoe UI", 12),
+            ctk.CTkLabel(tbl, text=f"{it['quantity']:g}", font=("Segoe UI", 14),
                          text_color=DARK, anchor="e").grid(row=r, column=1, sticky="e", padx=(6, 0))
-            ctk.CTkLabel(tbl, text=f"{it['unit_price']:.0f}", font=("Segoe UI", 12),
+            ctk.CTkLabel(tbl, text=f"{it['unit_price']:.0f}", font=("Segoe UI", 14),
                          text_color=DARK, anchor="e").grid(row=r, column=2, sticky="e", padx=(6, 0))
-            ctk.CTkLabel(tbl, text=f"{it.get('discount', 0):.0f}", font=("Segoe UI", 12),
+            ctk.CTkLabel(tbl, text=f"{it.get('discount', 0):.0f}", font=("Segoe UI", 14),
                          text_color=DARK, anchor="e").grid(row=r, column=3, sticky="e", padx=(6, 0))
-            ctk.CTkLabel(tbl, text=f"{it['line_total']:.2f}", font=("Segoe UI", 12, "bold"),
+            ctk.CTkLabel(tbl, text=f"{it['line_total']:.2f}", font=("Segoe UI", 14, "bold"),
                          text_color=DARK, anchor="e").grid(row=r, column=4, sticky="e", padx=(6, 0))
 
         hline(color=COLORS["hairline"], h=1, pady=(8, 6))
@@ -2001,7 +2005,7 @@ class BillingScreen(ResponsiveMixin, ctk.CTkFrame):
         ctk.CTkLabel(scroll, text="Thank you for shopping with us!  \U0001F64F",
                      font=("Segoe UI", 13, "bold"), text_color=GREEN).pack(pady=(0, 2))
         if time_str:
-            ctk.CTkLabel(scroll, text=time_str, font=("Segoe UI", 11),
+            ctk.CTkLabel(scroll, text=time_str, font=("Segoe UI", 13),
                          text_color=MUTED).pack(pady=(0, 12))
 
         def _thermal():

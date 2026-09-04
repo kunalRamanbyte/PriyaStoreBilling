@@ -17,6 +17,8 @@ from lang import t
 
 
 class LoginScreen(ctk.CTkFrame):
+    _SHOW_BTN_W = 72
+
     def __init__(self, parent, on_success_callback):
         super().__init__(parent, fg_color=COLORS["bg_main"], corner_radius=0)
         self.on_success = on_success_callback
@@ -97,7 +99,7 @@ class LoginScreen(ctk.CTkFrame):
         # sitting flush to the card edge.
         brand = ctk.CTkFrame(card, fg_color=COLORS["accent_action_deep"],
                              corner_radius=RADII["pill_lg"], width=376)
-        brand.pack(side="left", fill="y", padx=12, pady=12)
+        brand.pack(side="left", fill="y", padx=10, pady=10)
         brand.pack_propagate(False)
 
         # Top: mark + name
@@ -161,8 +163,10 @@ class LoginScreen(ctk.CTkFrame):
         self.username_entry = self._field(user_row)
         self.username_entry.pack(side="left", fill="x", expand=True)
         # Reserve the Show button's width so both fields end on the same edge.
+        # Matches the Show button's real footprint (its width plus the 6px
+        # gap), so both fields end on the same edge.
         ctk.CTkFrame(user_row, fg_color="transparent",
-                     width=68, height=1).pack(side="left")
+                     width=self._SHOW_BTN_W + 6, height=1).pack(side="left")
 
         # Password + show/hide
         ctk.CTkLabel(inner, text=t("Password", L), font=FONTS["small"],
@@ -175,7 +179,7 @@ class LoginScreen(ctk.CTkFrame):
         self.password_entry.pack(side="left", fill="x", expand=True)
 
         self.show_btn = ctk.CTkButton(
-            pwd_row, text=t("Show", L), width=62, height=52,
+            pwd_row, text=t("Show", L), width=self._SHOW_BTN_W, height=52,
             font=FONTS["button"], fg_color="transparent",
             hover_color=COLORS["accent_action_tint"],
             text_color=COLORS["accent_action"],

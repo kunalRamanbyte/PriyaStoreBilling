@@ -127,7 +127,7 @@ def open_date_picker(parent, var, title="Select Date"):
         month=start.month,
         day=start.day,
         date_pattern="yyyy-mm-dd",
-        font=("Segoe UI", 12),
+        font=("Segoe UI", 14),
         background=btn_prim,
         foreground="white",
         # The weekday header used to borrow bg_sidebar, which was deep
@@ -157,15 +157,15 @@ def open_date_picker(parent, var, title="Select Date"):
         var.set("")
         popup.destroy()
 
-    tk.Button(btn_frame, text="✅  Select", font=("Segoe UI", 11, "bold"),
+    tk.Button(btn_frame, text="✅  Select", font=("Segoe UI", 13, "bold"),
               bg=btn_succ, fg="white", relief="flat", padx=16, pady=6,
               cursor="hand2", command=confirm
              ).pack(side="left", padx=(0, 6))
-    tk.Button(btn_frame, text="🗑  Clear", font=("Segoe UI", 11),
+    tk.Button(btn_frame, text="🗑  Clear", font=("Segoe UI", 13),
               bg=btn_dang, fg="white", relief="flat", padx=16, pady=6,
               cursor="hand2", command=clear
              ).pack(side="left", padx=(0, 6))
-    tk.Button(btn_frame, text="Cancel", font=("Segoe UI", 11),
+    tk.Button(btn_frame, text="Cancel", font=("Segoe UI", 13),
               bg=btn_sec, fg="white", relief="flat", padx=16, pady=6,
               cursor="hand2", command=popup.destroy
              ).pack(side="left")

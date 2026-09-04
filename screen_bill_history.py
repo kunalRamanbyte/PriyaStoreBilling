@@ -218,9 +218,9 @@ class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
             ("grand_total", 0, 100), ("mode", 0, 108), ("status", 0, 80),
         ]
         for (col, _w, m), head in zip(self.HIST_COLSPEC, heads):
-            self.tree.heading(col, text=head,
-                              command=lambda c=col: self._sort_by(c))
             anch = "e" if col in ("subtotal", "discount", "grand_total", "items") else "w"
+            self.tree.heading(col, text=head, anchor=anch,
+                              command=lambda c=col: self._sort_by(c))
             self.tree.column(col, width=m, anchor=anch, minwidth=m,
                              stretch=(col == "customer"))
 
@@ -737,7 +737,7 @@ class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
             refund_lbl.pack(side="left", padx=2)
             rsv = tk.BooleanVar(value=True)
             ctk.CTkCheckBox(rowf, text=f"max {r['returnable']:.2f}", variable=rsv,
-                            font=("Segoe UI", 11), width=90
+                            font=("Segoe UI", 13), width=90
                             ).pack(side="left", padx=(14, 2))
             ret_rows.append({
                 "bill_item_id": r["item_id"],
