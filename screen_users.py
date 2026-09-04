@@ -70,7 +70,7 @@ class UserScreen(ctk.CTkFrame):
             hdr, text=t("Add User", L),
             font=FONTS["button"],
             fg_color=COLORS["btn_success"],
-            hover_color="#28A745",
+            hover_color=COLORS["btn_success_h"],
             height=42, width=140,
             command=self._open_add,
         ).pack(side="right", padx=18)
@@ -302,7 +302,7 @@ class UserScreen(ctk.CTkFrame):
         ctk.CTkButton(body, text=t("Save", L),
                       font=FONTS["button"],
                       fg_color=COLORS["btn_success"],
-                      hover_color="#28A745",
+                      hover_color=COLORS["btn_success_h"],
                       height=48,
                       command=_save).pack(fill="x", pady=(18, 0))
 
@@ -374,7 +374,7 @@ class UserScreen(ctk.CTkFrame):
         ctk.CTkButton(body, text=t("Update Password", L),
                       font=FONTS["button"],
                       fg_color=COLORS["btn_warning"],
-                      hover_color="#CC7700",
+                      hover_color=COLORS["btn_warning_h"],
                       height=48,
                       command=_save).pack(fill="x", pady=(18, 0))
 

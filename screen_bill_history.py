@@ -455,7 +455,7 @@ class BillHistoryScreen(ctk.CTkFrame):
         btn_f.pack(pady=10, fill="x", padx=20)
         ctk.CTkButton(btn_f, text="📄  PDF / A4",
                       font=FONTS["button"], fg_color=COLORS["btn_purple"],
-                      hover_color="#9B45C7",
+                      hover_color=COLORS["btn_purple_h"],
                       height=44, width=150,
                       command=lambda b=bill, i=items: self._pdf_bill(b, i)
                      ).pack(side="left", padx=(0, 8))
@@ -603,7 +603,7 @@ class BillHistoryScreen(ctk.CTkFrame):
         head.pack(fill="x")
         head.pack_propagate(False)
         ctk.CTkLabel(head, text=f"↩  {t('Sales Return', L)} — {bill['bill_number']}",
-                     font=FONTS["subheading"], text_color="#9A3412"
+                     font=FONTS["subheading"], text_color=COLORS["accent_stock_fg"]
                      ).pack(side="left", padx=18, pady=10)
         ctk.CTkLabel(head, text=f"{bill.get('customer_name','Walk-in')}  •  {bill['bill_date'][:16]}",
                      font=FONTS["small"], text_color=COLORS["text_muted"]
@@ -663,7 +663,7 @@ class BillHistoryScreen(ctk.CTkFrame):
             ctk.CTkEntry(rowf, textvariable=qv, width=100, height=34, justify="center",
                          font=FONTS["input"]).pack(side="left", padx=2)
             refund_lbl = ctk.CTkLabel(rowf, text="0.00", font=FONTS["body_bold"],
-                                      text_color="#9A3412", width=100, anchor="e")
+                                      text_color=COLORS["accent_stock_fg"], width=100, anchor="e")
             refund_lbl.pack(side="left", padx=2)
             rsv = tk.BooleanVar(value=True)
             ctk.CTkCheckBox(rowf, text=f"max {r['returnable']:.2f}", variable=rsv,
@@ -704,7 +704,7 @@ class BillHistoryScreen(ctk.CTkFrame):
             ctk.CTkLabel(row1, text="(Walk-in: cash only)", font=FONTS["small"],
                          text_color=COLORS["text_muted"]).pack(side="left", padx=10)
         ctk.CTkLabel(row1, textvariable=total_var, font=FONTS["subheading"],
-                     text_color="#9A3412").pack(side="right", padx=4)
+                     text_color=COLORS["accent_stock_fg"]).pack(side="right", padx=4)
         ctk.CTkLabel(row1, text=f"{t('Total Refund', L)}:", font=FONTS["body"],
                      text_color=COLORS["text_muted"]).pack(side="right")
 
@@ -778,7 +778,7 @@ class BillHistoryScreen(ctk.CTkFrame):
             self._load_bills()
 
         ctk.CTkButton(btns, text=t("Process Return", L), font=FONTS["button"],
-                      fg_color="#C2410C", hover_color="#9A3412", height=44, width=180,
+                      fg_color=COLORS["accent_stock_fg"], hover_color=COLORS["accent_danger"], height=44, width=180,
                       command=_confirm).pack(side="left")
         ctk.CTkButton(btns, text=t("Cancel", L), font=FONTS["button"],
                       fg_color=COLORS["btn_secondary"], height=44, width=120,

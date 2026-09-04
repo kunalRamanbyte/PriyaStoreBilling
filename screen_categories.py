@@ -99,7 +99,7 @@ class CategoryScreen(ctk.CTkFrame):
         ctk.CTkLabel(pick_row, text="Custom:", font=FONTS["small"],
                      text_color=COLORS["text_muted"]).pack(side="left")
         ctk.CTkButton(pick_row, text=t("Pick Colour", L),
-                      font=FONTS["small_bold"], fg_color="#607D8B",
+                      font=FONTS["small_bold"], fg_color=COLORS["btn_secondary"],
                       height=32, width=130, corner_radius=10,
                       command=self._pick_custom_color
                      ).pack(side="left", padx=8)
@@ -186,13 +186,13 @@ class CategoryScreen(ctk.CTkFrame):
         # Edit button
         ctk.CTkButton(card, text="✏️ Edit",
                       font=FONTS["small_bold"], fg_color=COLORS["btn_primary"],
-                      hover_color="#005BBE", width=72, height=34, corner_radius=6,
+                      hover_color=COLORS["btn_primary_h"], width=72, height=34, corner_radius=6,
                       command=lambda c=cat: self._edit_category(c)
                      ).pack(side="right", padx=(0, 8))
 
         ctk.CTkButton(card, text="🗑️",
                       font=FONTS["small_bold"], fg_color=COLORS["btn_danger"],
-                      hover_color="#CC2200", width=42, height=34, corner_radius=6,
+                      hover_color=COLORS["btn_danger_h"], width=42, height=34, corner_radius=6,
                       command=lambda c=cat: self._delete_category(c)
                      ).pack(side="right", padx=(0, 4))
 

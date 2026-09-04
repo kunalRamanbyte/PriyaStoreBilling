@@ -83,7 +83,7 @@ class ActivityLogScreen(ctk.CTkFrame):
             hdr, text=t("Export CSV", L),
             font=FONTS["button"],
             fg_color=COLORS["btn_purple"],
-            hover_color="#9B45C7",
+            hover_color=COLORS["btn_purple_h"],
             height=42, width=150,
             command=self._export_csv,
         ).pack(side="right", padx=18)
@@ -156,7 +156,7 @@ class ActivityLogScreen(ctk.CTkFrame):
         self._btn_prev = ctk.CTkButton(
             pg, text=t("Previous", L), font=FONTS["button"],
             fg_color=COLORS["btn_secondary"],
-            hover_color="#263238",
+            hover_color=COLORS["btn_secondary_h"],
             height=40, width=140,
             command=self._prev_page, state="disabled")
         self._btn_prev.pack(side="left", padx=12, pady=8)
@@ -169,7 +169,7 @@ class ActivityLogScreen(ctk.CTkFrame):
         self._btn_next = ctk.CTkButton(
             pg, text=t("Next", L), font=FONTS["button"],
             fg_color=COLORS["btn_primary"],
-            hover_color="#005BBE",
+            hover_color=COLORS["btn_primary_h"],
             height=40, width=140,
             command=self._next_page, state="disabled")
         self._btn_next.pack(side="left", padx=4)

@@ -58,7 +58,7 @@ class WebcamScanner(ctk.CTkToplevel):
             text=t("Cancel", self.lang), 
             font=FONTS.get("button", ("Segoe UI", 13, "bold")),
             fg_color=COLORS.get("btn_danger", "#F43F5E"), 
-            hover_color="#E11D48", 
+            hover_color=COLORS["btn_danger_h"], 
             command=self.close_scanner,
             height=36,
             corner_radius=10

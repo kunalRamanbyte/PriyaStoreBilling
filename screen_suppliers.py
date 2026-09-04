@@ -101,7 +101,7 @@ class SupplierScreen(ctk.CTkFrame):
                       command=self._record_payment
                      ).pack(side="left", padx=(0, 6), pady=8)
         ctk.CTkButton(act, text="🚫  " + t("Deactivate", L),
-                      font=FONTS["button"], fg_color="#FF8C00",
+                      font=FONTS["button"], fg_color=COLORS["btn_warning"],
                       height=42, width=140, corner_radius=10,
                       command=self._deactivate
                      ).pack(side="left", padx=(0, 6), pady=8)
@@ -315,7 +315,7 @@ class SupplierScreen(ctk.CTkFrame):
             scroll, variable=inv_var,
             values=list(inv_map.keys()),
             font=FONTS["body"], height=44, width=490,
-            fg_color=COLORS["btn_primary"], button_color="#005BBE",
+            fg_color=COLORS["btn_primary"], button_color=COLORS["btn_primary_h"],
             dynamic_resizing=False
         )
         inv_menu.pack(padx=20, pady=(4, 12))

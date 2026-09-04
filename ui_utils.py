@@ -130,8 +130,11 @@ def open_date_picker(parent, var, title="Select Date"):
         font=("Segoe UI", 12),
         background=btn_prim,
         foreground="white",
-        headersbackground=COLORS.get("bg_sidebar", "#1E3A8A"),
-        headersforeground="white",
+        # The weekday header used to borrow bg_sidebar, which was deep
+        # navy. Direction B's sidebar is white, so it needs its own tint
+        # with dark ink rather than white-on-white.
+        headersbackground=COLORS["accent_action_tint"],
+        headersforeground=COLORS["accent_action_deep"],
         selectbackground=btn_succ,
         selectforeground="white",
         normalbackground=bg_pop,

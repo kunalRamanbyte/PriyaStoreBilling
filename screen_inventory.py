@@ -89,7 +89,7 @@ class InventoryScreen(ctk.CTkFrame):
         self.cat_menu = ctk.CTkOptionMenu(
             fbar, variable=self.cat_var, values=[t("All", L)],
             font=FONTS["body"], height=40, width=160,
-            fg_color=COLORS["btn_primary"], button_color="#005BBE",
+            fg_color=COLORS["btn_primary"], button_color=COLORS["btn_primary_h"],
             command=lambda _: self._load_products()
         )
         self.cat_menu.grid(row=0, column=3, padx=(0, 10), pady=9)
@@ -285,7 +285,7 @@ class InventoryScreen(ctk.CTkFrame):
         reason_var = tk.StringVar(value=reasons_display[0])
         ctk.CTkOptionMenu(dlg, variable=reason_var, values=reasons_display,
                           font=FONTS["input"], height=46, fg_color=COLORS["btn_primary"],
-                          button_color="#005BBE"
+                          button_color=COLORS["btn_primary_h"]
                          ).pack(fill="x", padx=24, pady=(4, 0))
 
         err_lbl = ctk.CTkLabel(dlg, text="", font=FONTS["small"],

@@ -8,7 +8,7 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import date
-from config import COLORS, FONTS
+from config import COLORS, FONTS, RADII
 from ui_utils import place_popup
 from lang import t
 
@@ -109,10 +109,10 @@ class CustomerScreen(ctk.CTkFrame):
         for txt, color, cmd in [
             (t("✏️  Edit", L),          COLORS["btn_primary"],   self._open_edit_form),
             (t("📖  View Ledger", L),   COLORS["btn_purple"],    self._open_ledger),
-            (t("🖨️  Print Ledger", L),  "#0277BD",               self._print_ledger),
+            (t("🖨️  Print Ledger", L),  COLORS["btn_primary"],   self._print_ledger),
             (t("💳  Add Payment", L),   COLORS["btn_success"],   self._add_payment),
             (t("📝  Add Udhaar", L),    COLORS["btn_warning"],   self._add_udhaar),
-            (t("💰  Clear Change", L),   "#E65100",               self._clear_change),
+            (t("💰  Clear Change", L),   COLORS["btn_warning"],   self._clear_change),
             (t("🗑️  Delete", L),        COLORS["btn_danger"],    self._delete_customer),
         ]:
             ctk.CTkButton(act, text=txt, font=FONTS["button"],
@@ -291,9 +291,14 @@ class CustomerScreen(ctk.CTkFrame):
         bal_text = t("Current Balance", L) + f": ₹{bal:,.2f}"
         if change_bal > 0:
             bal_text += f"  |  " + t("Change Balance", L) + f": ₹{change_bal:,.2f}"
-        bal_color = "#FFCDD2" if bal > 0 else "#C8E6C9"
-        ctk.CTkLabel(hdr, text=bal_text,
-                     font=FONTS["body_bold"], text_color=bal_color
+        owed = bal > 0
+        ctk.CTkLabel(hdr, text=f"  {bal_text}  ",
+                     font=FONTS["body_bold"],
+                     fg_color=(COLORS["accent_danger_tint"] if owed
+                               else COLORS["accent_money_tint"]),
+                     text_color=(COLORS["accent_danger"] if owed
+                                 else COLORS["accent_money"]),
+                     corner_radius=RADII["badge"], height=32,
                     ).pack(side="right", padx=20)
 
         # Table

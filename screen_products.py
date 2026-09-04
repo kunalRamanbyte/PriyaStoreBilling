@@ -70,7 +70,7 @@ class ProductScreen(ctk.CTkFrame):
             fbar, variable=self.cat_filter_var,
             values=[t("All Categories", L)],
             font=FONTS["body"], height=40, width=170,
-            fg_color=COLORS["btn_primary"], button_color="#005BBE",
+            fg_color=COLORS["btn_primary"], button_color=COLORS["btn_primary_h"],
             command=lambda _: self._load_products()
         )
         self.cat_filter_menu.grid(row=0, column=3, padx=(0, 12), pady=9)
@@ -132,7 +132,7 @@ class ProductScreen(ctk.CTkFrame):
                       command=self._open_edit_form
                      ).pack(side="left", padx=(20, 6), pady=8)
         ctk.CTkButton(act, text="🚫  " + t("Deactivate", L),
-                      font=FONTS["button"], fg_color="#FF8C00",
+                      font=FONTS["button"], fg_color=COLORS["btn_warning"],
                       height=42, width=130, corner_radius=10,
                       command=self._deactivate_product
                      ).pack(side="left", padx=(0, 6), pady=8)
@@ -271,7 +271,7 @@ class ProductScreen(ctk.CTkFrame):
                 scan_btn = ctk.CTkButton(
                     f, text="📷", font=("Segoe UI", 16),
                     width=50, height=40, corner_radius=10,
-                    fg_color=COLORS.get("btn_primary", "#3B82F6"), hover_color="#2563EB",
+                    fg_color=COLORS.get("btn_primary", "#3B82F6"), hover_color=COLORS["btn_primary_h"],
                     command=lambda: WebcamScanner(dlg, self.app, callback=lambda val: var.set(val))
                 )
                 scan_btn.pack(side="left", padx=(6, 0))
@@ -287,7 +287,7 @@ class ProductScreen(ctk.CTkFrame):
             var = tk.StringVar(value=default if default else (values[0] if values else ""))
             ctk.CTkOptionMenu(f, variable=var, values=values,
                               font=FONTS["input"], height=40, width=220,
-                              fg_color=COLORS["btn_primary"], button_color="#005BBE"
+                              fg_color=COLORS["btn_primary"], button_color=COLORS["btn_primary_h"]
                               ).pack(side="left")
             entries[key] = var
 
