@@ -79,7 +79,7 @@ Built installers are gitignored (`installer/*.exe`) — they are ~68 MB each and
 
 ### Entry Point & Navigation
 
-`main.py` → `BillingApp(ctk.CTk)` is the root window. After login it builds a header + sidebar + `content_area` frame. Navigation goes through `navigate_to(screen_name)`, which:
+`main.py` → `BillingApp(ctk.CTk)` is the root window. After login it builds a sidebar + `content_area` frame. There is **no global header band**: the brand lives in the sidebar and every screen draws its own title header. Navigation goes through `navigate_to(screen_name)`, which:
 
 1. **Enforces role access** against `self._screen_roles` (built from the `NAV` list in `_build_sidebar`) and shows an "Access Denied" warning on failure — so non-sidebar entry points (dashboard quick actions, resume-draft) cannot escalate.
 2. Calls `on_hide()` on the outgoing screen if it defines one.
@@ -139,7 +139,7 @@ Passwords are salted **PBKDF2-HMAC-SHA256** (200k iterations), stored as `pbkdf2
 
 ### Row Coloring Pattern (all treeviews)
 
-Every treeview uses a rotating 6-colour pastel palette defined as `COLORS["ROW_COLORS"]` in `config.py`. The pattern is:
+Every treeview uses a rotating 6-entry palette defined as `COLORS["ROW_COLORS"]` in `config.py`. Under Direction B this is a **whisper zebra** (white / `#F7F9FD`, alternating) rather than the old pastels — the design spends colour on *coding*, not on fills behind numbers, so meaning arrives through the override tags instead. The pattern is:
 
 1. After inserting each row, tag it with `f"row{i % 6}"` where `i` is the row index.
 2. After populating the tree, configure each tag's background:
@@ -185,7 +185,7 @@ Actions written elsewhere that are *not* in the map — `PURCHASE_SAVED`, `CUSTO
 
 - **`config.py`** — single source of truth for `COLORS`, `FONTS`, `RADII`, `APP_TITLE`, `APP_VERSION`, `SHOP_NAME`, `WINDOW_WIDTH/HEIGHT`, `SIDEBAR_WIDTH`, `UNITS`, `PAYMENT_MODES`, `CAT_COLORS`, `SHORTCUTS`. Never hardcode colors or font sizes in screen files.
 - **`styles.py`** — `setup_ttk_styles(mode="light")` registers every named `ttk.Treeview` and `TScrollbar` style once at startup, and again on theme switch. Each screen references its pre-registered style by name (e.g. `"Bill.Treeview"`). Never create a new `ttk.Style()` inside a screen. Style prefixes: `Dash`, `Bill`, `Prod`, `Inv`, `Adj`, `Sup`, `Cust`, `Rpt`, `Purch`, `Pur`, `GRN`, `User`, `Log`, `Cat`, `Exp`, `Cart`, `Led`. `Exp` (dashboard expiry panel) and `Cart` (POS) intentionally override the shared header colours.
-  **Any name a screen passes as `style="X.Treeview"` must be in `styles.STYLE_NAMES`** (module-level, so tests can import it). ttk resolves an unknown style name to the base `Treeview` style *without raising*, so the table would silently render with clam's grey header and default row height instead of the 48px/near-black design. `verify_screens.test_tree_styles_registered` walks every built screen and fails on an unregistered name, so this no longer fails silently. (`Purch` and `Cat` are currently registered but referenced by no screen.)
+  **Any name a screen passes as `style="X.Treeview"` must be in `styles.STYLE_NAMES`** (module-level, so tests can import it). ttk resolves an unknown style name to the base `Treeview` style *without raising*, so the table would silently render with clam's grey header and default row height instead of the Direction B header and row height. `verify_screens.test_tree_styles_registered` walks every built screen and fails on an unregistered name, so this no longer fails silently. (`Purch` and `Cat` are currently registered but referenced by no screen.)
 - **`config.resource_path(*parts)`** — use this for any asset path (icons, images) so it works both in source and PyInstaller builds.
 
 ### Role-Based Access
@@ -208,10 +208,34 @@ Restore validates the chosen file with `_is_valid_sqlite()` (header magic + `PRA
 
 ## UI Conventions
 
-- Font sizes: `FONTS["body"]=16`, `FONTS["heading"]=27`. Keep large for 60+ users.
-- Sidebar: deep navy gradient (`COLORS["sidebar_grad_start"]` → `sidebar_grad_end`), drawn with a `tk.Canvas` gradient loop debounced on `<Configure>`. Nav buttons live in a `CTkScrollableFrame` so they never overflow on short screens.
-- Cards: white with `COLORS["glass_border"]` borders — glassmorphism aesthetic.
-- Tables: all use `ttk.Treeview` with 48px row height. Always use the screen-specific named style and the ROW_COLORS tagging pattern described above.
+- **Design system: Direction B** — "soft, rounded, colour with a job", imported from the Claude Design project `Priya Store - Before & After.dc.html`. One vivid blue carries every action; four hues are each locked to a single meaning and never used decoratively: violet counts, teal money-in, amber expiry, coral stock risk, plus a destructive red. Use the `accent_*` tokens, never a raw hex.
+- Every surface is a **solid fill, a hairline border or a corner radius**. No gradient, blur, shadow or translucency — CustomTkinter cannot draw them, so anything of the sort is a bug, not a stylistic choice.
+- **Dark text on tinted surfaces only.** A vivid hue is an icon, a pill or an accent on its own pale tint; body text on a tint takes the dark variant of the same family (`accent_expiry_fg`, `accent_stock_fg`, `accent_counts_fg`). Every foreground clears 4.5:1. `btn_warning` and `btn_purple` are deliberately deepened because existing code puts white text on them.
+- Type: a strict three-step scale — 13px captions, 14–15px labels, 16–17px body **and every figure**. Headings and figures step up from there (`FONTS["heading"]=26`, `subheading`=19, `num_md`=28, `num_xl`=42). Nothing sits between the steps.
+- Geometry comes from `RADII` and `METRICS`: 24px cards, 44px pill controls (radius = half the height), 14px nav items and icon bubbles, 36px on the login card.
+- Sidebar: a **white surface**, 236px, with a rounded brand mark and 44px nav pills. A solid `sidebar_active` fill marks the current screen — there is no gradient and no glow border. The `sidebar_grad_*` tokens survive only so old readers resolve; both ends are the flat surface colour. Nav buttons live in a `CTkScrollableFrame` so they never overflow on short screens.
+- Cards: solid `bg_card` with a 1px `hairline` border and `RADII["card"]` corners.
+- Tables: `ttk.Treeview` with a quiet uppercase 13px header on the card surface (no dark band) and per-table row heights from `styles.ROW_HEIGHTS` — 62 Bill History, 60 POS cart, 58 Reports, 56 elsewhere. `Exp` (dashboard expiry panel) is the **one** deliberate header override, on the amber tint. Always use the screen-specific named style and the ROW_COLORS tagging pattern above.
+- Buttons rank by weight: exactly one solid fill per screen for the primary action; everything else is a tint with dark ink. Most screens keep a local `_pill(parent, text, kind=...)` helper for this.
+
+> **Beware `CTkFrame`'s default 200×200.** An empty frame, or one with
+> `pack_propagate(False)` and no explicit height, holds that size and leaks it
+> into the layout. This caused five separate defects during the Direction B
+> work: 200px-tall settings rows, a 150px gap in the Bill History filter bar,
+> clipped login chips, and KPI cards overflowing 1366. Prefer a `CTkLabel` with
+> `fg_color`+`corner_radius` for a chip, and pass `width=1` when a card should
+> take its share of a row rather than demand 200px.
+
+> **`side="bottom"` does not reserve space.** Pack a footer bar *before* any
+> sibling packed with `expand=True`, or the expanding widget takes everything
+> and the footer never appears. Same within a bar: a `side="right"` button only
+> gets what earlier widgets leave.
+
+> **`CTkEntry` suppresses `placeholder_text` once a `textvariable` is set.** The
+> POS and Bill History search fields both need a variable to drive their filter
+> traces, so each draws its hint as a muted `CTkLabel` placed over the empty
+> field and hidden on the first keystroke — never by writing into the variable,
+> which would fire the filter.
 - Shop name is always "Priya Store" — enforced on every startup via `db.set_setting("shop_name", "Priya Store")`, which is why Settings deliberately has no shop-name field.
 - Billing screen keyboard shortcuts: `F2` search product, `F8` hold bill, `F10` print & save, `Ctrl+N` new bill, `Esc` close popup or clear cart — all bound on the **toplevel**, so they are armed in `on_show()` (`_bind_root_keys`) and disarmed in `on_hide()` (`_unbind_root_keys`). Never bind them in the constructor: screens are cached and never destroyed, so a leftover binding keeps firing on every other screen — F10 would save and print a bill, and Esc would clear the cart, while the user is looking at Products. `Del` (remove item) is bound on `cart_tree` itself and needs no teardown.
 - Responsive window: `_compute_fit()` scales from a 1280×720 floor to a 4K ceiling inside a 16:10–16:9 aspect band. Widget scaling is set once via `ctk.set_widget_scaling()` — never call it again after startup.
