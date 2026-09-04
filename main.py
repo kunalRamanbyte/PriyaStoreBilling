@@ -489,8 +489,16 @@ class BillingApp(ctk.CTk):
             )
             icon = self.nav_icons.get(name)
             if icon is not None:
-                icon.configure(text_color=COLORS["on_accent"] if is_active
-                               else COLORS["sidebar_text"])
+                # The icon's fg_color must move with the pill. CTkLabel
+                # resolves "transparent" against its parent's fill at
+                # CREATION time, and these buttons are created transparent on
+                # the white sidebar — so an active icon kept a stale white
+                # background that covered the glyph entirely.
+                icon.configure(
+                    text_color=COLORS["on_accent"] if is_active
+                    else COLORS["sidebar_text"],
+                    fg_color=COLORS["sidebar_active"] if is_active
+                    else "transparent")
 
         for w in self.content_area.winfo_children():
             w.pack_forget()

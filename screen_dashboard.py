@@ -14,6 +14,7 @@ from config import COLORS, FONTS, RADII, METRICS, GUTTERS
 from responsive import ResponsiveMixin
 from lang import t
 from ui_utils import EmptyState
+from responsive import autohide_scrollbar
 
 
 # Each KPI owns one hue: blue action, violet counts, coral stock risk,
@@ -105,8 +106,13 @@ class DashboardScreen(ResponsiveMixin, ctk.CTkFrame):
         self._update_clock()
 
         # ── Scrollable body ──────────────────────────────────
-        body = ctk.CTkScrollableFrame(self, fg_color=COLORS["bg_main"],
-                                      corner_radius=0)
+        # A plain frame, not a scrollable one. CTkScrollableFrame's inner
+        # frame would not take the canvas width here (971px canvas, 761px
+        # frame), leaving ~200px of dead canvas on the right. The dashboard
+        # has nothing to scroll anyway: the KPI row wraps, and the recent
+        # bills table carries its own scrollbar.
+        body = ctk.CTkFrame(self, fg_color=COLORS["bg_main"],
+                            corner_radius=0)
         self._body = body
         body.pack(fill="both", expand=True, padx=28, pady=(0, 20))
 
@@ -255,7 +261,9 @@ class DashboardScreen(ResponsiveMixin, ctk.CTkFrame):
 
         scroll = ttk.Scrollbar(self.bills_card, orient="vertical",
                                command=self.recent_tree.yview)
-        self.recent_tree.configure(yscrollcommand=scroll.set)
+        _vgrid = dict(side="right", fill="y", padx=(0, 8), pady=(0, 10))
+        self.recent_tree.configure(
+            yscrollcommand=autohide_scrollbar(self.recent_tree, scroll, _vgrid))
         self.recent_tree.pack(side="left", fill="both", expand=True,
                               padx=(10, 0), pady=(0, 10))
         scroll.pack(side="right", fill="y", padx=(0, 8), pady=(0, 10))

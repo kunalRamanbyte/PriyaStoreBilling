@@ -80,8 +80,13 @@ class ResponsiveMixin:
         try:
             self.on_breakpoint(bp, lw)
         except Exception:
-            # A layout callback must never take the till down mid-sale.
-            pass
+            # A layout callback must never take the till down mid-sale, but
+            # swallowing it silently would hide a real layout bug, so it goes
+            # to stderr rather than nowhere.
+            import traceback, sys as _sys
+            print(f"[responsive] {type(self).__name__}.on_breakpoint({bp}) failed:",
+                  file=_sys.stderr)
+            traceback.print_exc()
 
     # Subclasses override.
     def on_breakpoint(self, bp, logical_w):
@@ -127,16 +132,33 @@ def fit_columns(tree, spec, avail_px, scaling=1.0, min_scale=0.62):
                     minwidth=m)
 
 
-def autohide_scrollbar(widget, bar, grid_kw):
+def autohide_scrollbar(widget, bar, layout_kw):
     """Show a scrollbar only when it can actually scroll.
 
-    ttk scrollbars are always visible once gridded, so a table whose columns
-    already fit still carried a dead bar across its bottom edge.
+    ttk scrollbars stay visible once placed, so a table whose columns already
+    fit carried a dead bar across its edge, and an empty table carried two.
+
+    Works with either geometry manager: pass the same kwargs you would give
+    grid() or pack(), and the manager is inferred from them.
     """
+    use_pack = "row" not in layout_kw and "column" not in layout_kw
+
+    def _show():
+        if use_pack:
+            bar.pack(**layout_kw)
+        else:
+            bar.grid(**layout_kw)
+
+    def _hide():
+        if use_pack:
+            bar.pack_forget()
+        else:
+            bar.grid_remove()
+
     def _set(first, last):
         bar.set(first, last)
         if float(first) <= 0.0 and float(last) >= 1.0:
-            bar.grid_remove()
+            _hide()
         else:
-            bar.grid(**grid_kw)
+            _show()
     return _set
