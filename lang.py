@@ -427,6 +427,49 @@ T = {
     "collected":            ["collected",                "জমা হয়েছে",           "जमा हुआ"],
     "selected":             ["selected",                 "সিলেক্ট করা",          "चुना गया"],
     "No bill selected":     ["No bill selected",         "কোনো বিল সিলেক্ট করা নেই", "कोई बिल नहीं चुना"],
+
+    # Direction B reports
+    "Generate":             ["Generate",                 "তৈরি করো",            "बनाओ"],
+    "Excel":                ["Excel",                    "এক্সেল",              "एक्सेल"],
+    "CSV":                  ["CSV",                      "সিএসভি",              "सीएसवी"],
+    "PDF":                  ["PDF",                      "পিডিএফ",              "पीडीएफ"],
+    "Average":              ["Average",                  "গড়",                  "औसत"],
+    "Current stock position": ["Current stock position", "এখনকার স্টক", "अभी का स्टॉक"],
+
+    # Direction B settings
+    "Save changes":         ["Save changes",             "সেভ করো",             "सेव करो"],
+    "Shop":                 ["Shop",                     "দোকান",                "दुकान"],
+    "Billing":              ["Billing",                  "বিলিং",               "बिलिंग"],
+    "Backup":               ["Backup",                   "ব্যাকআপ",             "बैकअप"],
+    "Danger Zone":          ["Danger Zone",              "বিপদের জায়গা",       "खतरे की जगह"],
+    "Language & Theme":     ["Language & Theme",         "ভাষা ও থিম",          "भाषा और थीम"],
+    "Theme Mode":           ["Theme Mode",               "থিম মোড",            "थीम मोड"],
+    "Appearance":           ["Appearance",               "দেখতে কেমন",         "दिखने में"],
+    "Light":                ["Light",                    "লাইট",                "लाइट"],
+    "Dark":                 ["Dark",                     "ডার্ক",                "डार्क"],
+    "System":               ["System",                   "সিস্টেম",              "सिस्टम"],
+    "Next bill:":           ["Next bill:",               "পরের বিল:",           "अगला बिल:"],
+    "Format Data":          ["Format Data",              "সব ডাটা মুছো",       "सब डेटा मिटाओ"],
+    "Factory Reset / Format Data":
+                            ["Factory Reset / Format Data",
+                             "ফ্যাক্টরি রিসেট / সব ডাটা মুছো",
+                             "फैक्ट्री रीसेट / सब डेटा मिटाओ"],
+    "Shop details, bill numbering, backups":
+                            ["Shop details, bill numbering, backups",
+                             "দোকানের তথ্য, বিল নম্বর, ব্যাকআপ",
+                             "दुकान की जानकारी, बिल नंबर, बैकअप"],
+    "Printed at the top of every receipt.":
+                            ["Printed at the top of every receipt.",
+                             "প্রতিটি রসিদের উপরে ছাপা হবে।",
+                             "हर रसीद के ऊपर छपेगा।"],
+    "Automatically backup once every 24 hours while the app is open":
+                            ["Automatically backup once every 24 hours while the app is open",
+                             "অ্যাপ খোলা থাকলে প্রতি ২৪ ঘন্টায় একবার ব্যাকআপ হবে",
+                             "ऐप खुला रहने पर हर 24 घंटे में एक बार बैकअप होगा"],
+    "Replace current data with a previous backup file (.db)":
+                            ["Replace current data with a previous backup file (.db)",
+                             "এখনকার ডাটা পাল্টে আগের ব্যাকআপ ফাইল (.db) বসাবে",
+                             "अभी का डेटा हटाकर पुरानी बैकअप फ़ाइल (.db) लगाएगा"],
     "Saved":                ["Saved",                    "সেভ হয়েছে",          "सेव हो गया"],
     "Settings saved successfully!":
         ["Settings saved successfully!",

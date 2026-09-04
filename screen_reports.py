@@ -10,7 +10,7 @@ from tkinter import ttk, messagebox, filedialog
 from datetime import date, timedelta
 import os
 
-from config import COLORS, FONTS
+from config import COLORS, FONTS, RADII, METRICS
 from ui_utils import place_popup
 from lang import t
 
@@ -110,27 +110,66 @@ class ReportScreen(ctk.CTkFrame):
         self._cust_map    = {}   # name → id for customer ledger
         self._build()
 
+    # -- Direction B primitives ------------------------------
+    def _card(self, parent, **kw):
+        return ctk.CTkFrame(parent, fg_color=COLORS["bg_card"],
+                            corner_radius=RADII["card"], border_width=1,
+                            border_color=COLORS["hairline"], **kw)
+
+    def _pill(self, parent, text, kind="plain", command=None, width=None,
+              height=None):
+        tints = {
+            "primary": (COLORS["accent_action"], COLORS["btn_primary_h"], COLORS["on_accent"]),
+            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_deep"]),
+            "money":   (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money"]),
+            "counts":  (COLORS["accent_counts_tint"], COLORS["accent_counts_tint"], COLORS["accent_counts_fg"]),
+            "plain":   (COLORS["bg_white"], COLORS["bg_main"], COLORS["text_dark"]),
+        }
+        fg, hov, ink = tints.get(kind, tints["plain"])
+        h = height or METRICS["control"]
+        kw = {"width": width} if width else {}
+        return ctk.CTkButton(parent, text=text, font=FONTS["button"],
+                             fg_color=fg, hover_color=hov, text_color=ink,
+                             height=h, corner_radius=h // 2, border_width=0,
+                             command=command, **kw)
+
+    def _stat_card(self, parent, label, hero=False):
+        """A stat tile. The hero is the deep blue panel the artboard uses for
+        the headline figure; the rest are white cards with a hairline."""
+        if hero:
+            card = ctk.CTkFrame(parent, fg_color=COLORS["accent_action_deep"],
+                                corner_radius=RADII["card"])
+            label_ink, value_ink = COLORS["on_accent_soft"], COLORS["on_accent"]
+            value_font = FONTS["num_lg"]
+        else:
+            card = self._card(parent)
+            label_ink, value_ink = COLORS["text_muted"], COLORS["text_dark"]
+            value_font = FONTS["num_md"]
+
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.pack(fill="both", expand=True, padx=20, pady=16)
+        lbl = ctk.CTkLabel(inner, text=label, font=FONTS["small"],
+                           text_color=label_ink, anchor="w")
+        lbl.pack(anchor="w")
+        val = ctk.CTkLabel(inner, text="\u2014", font=value_font,
+                           text_color=value_ink, anchor="w")
+        val.pack(anchor="w")
+        card._lbl, card._val = lbl, val
+        return card
+
     def _build(self):
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
         L = self.app.current_lang
 
-        # ── Header ───────────────────────────────────────────
-        hdr = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0, height=70)
-        hdr.grid(row=0, column=0, columnspan=2, sticky="ew")
-        hdr.grid_propagate(False)
-        ctk.CTkLabel(hdr, text=t("Reports & Analytics", L),
-                     font=FONTS["heading"], text_color=COLORS["text_dark"]
-                    ).pack(side="left", padx=25, pady=15)
-
-        # ── Left sidebar: report buttons ─────────────────────
-        left = ctk.CTkScrollableFrame(self, fg_color=COLORS["bg_card"],
-                                       corner_radius=0, width=220)
-        left.grid(row=1, column=0, sticky="nsew")
+        # -- Report list (second sidebar column) --------------
+        left = ctk.CTkScrollableFrame(self, fg_color=COLORS["bg_sidebar"],
+                                      corner_radius=0, width=244)
+        left.grid(row=0, column=0, rowspan=2, sticky="nsew")
         ctk.CTkLabel(left, text=t("SELECT REPORT", L),
-                     font=FONTS["small_bold"], text_color=COLORS["text_muted"]
-                    ).pack(pady=(16, 8), padx=14, anchor="w")
+                     font=FONTS["table_hdr"], text_color=COLORS["text_muted"]
+                     ).pack(pady=(18, 10), padx=14, anchor="w")
 
         self._rpt_btns = {}
         for rpt in REPORTS:
@@ -139,99 +178,114 @@ class ReportScreen(ctk.CTkFrame):
                 text=f"  {rpt['emoji']}  {t(rpt['title'], L)}",
                 font=FONTS["sidebar"],
                 fg_color="transparent",
-                hover_color=COLORS["bg_main"],
-                text_color=COLORS["text_dark"],
+                hover_color=COLORS["sidebar_hover"],
+                text_color=COLORS["sidebar_text"],
                 anchor="w",
-                height=52,
-                corner_radius=16,
+                height=METRICS["nav_item"],
+                corner_radius=RADII["sidebar"],
+                border_width=0,
                 command=lambda r=rpt: self._select_report(r),
             )
-            btn.pack(fill="x", padx=8, pady=3)
+            btn.pack(fill="x", padx=10, pady=2)
             self._rpt_btns[rpt["key"]] = btn
 
-        # ── Right content panel ───────────────────────────────
+        # -- Header band --------------------------------------
+        hdr = ctk.CTkFrame(self, fg_color="transparent", height=METRICS["header"])
+        hdr.grid(row=0, column=1, sticky="ew", padx=26)
+        hdr.grid_propagate(False)
+
+        titles = ctk.CTkFrame(hdr, fg_color="transparent")
+        titles.pack(side="left", fill="y")
+        self._title_lbl = ctk.CTkLabel(
+            titles, text=t("Reports & Analytics", L),
+            font=("Segoe UI Semibold", 26, "bold"),
+            text_color=COLORS["text_dark"], anchor="w")
+        self._title_lbl.pack(anchor="w", pady=(16, 0))
+        self._range_lbl = ctk.CTkLabel(
+            titles, text=t("\u2190 Select a report from the left panel", L),
+            font=FONTS["small"], text_color=COLORS["text_muted"], anchor="w")
+        self._range_lbl.pack(anchor="w")
+
+        acts = ctk.CTkFrame(hdr, fg_color="transparent")
+        acts.pack(side="right", fill="y")
+        self._pill(acts, "\u25b6  " + t("Generate", L), kind="primary", width=130,
+                   command=self._generate).pack(side="right", pady=16)
+        self._pill(acts, t("PDF", L), kind="counts", width=76,
+                   command=self._export_pdf).pack(side="right", padx=(0, 8), pady=16)
+        self._pill(acts, t("CSV", L), kind="plain", width=76,
+                   command=self._export_csv).pack(side="right", padx=(0, 8), pady=16)
+        self._pill(acts, t("Excel", L), kind="money", width=86,
+                   command=self._export_excel).pack(side="right", padx=(0, 8), pady=16)
+
+        # -- Right content panel ------------------------------
         right = ctk.CTkFrame(self, fg_color="transparent")
-        right.grid(row=1, column=1, sticky="nsew", padx=10, pady=10)
-        right.grid_rowconfigure(3, weight=1)
+        right.grid(row=1, column=1, sticky="nsew", padx=26, pady=(0, 20))
+        right.grid_rowconfigure(2, weight=1)
         right.grid_columnconfigure(0, weight=1)
 
-        # Controls bar
-        ctrl = ctk.CTkFrame(right, fg_color=COLORS["bg_card"], corner_radius=16, height=68)
-        ctrl.grid(row=0, column=0, sticky="ew", pady=(0, 8))
-        ctrl.grid_propagate(False)
-        ctrl.grid_columnconfigure(99, weight=1)  # push export right
+        # Filters row: dates + optional customer selector
+        ctrl = ctk.CTkFrame(right, fg_color="transparent")
+        ctrl.grid(row=0, column=0, sticky="ew", pady=(0, 12))
 
-        # Date From
-        ctk.CTkLabel(ctrl, text=t("From:", L), font=FONTS["small_bold"],
-                     text_color=COLORS["text_dark"]).grid(row=0, column=0, padx=(16, 4), pady=14)
-        self.date_from = ctk.CTkEntry(ctrl, width=120, font=FONTS["input"],
-                                       fg_color=COLORS["bg_input"], border_color=COLORS["border_focus"],
-                                       height=40)
-        self.date_from.grid(row=0, column=1, padx=(0, 10))
+        ctk.CTkLabel(ctrl, text=t("From:", L), font=FONTS["label_form"],
+                     text_color=COLORS["text_muted"]).pack(side="left", padx=(0, 6))
+        self.date_from = ctk.CTkEntry(ctrl, width=128, font=FONTS["label_form"],
+                                      height=METRICS["control"],
+                                      corner_radius=RADII["input"], border_width=1,
+                                      border_color=COLORS["hairline"],
+                                      fg_color=COLORS["bg_white"],
+                                      text_color=COLORS["text_dark"], justify="center")
+        self.date_from.pack(side="left", padx=(0, 12))
         self.date_from.insert(0, (date.today() - timedelta(days=30)).isoformat())
 
-        # Date To
-        ctk.CTkLabel(ctrl, text=t("To:", L), font=FONTS["small_bold"],
-                     text_color=COLORS["text_dark"]).grid(row=0, column=2, padx=(0, 4))
-        self.date_to = ctk.CTkEntry(ctrl, width=120, font=FONTS["input"],
-                                     fg_color=COLORS["bg_input"], border_color=COLORS["border_focus"],
-                                     height=40)
-        self.date_to.grid(row=0, column=3, padx=(0, 10))
+        ctk.CTkLabel(ctrl, text=t("To:", L), font=FONTS["label_form"],
+                     text_color=COLORS["text_muted"]).pack(side="left", padx=(0, 6))
+        self.date_to = ctk.CTkEntry(ctrl, width=128, font=FONTS["label_form"],
+                                    height=METRICS["control"],
+                                    corner_radius=RADII["input"], border_width=1,
+                                    border_color=COLORS["hairline"],
+                                    fg_color=COLORS["bg_white"],
+                                    text_color=COLORS["text_dark"], justify="center")
+        self.date_to.pack(side="left", padx=(0, 12))
         self.date_to.insert(0, date.today().isoformat())
 
-        # Customer selector (hidden unless needed)
         self._cust_frame = ctk.CTkFrame(ctrl, fg_color="transparent")
-        self._cust_frame.grid(row=0, column=4, padx=(0, 10))
-        ctk.CTkLabel(self._cust_frame, text=t("Customer:", L), font=FONTS["small_bold"],
-                     text_color=COLORS["text_dark"]).pack(side="left", padx=(0, 4))
+        self._cust_frame.pack(side="left")
+        ctk.CTkLabel(self._cust_frame, text=t("Customer:", L),
+                     font=FONTS["label_form"], text_color=COLORS["text_muted"]
+                     ).pack(side="left", padx=(0, 6))
         self._cust_var = tk.StringVar(value=t("All Customers", L))
         self._cust_menu = ctk.CTkComboBox(self._cust_frame, variable=self._cust_var,
-                                           values=[t("All Customers", L)], width=170,
-                                           font=FONTS["input"], height=40)
+                                          values=[t("All Customers", L)], width=180,
+                                          font=FONTS["label_form"],
+                                          height=METRICS["control"],
+                                          corner_radius=RADII["input"],
+                                          border_width=1,
+                                          border_color=COLORS["hairline"],
+                                          fg_color=COLORS["bg_white"],
+                                          button_color=COLORS["accent_action"],
+                                          button_hover_color=COLORS["btn_primary_h"],
+                                          text_color=COLORS["text_dark"])
         self._cust_menu.pack(side="left")
-        self._cust_frame.grid_remove()  # hidden by default
+        self._cust_frame.pack_forget()   # hidden by default
 
-        # Generate button
-        ctk.CTkButton(ctrl, text=t("▶  Generate", L),
-                      font=FONTS["button"], fg_color=COLORS["btn_primary"],
-                      height=44, corner_radius=10, width=130,
-                      command=self._generate).grid(row=0, column=5, padx=(0, 10))
+        # Stat row — replaces the old one-line summary label
+        stats = ctk.CTkFrame(right, fg_color="transparent")
+        stats.grid(row=1, column=0, sticky="ew", pady=(0, 12))
+        self._stat_hero  = self._stat_card(stats, t("Grand Total", L), hero=True)
+        self._stat_rows  = self._stat_card(stats, t("Total rows:", L))
+        self._stat_avg   = self._stat_card(stats, t("Average", L))
+        self._stat_disc  = self._stat_card(stats, t("Discount", L))
+        self._stat_hero.pack(side="left", fill="both", expand=True)
+        for c in (self._stat_rows, self._stat_avg, self._stat_disc):
+            c.pack(side="left", fill="both", expand=True, padx=(10, 0))
 
-        # Export buttons
-        ctk.CTkButton(ctrl, text=t("📊 Excel", L),
-                      font=FONTS["small_bold"], fg_color=COLORS["btn_success"],
-                      height=40, corner_radius=10, width=90,
-                      command=self._export_excel).grid(row=0, column=97, padx=(0, 6))
-        ctk.CTkButton(ctrl, text=t("📋 CSV", L),
-                      font=FONTS["small_bold"], fg_color=COLORS["btn_secondary"],
-                      height=40, corner_radius=10, width=80,
-                      command=self._export_csv).grid(row=0, column=98, padx=(0, 6))
-        ctk.CTkButton(ctrl, text=t("📄 PDF", L),
-                      font=FONTS["small_bold"], fg_color=COLORS["btn_purple"],
-                      height=40, corner_radius=10, width=80,
-                      command=self._export_pdf).grid(row=0, column=99, padx=(0, 14))
-
-        # Placeholder / title label
-        self._title_lbl = ctk.CTkLabel(right,
-                                        text=t("← Select a report from the left panel", L),
-                                        font=FONTS["subheading"],
-                                        text_color=COLORS["text_muted"])
-        self._title_lbl.grid(row=1, column=0, pady=(8, 4), sticky="w")
-
-        # Summary row count / grand total label (RPT-1 fix: was missing entirely)
-        self._summary_lbl = ctk.CTkLabel(
-            right, text="",
-            font=FONTS["small_bold"], text_color=COLORS["text_muted"]
-        )
-        self._summary_lbl.grid(row=2, column=0, sticky="w", pady=(0, 4))
-
-        # Table area
-        tbl_frame = ctk.CTkFrame(right, fg_color=COLORS["bg_card"], corner_radius=16)
-        tbl_frame.grid(row=3, column=0, sticky="nsew")
+        # Table card
+        tbl_frame = self._card(right)
+        tbl_frame.grid(row=2, column=0, sticky="nsew")
         tbl_frame.grid_rowconfigure(0, weight=1)
         tbl_frame.grid_columnconfigure(0, weight=1)
 
-        # Treeview (columns rebuilt per report in _select_report)
         self.tree = ttk.Treeview(
             tbl_frame, columns=[], show="headings",
             style="Rpt.Treeview", selectmode="browse"
@@ -239,10 +293,9 @@ class ReportScreen(ctk.CTkFrame):
         vsb = ttk.Scrollbar(tbl_frame, orient="vertical",   command=self.tree.yview)
         hsb = ttk.Scrollbar(tbl_frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-        self.tree.grid(row=0, column=0, sticky="nsew", padx=(4,0), pady=4)
-        vsb.grid(row=0, column=1, sticky="ns",  pady=4)
-        hsb.grid(row=1, column=0, sticky="ew",  padx=(4,0))
-        # Highlight tags used by _render_table (danger/warning) and zebra striping.
+        self.tree.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=(10, 0))
+        vsb.grid(row=0, column=1, sticky="ns",  pady=(10, 0), padx=(0, 8))
+        hsb.grid(row=1, column=0, sticky="ew",  padx=(10, 0), pady=(0, 8))
         self.tree.tag_configure("danger",  background=COLORS["row_low_stock"],
                                 foreground=COLORS["text_dark"])
         self.tree.tag_configure("warning", background=COLORS["row_expiring"],
@@ -251,6 +304,50 @@ class ReportScreen(ctk.CTkFrame):
                                 foreground=COLORS["text_dark"])
         self.tree.bind("<Double-1>", self._on_tree_drilldown)
 
+    # -- Stat row --------------------------------------------
+    def _sum_col(self, data, col):
+        total = 0.0
+        for row in data:
+            try:
+                total += float(row.get(col) or 0)
+            except (TypeError, ValueError):
+                pass
+        return total
+
+    def _update_stats(self, rpt, data):
+        """Direction B replaces the old 'Total rows | Grand Total' line with a
+        stat row: the headline figure on the blue hero, then the supporting
+        counts. Cards with nothing to say are hidden rather than showing 0."""
+        L = self.app.current_lang
+        n = len(data)
+        summary_col = rpt.get("summary_col")
+        col_keys = [c[0] for c in rpt["cols"]]
+
+        if summary_col and summary_col in col_keys:
+            total = self._sum_col(data, summary_col)
+            head = t(rpt["cols"][col_keys.index(summary_col)][1], L)
+            self._stat_hero._lbl.configure(text=head)
+            self._stat_hero._val.configure(text=f"\u20b9 {total:,.0f}")
+            self._stat_avg._val.configure(
+                text=f"\u20b9 {(total / n if n else 0):,.0f}")
+            self._stat_avg.pack(side="left", fill="both", expand=True, padx=(10, 0))
+        else:
+            total = 0.0
+            self._stat_hero._lbl.configure(text=t("Total rows:", L))
+            self._stat_hero._val.configure(text=str(n))
+            self._stat_avg.pack_forget()
+
+        self._stat_rows._val.configure(text=str(n))
+
+        # A discount column is common but not universal.
+        disc_col = next((k for k in col_keys if "disc" in k), None)
+        if disc_col:
+            self._stat_disc._val.configure(
+                text=f"\u20b9 {self._sum_col(data, disc_col):,.0f}")
+            self._stat_disc.pack(side="left", fill="both", expand=True, padx=(10, 0))
+        else:
+            self._stat_disc.pack_forget()
+
     def _select_report(self, rpt: dict):
         """Called when user clicks a report button on the left panel."""
         L = self.app.current_lang
@@ -258,17 +355,20 @@ class ReportScreen(ctk.CTkFrame):
         self._active_key  = rpt["key"]
         self._report_data = []
 
-        # Highlight active button
+        # Active report takes the solid blue pill, like the sidebar
         for key, btn in self._rpt_btns.items():
+            on = key == rpt["key"]
             btn.configure(
-                fg_color=COLORS["btn_primary"] if key == rpt["key"] else "transparent",
-                text_color="white" if key == rpt["key"] else COLORS["text_dark"],
+                fg_color=COLORS["sidebar_active"] if on else "transparent",
+                text_color=COLORS["on_accent"] if on else COLORS["sidebar_text"],
+                hover_color=(COLORS["sidebar_active"] if on
+                             else COLORS["sidebar_hover"]),
             )
 
-        self._title_lbl.configure(
-            text=f"{rpt['emoji']}  {t(rpt['title'], L)}",
-            text_color=rpt["color"]
-        )
+        # The header keeps one ink colour; the report is identified by the
+        # active pill, not by recolouring the title.
+        self._title_lbl.configure(text=f"{rpt['emoji']}  {t(rpt['title'], L)}",
+                                  text_color=COLORS["text_dark"])
 
         # Refresh customer list if needed
         if rpt["needs_cust"]:
@@ -288,9 +388,9 @@ class ReportScreen(ctk.CTkFrame):
 
         # Show/hide customer selector
         if rpt["needs_cust"]:
-            self._cust_frame.grid()
+            self._cust_frame.pack(side="left")
         else:
-            self._cust_frame.grid_remove()
+            self._cust_frame.pack_forget()
 
         # Auto-generate immediately
         self._generate()
@@ -343,6 +443,12 @@ class ReportScreen(ctk.CTkFrame):
         self._report_data = data
         self._render_table(rpt, data)
 
+        # Header subtitle: say what range this result actually covers.
+        if rpt["needs_dates"]:
+            self._range_lbl.configure(text=f"{df} – {dt}")
+        else:
+            self._range_lbl.configure(text=t("Current stock position", L))
+
     def _render_table(self, rpt: dict, data: list):
         L = self.app.current_lang
         # Rebuild columns
@@ -386,16 +492,8 @@ class ReportScreen(ctk.CTkFrame):
                 except Exception:
                     pass
 
-        # Summary line
-        if summary_col and data:
-            col_name_trans = t(rpt['cols'][[ c[0] for c in rpt['cols']].index(summary_col)][1], L)
-            self._summary_lbl.configure(
-                text=f"{t('Total rows:', L)} {len(data)}    |    "
-                     f"{t('Grand Total', L)} ({col_name_trans}): "
-                     f"₹{total:,.2f}"
-            )
-        else:
-            self._summary_lbl.configure(text=f"{t('Total rows:', L)} {len(data)}")
+        # Stat row (Direction B) replaces the old single summary label.
+        self._update_stats(rpt, data)
 
     # ── Excel export ──────────────────────────────────────────
     def _export_excel(self):

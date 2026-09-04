@@ -15,7 +15,7 @@ import os
 import shutil
 import sqlite3
 from datetime import datetime
-from config import COLORS, FONTS
+from config import COLORS, FONTS, RADII, METRICS
 from lang import LANGUAGES, LANG_DB_VALUES, t
 
 
@@ -61,265 +61,315 @@ class SettingsScreen(ctk.CTkFrame):
         self._build()
 
     # ─────────────────────────────────────────────────────────
+    # -- Direction B primitives ------------------------------
+    def _card(self, parent, title=None, subtitle=None):
+        """White surface, 24px corners, hairline border, optional heading."""
+        card = ctk.CTkFrame(parent, fg_color=COLORS["bg_card"],
+                            corner_radius=RADII["card"], border_width=1,
+                            border_color=COLORS["hairline"])
+        card.pack(fill="x", pady=(0, 14))
+        if title:
+            head = ctk.CTkFrame(card, fg_color="transparent")
+            head.pack(fill="x", padx=24, pady=(20, 0))
+            ctk.CTkLabel(head, text=title, font=FONTS["subheading"],
+                         text_color=COLORS["text_dark"], anchor="w"
+                         ).pack(anchor="w")
+            if subtitle:
+                ctk.CTkLabel(head, text=subtitle, font=FONTS["small"],
+                             text_color=COLORS["text_muted"], anchor="w"
+                             ).pack(anchor="w", pady=(2, 0))
+        return card
+
+    def _pill(self, parent, text, kind="plain", command=None, width=None,
+              height=None):
+        tints = {
+            "primary": (COLORS["accent_action"], COLORS["btn_primary_h"], COLORS["on_accent"]),
+            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_deep"]),
+            "money":   (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money"]),
+            "expiry":  (COLORS["accent_expiry_tint"], COLORS["accent_expiry_tint"], COLORS["accent_expiry_fg"]),
+            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger_tint"], COLORS["accent_danger"]),
+            "danger_solid": (COLORS["accent_danger"], COLORS["btn_danger_h"], COLORS["on_accent"]),
+            "plain":   (COLORS["bg_main"], COLORS["glass_glow"], COLORS["text_dark"]),
+        }
+        fg, hov, ink = tints.get(kind, tints["plain"])
+        h = height or METRICS["control"]
+        kw = {"width": width} if width else {}
+        return ctk.CTkButton(parent, text=text, font=FONTS["button"],
+                             fg_color=fg, hover_color=hov, text_color=ink,
+                             height=h, corner_radius=h // 2, border_width=0,
+                             command=command, **kw)
+
+    def _row(self, parent, label, hint=None):
+        """A label column plus a control column, the artboard's field row."""
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", padx=24, pady=9)
+        col = ctk.CTkFrame(row, fg_color="transparent", width=170)
+        col.pack(side="left", fill="y")
+        col.pack_propagate(False)
+        ctk.CTkLabel(col, text=label, font=FONTS["label_form"],
+                     text_color=COLORS["text_muted"], anchor="w",
+                     justify="left").pack(anchor="w")
+        if hint:
+            ctk.CTkLabel(col, text=hint, font=FONTS["caption"],
+                         text_color=COLORS["text_muted"], anchor="w",
+                         justify="left", wraplength=160).pack(anchor="w")
+        return row
+
+    def _entry(self, parent, placeholder="", width=None):
+        kw = {"width": width} if width else {}
+        return ctk.CTkEntry(parent, font=FONTS["input"],
+                            fg_color=COLORS["bg_input"],
+                            border_width=1, border_color=COLORS["hairline"],
+                            text_color=COLORS["text_dark"],
+                            placeholder_text=placeholder,
+                            corner_radius=RADII["input"],
+                            height=46, **kw)
+
+    # -- Build ------------------------------------------------
     def _build(self):
-        self.grid_columnconfigure(0, weight=1)
+        L = self.app.current_lang
+        self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        # ── Header ──
-        hdr = ctk.CTkFrame(self, fg_color=COLORS["bg_card"],
-                           corner_radius=16, height=70)
-        hdr.grid(row=0, column=0, sticky="ew", padx=20, pady=(18, 0))
+        # -- Header band -------------------------------------
+        hdr = ctk.CTkFrame(self, fg_color="transparent", height=METRICS["header"])
+        hdr.grid(row=0, column=0, columnspan=2, sticky="ew", padx=28)
         hdr.grid_propagate(False)
-        ctk.CTkLabel(hdr, text="⚙️   Settings & Configuration",
-                     font=FONTS["subheading"],
-                     text_color=COLORS["text_dark"]).pack(side="left", padx=24, pady=18)
 
-        # ── Scrollable body ──
-        body = ctk.CTkScrollableFrame(self, fg_color=COLORS["bg_main"],
-                                      corner_radius=0)
-        body.grid(row=1, column=0, sticky="nsew", padx=20, pady=12)
-        body.grid_columnconfigure(0, weight=1)
+        titles = ctk.CTkFrame(hdr, fg_color="transparent")
+        titles.pack(side="left", fill="y")
+        ctk.CTkLabel(titles, text=t("Settings", L),
+                     font=("Segoe UI Semibold", 26, "bold"),
+                     text_color=COLORS["text_dark"], anchor="w"
+                     ).pack(anchor="w", pady=(16, 0))
+        ctk.CTkLabel(titles, text=t("Shop details, bill numbering, backups", L),
+                     font=FONTS["small"], text_color=COLORS["text_muted"],
+                     anchor="w").pack(anchor="w")
 
-        # ── Language & Theme section ─────────────────────────
-        self._section(body, 0, "🌐  Language & Theme")
-        lang_card = ctk.CTkFrame(body, fg_color=COLORS["bg_card"], corner_radius=16)
-        lang_card.grid(row=1, column=0, sticky="ew", pady=4, padx=4)
-        lang_card.grid_columnconfigure(1, weight=1)
-        
-        # Row 0: Language Selection
-        ctk.CTkLabel(lang_card, text="Select Language",
-                     font=FONTS["label_form"],
-                     text_color=COLORS["text_dark"],
-                     width=200, anchor="w").grid(row=0, column=0, padx=18, pady=14)
-        self._lang_var = tk.StringVar()
-        self._lang_menu = ctk.CTkOptionMenu(
-            lang_card, variable=self._lang_var,
-            values=LANGUAGES,
-            font=FONTS["input"], height=42, width=260, corner_radius=10,
-            fg_color=COLORS["bg_input"], button_color=COLORS["btn_primary"],
-            button_hover_color="#005BBE",
-            text_color=COLORS["text_dark"],
-            dropdown_fg_color=COLORS["bg_card"], dropdown_text_color=COLORS["text_dark"],
-            command=self._change_language,
-        )
-        self._lang_menu.grid(row=0, column=1, padx=(0, 18), pady=10, sticky="w")
+        self._pill(hdr, "\U0001F4BE  " + t("Save changes", L), kind="primary",
+                   width=170, height=46, command=self._save
+                   ).pack(side="right", pady=15)
 
-        # Row 1: Theme Mode Selection
-        ctk.CTkLabel(lang_card, text="Theme Mode",
-                     font=FONTS["label_form"],
-                     text_color=COLORS["text_dark"],
-                     width=200, anchor="w").grid(row=1, column=0, padx=18, pady=14)
-        self._theme_var = tk.StringVar()
-        self._theme_menu = ctk.CTkOptionMenu(
-            lang_card, variable=self._theme_var,
-            values=["System", "Light", "Dark"],
-            font=FONTS["input"], height=42, width=260, corner_radius=10,
-            fg_color=COLORS["bg_input"], button_color=COLORS["btn_primary"],
-            button_hover_color="#005BBE",
-            text_color=COLORS["text_dark"],
-            dropdown_fg_color=COLORS["bg_card"], dropdown_text_color=COLORS["text_dark"],
-            command=self._change_theme,
-        )
-        self._theme_menu.grid(row=1, column=1, padx=(0, 18), pady=10, sticky="w")
+        # -- Section nav -------------------------------------
+        nav = ctk.CTkFrame(self, fg_color="transparent", width=200)
+        nav.grid(row=1, column=0, sticky="nsew", padx=(28, 0), pady=(0, 20))
+        nav.pack_propagate(False)
 
-        # Shop Info section
-        self._section(body, 2, "🏪  Shop Information")
-        row = 3
+        self._sections = {}
+        self._section_btns = {}
+
+        # -- Content stack -----------------------------------
+        stack = ctk.CTkFrame(self, fg_color="transparent")
+        stack.grid(row=1, column=1, sticky="nsew", padx=(20, 28), pady=(0, 20))
+        self._stack = stack
+
+        def make_section(key, label, icon):
+            panel = ctk.CTkScrollableFrame(stack, fg_color="transparent",
+                                           corner_radius=0)
+            self._sections[key] = panel
+            btn = ctk.CTkButton(
+                nav, text=f"  {icon}  {t(label, L)}", font=FONTS["sidebar"],
+                fg_color="transparent", hover_color=COLORS["sidebar_hover"],
+                text_color=COLORS["sidebar_text"], anchor="w",
+                height=METRICS["nav_item"], corner_radius=RADII["sidebar"],
+                border_width=0, command=lambda k=key: self._show_section(k),
+            )
+            btn.pack(fill="x", pady=2)
+            self._section_btns[key] = btn
+            return panel
+
+        shop_p   = make_section("shop",     "Shop",             "\U0001F3EA")
+        bill_p   = make_section("billing",  "Billing",          "\U0001F9FE")
+        backup_p = make_section("backup",   "Backup",           "\U0001F4BE")
+        lang_p   = make_section("language", "Language & Theme", "\U0001F310")
+        danger_p = None
+        if self.current_user.get("role") == "admin":
+            danger_p = make_section("danger", "Danger Zone", "\u26A0\uFE0F")
+
+        # -- Shop ---------------------------------------------
+        card = self._card(shop_p, t("Shop Information", L),
+                          t("Printed at the top of every receipt.", L))
+        pad = ctk.CTkFrame(card, fg_color="transparent", height=6)
+        pad.pack()
         for key, label, ph, sec in self.FIELDS:
             if sec != "shop":
                 continue
-            self._field_row(body, row, key, label, ph)
-            row += 1
+            row = self._row(card, t(label, L))
+            ent = self._entry(row, t(ph, L))
+            ent.pack(side="left", fill="x", expand=True)
+            self._entries[key] = ent
+        ctk.CTkFrame(card, fg_color="transparent", height=10).pack()
 
-        # Bill Config section
-        self._section(body, row, "🧾  Bill Configuration")
-        row += 1
-        # Offset rows by 2 because language section took rows 0-1
+        # -- Billing ------------------------------------------
+        card = self._card(bill_p, t("Bill Configuration", L))
+        ctk.CTkFrame(card, fg_color="transparent", height=6).pack()
         for key, label, ph, sec in self.FIELDS:
             if sec != "bill":
                 continue
-            self._field_row(body, row, key, label, ph)
-            row += 1
+            row = self._row(card, t(label, L))
+            ent = self._entry(row, t(ph, L), width=240)
+            ent.pack(side="left")
+            self._entries[key] = ent
+            if key == "next_bill_no":
+                self._next_bill_hint = ctk.CTkLabel(
+                    row, text="", font=FONTS["small"],
+                    text_color=COLORS["accent_action_deep"], anchor="w")
+                self._next_bill_hint.pack(side="left", padx=(14, 0))
+        ctk.CTkFrame(card, fg_color="transparent", height=10).pack()
 
-        # ── Backup section ──────────────────────────────────────
-        self._section(body, row, "💾  Backup & Restore")
-        row += 1
+        # -- Language & Theme ---------------------------------
+        card = self._card(lang_p, t("Language & Theme", L))
+        ctk.CTkFrame(card, fg_color="transparent", height=6).pack()
 
-        # --- Row 1: Last backup info + Backup Now ---
-        brow = ctk.CTkFrame(body, fg_color=COLORS["bg_card"], corner_radius=16)
-        brow.grid(row=row, column=0, sticky="ew", pady=4, padx=4)
-        brow.grid_columnconfigure(1, weight=1)
+        row = self._row(card, t("Select Language", L))
+        self._lang_var = tk.StringVar()
+        self._lang_menu = ctk.CTkOptionMenu(
+            card, variable=self._lang_var, values=LANGUAGES,
+            font=FONTS["input"], height=46, width=280,
+            corner_radius=RADII["input"],
+            fg_color=COLORS["bg_input"], button_color=COLORS["accent_action"],
+            button_hover_color=COLORS["btn_primary_h"],
+            text_color=COLORS["text_dark"],
+            dropdown_fg_color=COLORS["bg_card"],
+            dropdown_text_color=COLORS["text_dark"],
+            command=self._change_language,
+        )
+        self._lang_menu.pack(in_=row, side="left")
 
-        ctk.CTkLabel(brow, text="Last Backup",
-                     font=FONTS["label_form"],
-                     text_color=COLORS["text_dark"],
-                     width=200, anchor="w").grid(row=0, column=0, padx=18, pady=14)
-        self._last_backup_label = ctk.CTkLabel(
-            brow, text="—", font=FONTS["body"],
-            text_color=COLORS["text_muted"], anchor="w")
-        self._last_backup_label.grid(row=0, column=1, padx=12, sticky="w")
-        ctk.CTkButton(
-            brow, text="🔄  Backup Now",
-            font=FONTS["button"], fg_color=COLORS["btn_primary"],
-            hover_color="#005BBE", height=40, width=160,
-            command=self._do_backup,
-        ).grid(row=0, column=2, padx=18, pady=10)
-        row += 1
-
-        # --- Row 2: Custom backup folder ---
-        frow = ctk.CTkFrame(body, fg_color=COLORS["bg_card"], corner_radius=16)
-        frow.grid(row=row, column=0, sticky="ew", pady=4, padx=4)
-        frow.grid_columnconfigure(1, weight=1)
-
-        ctk.CTkLabel(frow, text="Backup Folder",
-                     font=FONTS["label_form"],
-                     text_color=COLORS["text_dark"],
-                     width=200, anchor="w").grid(row=0, column=0, padx=18, pady=14)
-        self._folder_label = ctk.CTkLabel(
-            frow, text="Default (app folder)", font=FONTS["small"],
-            text_color=COLORS["text_muted"], anchor="w", wraplength=340)
-        self._folder_label.grid(row=0, column=1, padx=12, sticky="w")
-
-        btn_col = ctk.CTkFrame(frow, fg_color="transparent")
-        btn_col.grid(row=0, column=2, padx=18, pady=10)
-        ctk.CTkButton(
-            btn_col, text="📂  Choose Folder",
-            font=FONTS["button"], fg_color=COLORS["btn_warning"],
-            hover_color="#CC7700", height=40, width=160,
-            command=self._choose_backup_folder,
-        ).pack(side="top", pady=(0, 4))
-        ctk.CTkButton(
-            btn_col, text="🗑  Reset to Default",
-            font=FONTS["small"], fg_color=COLORS["btn_secondary"],
-            hover_color=COLORS["btn_secondary"], height=32, width=160,
-            command=self._reset_backup_folder,
-        ).pack(side="top")
-        row += 1
-
-        # --- Row 3: Scheduled daily backup toggle ---
-        srow = ctk.CTkFrame(body, fg_color=COLORS["bg_card"], corner_radius=16)
-        srow.grid(row=row, column=0, sticky="ew", pady=4, padx=4)
-        srow.grid_columnconfigure(1, weight=1)
-
-        ctk.CTkLabel(srow, text="Daily Auto-Backup",
-                     font=FONTS["label_form"],
-                     text_color=COLORS["text_dark"],
-                     width=200, anchor="w").grid(row=0, column=0, padx=18, pady=14)
-        ctk.CTkLabel(srow, text="Automatically backup once every 24 hours while the app is open",
-                     font=FONTS["small"], text_color=COLORS["text_muted"],
-                     anchor="w").grid(row=0, column=1, padx=12, sticky="w")
-        self._auto_backup_var = tk.BooleanVar(value=True)
-        ctk.CTkSwitch(
-            srow, text="", variable=self._auto_backup_var,
-            fg_color=COLORS["btn_primary"], progress_color="#43A047",
-            command=self._toggle_auto_backup,
-        ).grid(row=0, column=2, padx=18, pady=10)
-        row += 1
-
-        # --- Row 4: Restore ---
-        rrow = ctk.CTkFrame(body, fg_color=COLORS["bg_card"], corner_radius=16)
-        rrow.grid(row=row, column=0, sticky="ew", pady=4, padx=4)
-        rrow.grid_columnconfigure(1, weight=1)
-
-        ctk.CTkLabel(rrow, text="Restore from Backup",
-                     font=FONTS["label_form"],
-                     text_color=COLORS["text_dark"],
-                     width=200, anchor="w").grid(row=0, column=0, padx=18, pady=14)
-        ctk.CTkLabel(rrow, text="Replace current data with a previous backup file (.db)",
-                     font=FONTS["small"], text_color=COLORS["text_muted"],
-                     anchor="w").grid(row=0, column=1, padx=12, sticky="w")
-        ctk.CTkButton(
-            rrow, text="♻️  Restore Backup",
-            font=FONTS["button"], fg_color=COLORS["btn_danger"],
-            hover_color="#CC2200", height=40, width=160,
-            command=self._do_restore,
-        ).grid(row=0, column=2, padx=18, pady=10)
-        row += 1
-
-        # ── Save button ──
-        btn_frame = ctk.CTkFrame(body, fg_color="transparent")
-        btn_frame.grid(row=row, column=0, sticky="ew", pady=(18, 8))
-        ctk.CTkButton(
-            btn_frame,
-            text="💾   Save Settings",
-            font=FONTS["button"],
-            fg_color=COLORS["btn_success"],
-            hover_color="#28A745",
-            height=52, width=240,
-            command=self._save,
-        ).pack(side="left", padx=4)
-        row += 1
-
-        # ── Danger Zone (admin only) ─────────────────────────────
-        if self.current_user.get("role") == "admin":
-            self._section(body, row, "⚠️  Danger Zone")
-            row += 1
-
-            danger_card = ctk.CTkFrame(
-                body,
-                fg_color="#FFF5F5",
-                corner_radius=16,
-                border_width=2,
-                border_color="#FF4444",
+        # Appearance is the artboard's segmented control, not a dropdown.
+        row = self._row(card, t("Appearance", L))
+        seg = ctk.CTkFrame(row, fg_color=COLORS["bg_input"],
+                           corner_radius=RADII["input"])
+        seg.pack(side="left")
+        self._theme_var = tk.StringVar(value="System")
+        self._theme_chips = {}
+        for mode in ("Light", "Dark", "System"):
+            chip = ctk.CTkButton(
+                seg, text=t(mode, L), font=FONTS["small"],
+                fg_color="transparent", hover_color=COLORS["glass_glow"],
+                text_color=COLORS["text_muted"], height=38, width=88,
+                corner_radius=19, border_width=0,
+                command=lambda m=mode: self._pick_theme(m),
             )
-            danger_card.grid(row=row, column=0, sticky="ew", pady=4, padx=4)
-            danger_card.grid_columnconfigure(1, weight=1)
+            chip.pack(side="left", padx=2, pady=4)
+            self._theme_chips[mode] = chip
+        # _load() sets _theme_var directly, so repaint from the variable.
+        self._theme_var.trace_add("write", lambda *_: self._paint_theme_chips())
+        ctk.CTkFrame(card, fg_color="transparent", height=10).pack()
 
-            ctk.CTkLabel(
-                danger_card,
-                text="Factory Reset / Format Data",
-                font=FONTS["label_form"],
-                text_color="#CC0000",
-                width=220,
-                anchor="w",
-            ).grid(row=0, column=0, padx=18, pady=(14, 2), sticky="w")
-            ctk.CTkLabel(
-                danger_card,
-                text="Permanently delete ALL bills, products, categories, customers, suppliers,\n"
-                     "stock data and non-admin users. Only admin accounts and settings are kept.",
-                font=FONTS["small"],
-                text_color="#AA2200",
-                anchor="w",
-                justify="left",
-            ).grid(row=1, column=0, columnspan=2, padx=18, pady=(0, 14), sticky="w")
-            ctk.CTkButton(
-                danger_card,
-                text="🗑️  Format Data",
-                font=FONTS["button"],
-                fg_color=COLORS["btn_danger"],
-                hover_color="#AA0000",
-                height=42,
-                width=180,
-                command=self._do_format_data,
-            ).grid(row=0, column=2, padx=18, pady=12)
+        # -- Backup -------------------------------------------
+        card = self._card(backup_p, t("Backup & Restore", L))
+        ctk.CTkFrame(card, fg_color="transparent", height=6).pack()
 
+        row = self._row(card, t("Last Backup", L))
+        self._last_backup_label = ctk.CTkLabel(
+            row, text="\u2014", font=FONTS["body"],
+            text_color=COLORS["text_muted"], anchor="w")
+        self._last_backup_label.pack(side="left", fill="x", expand=True)
+        self._pill(row, "\U0001F504  " + t("Backup Now", L), kind="action",
+                   width=160, command=self._do_backup).pack(side="right")
+
+        row = self._row(card, t("Backup Folder", L))
+        self._folder_label = ctk.CTkLabel(
+            row, text=t("Default (app folder)", L), font=FONTS["small"],
+            text_color=COLORS["text_muted"], anchor="w", wraplength=320,
+            justify="left")
+        self._folder_label.pack(side="left", fill="x", expand=True)
+        self._pill(row, t("Reset to Default", L), kind="plain", width=150,
+                   command=self._reset_backup_folder).pack(side="right", padx=(8, 0))
+        self._pill(row, "\U0001F4C2  " + t("Choose Folder", L), kind="expiry",
+                   width=160, command=self._choose_backup_folder).pack(side="right")
+
+        row = self._row(card, t("Daily Auto-Backup", L))
+        ctk.CTkLabel(row,
+                     text=t("Automatically backup once every 24 hours while the app is open", L),
+                     font=FONTS["small"], text_color=COLORS["text_muted"],
+                     anchor="w", justify="left", wraplength=380
+                     ).pack(side="left", fill="x", expand=True)
+        self._auto_backup_var = tk.BooleanVar(value=True)
+        ctk.CTkSwitch(row, text="", variable=self._auto_backup_var,
+                      fg_color=COLORS["hairline"],
+                      progress_color=COLORS["accent_money"],
+                      button_color=COLORS["bg_white"],
+                      command=self._toggle_auto_backup).pack(side="right")
+
+        row = self._row(card, t("Restore from Backup", L))
+        ctk.CTkLabel(row,
+                     text=t("Replace current data with a previous backup file (.db)", L),
+                     font=FONTS["small"], text_color=COLORS["text_muted"],
+                     anchor="w", justify="left", wraplength=340
+                     ).pack(side="left", fill="x", expand=True)
+        self._pill(row, "\u267B\uFE0F  " + t("Restore Backup", L), kind="danger",
+                   width=170, command=self._do_restore).pack(side="right")
+        ctk.CTkFrame(card, fg_color="transparent", height=10).pack()
+
+        # -- Danger Zone (admin only) -------------------------
+        if danger_p is not None:
+            card = ctk.CTkFrame(danger_p, fg_color=COLORS["accent_danger_tint"],
+                                corner_radius=RADII["card"], border_width=1,
+                                border_color=COLORS["accent_danger"])
+            card.pack(fill="x", pady=(0, 14))
+            head = ctk.CTkFrame(card, fg_color="transparent")
+            head.pack(fill="x", padx=24, pady=(20, 0))
+            ctk.CTkLabel(head, text=t("Factory Reset / Format Data", L),
+                         font=FONTS["subheading"],
+                         text_color=COLORS["accent_danger"], anchor="w"
+                         ).pack(anchor="w")
+            ctk.CTkLabel(
+                head,
+                text=t("Permanently delete ALL bills, products, categories, "
+                       "customers, suppliers, stock data and non-admin users. "
+                       "Only admin accounts and settings are kept.", L),
+                font=FONTS["small"], text_color=COLORS["accent_danger"],
+                anchor="w", justify="left", wraplength=560
+            ).pack(anchor="w", pady=(4, 0))
+            self._pill(card, "\U0001F5D1\uFE0F  " + t("Format Data", L),
+                       kind="danger_solid", width=190, height=46,
+                       command=self._do_format_data).pack(anchor="w", padx=24,
+                                                          pady=(16, 22))
+
+        self._show_section("shop")
         self._load()
 
-    def _section(self, parent, row, title):
-        ctk.CTkFrame(parent, fg_color="transparent", height=8).grid(
-            row=row, column=0)
-        ctk.CTkLabel(parent, text=title,
-                     font=FONTS["body_bold"],
-                     text_color=COLORS["btn_primary"],
-                     anchor="w").grid(row=row, column=0, sticky="w",
-                                      padx=6, pady=(14, 2))
+    # -- Section switching ------------------------------------
+    def _show_section(self, key):
+        for name, panel in self._sections.items():
+            if name == key:
+                panel.pack(fill="both", expand=True)
+            else:
+                panel.pack_forget()
+        for name, btn in self._section_btns.items():
+            on = name == key
+            danger = name == "danger"
+            btn.configure(
+                fg_color=((COLORS["accent_danger"] if danger
+                           else COLORS["sidebar_active"]) if on else "transparent"),
+                text_color=(COLORS["on_accent"] if on else
+                            (COLORS["accent_danger"] if danger
+                             else COLORS["sidebar_text"])),
+                hover_color=((COLORS["accent_danger"] if danger
+                              else COLORS["sidebar_active"]) if on
+                             else COLORS["sidebar_hover"]),
+            )
+        self._active_section = key
 
-    def _field_row(self, parent, row, key, label, placeholder):
-        card = ctk.CTkFrame(parent, fg_color=COLORS["bg_card"], corner_radius=16)
-        card.grid(row=row, column=0, sticky="ew", pady=4, padx=4)
-        card.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(card, text=label,
-                     font=FONTS["label_form"],
-                     text_color=COLORS["text_dark"],
-                     width=200, anchor="w").grid(row=0, column=0, padx=18, pady=14)
-        ent = ctk.CTkEntry(card, font=FONTS["input"],
-                           fg_color=COLORS["bg_input"],
-                           border_color=COLORS["border"],
-                           text_color=COLORS["text_dark"],
-                           placeholder_text=placeholder,
-                           height=42)
-        ent.grid(row=0, column=1, padx=(0, 18), pady=10, sticky="ew")
-        self._entries[key] = ent
+    # -- Appearance segmented control -------------------------
+    def _pick_theme(self, mode):
+        self._theme_var.set(mode)     # trace repaints the chips
+        self._change_theme(mode)
+
+    def _paint_theme_chips(self):
+        current = self._theme_var.get()
+        for mode, chip in self._theme_chips.items():
+            on = mode == current
+            chip.configure(
+                fg_color=COLORS["accent_action"] if on else "transparent",
+                text_color=COLORS["on_accent"] if on else COLORS["text_muted"],
+                hover_color=(COLORS["accent_action"] if on
+                             else COLORS["glass_glow"]),
+                font=FONTS["small_bold"] if on else FONTS["small"],
+            )
+
 
     # ─────────────────────────────────────────────────────────
     def _load(self):
@@ -353,6 +403,23 @@ class SettingsScreen(ctk.CTkFrame):
         # Restore auto-backup toggle
         auto = s.get("auto_backup_enabled", "1")
         self._auto_backup_var.set(auto == "1")
+
+        # Artboard shows the number the next bill will actually get, beside
+        # the field, so a prefix/counter edit can be sanity-checked in place.
+        self._refresh_next_bill_hint()
+
+    def _refresh_next_bill_hint(self):
+        """Preview of the next bill number, from the two fields as typed."""
+        hint = getattr(self, "_next_bill_hint", None)
+        if hint is None:
+            return
+        L = self.app.current_lang
+        prefix = (self._entries["bill_prefix"].get().strip() or "BILL")
+        seq = self._entries["next_bill_no"].get().strip()
+        if seq.isdigit():
+            hint.configure(text=f"{t('Next bill:', L)}  {prefix}-{int(seq):05d}")
+        else:
+            hint.configure(text="")
 
     def _save(self):
         L = self.app.current_lang
