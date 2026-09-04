@@ -394,6 +394,32 @@ T = {
     "Restore Backup":       ["♻️  Restore Backup",       "♻️  ব্যাকআপ রিস্টোর করো",      "♻️  बैकअप रीस्टोर करें"],
     "Save Settings":        ["💾   Save Settings",       "💾   সেটিংস সেভ করো",   "💾   सेटिंग्स सेव करें"],
     "No backup yet":        ["No backup yet",            "কোনো ব্যাকআপ নেই",    "कोई बैकअप नहीं"],
+    "Last backup":          ["Last backup",              "শেষ ব্যাকআপ",         "आखिरी बैकअप"],
+
+    # Direction B dashboard
+    "Good morning":         ["Good morning",             "সুপ্রভাত",              "सुप्रभात"],
+    "Good afternoon":       ["Good afternoon",           "শুভ দুপুর",             "नमस्कार"],
+    "Good evening":         ["Good evening",             "শুভ সন্ধ্যা",             "शुभ संध्या"],
+    "Week":                 ["Week",                     "সপ্তাহ",               "हफ्ता"],
+    "Review stock":         ["Review stock",             "স্টক দেখো",            "स्टॉक देखें"],
+    "EXPIRED":              ["EXPIRED",                  "মেয়াদ শেষ",             "एक्सपायर्ड"],
+    "needs attention today":
+                            ["needs attention today",
+                             "আজ নজর দিতে হবে",
+                             "आज ध्यान देना होगा"],
+    "need attention today":
+                            ["need attention today",
+                             "আজ নজর দিতে হবে",
+                             "आज ध्यान देना होगा"],
+    "item":                 ["item",                     "জিনিস",                "आइटम"],
+    "items":                ["items",                    "জিনিস",                "आइटम"],
+    "Paid":                 ["Paid",                     "পেড",                 "पेड"],
+    "Due":                  ["Due",                      "বাকি",                "बाकी"],
+    "Void":                 ["Void",                     "বাতিল",               "रद्द"],
+    "Draft":                ["Draft",                    "ড্রাফ্ট",              "ड्राफ्ट"],
+    "reorder now":          ["reorder now",              "এখনই অর্ডার করো",     "अभी ऑर्डर करें"],
+    "this shift":           ["this shift",               "এই শিফটে",             "इस शिफ्ट में"],
+    "expired":              ["expired",                  "মেয়াদ শেষ",             "एक्सपायर्ड"],
     "Saved":                ["Saved",                    "সেভ হয়েছে",          "सेव हो गया"],
     "Settings saved successfully!":
         ["Settings saved successfully!",
@@ -426,6 +452,29 @@ T = {
     # ══════════════════════════════════════════════════════════════
     "Login":                ["Login",                    "লগইন",                "लॉगिन"],
     "Sign In":              ["Sign In",                  "সাইন ইন করো",          "साइन इन करें"],
+
+    # Direction B login card
+    "Welcome back":         ["Welcome back",             "আবার স্বাগতম",         "फिर से स्वागत है"],
+    "Sign in to open the counter.":
+                            ["Sign in to open the counter.",
+                             "কাউন্টার খুলতে সাইন ইন করো।",
+                             "काउंटर खोलने के लिए साइन इन करें।"],
+    "Ring it up in seconds.":
+                            ["Ring it up in seconds.",
+                             "সেকেন্ডে বিল হয়ে যাবে।",
+                             "सेकंडों में बिल बन जाएगा।"],
+    "Bills, stock, udhaar and reports — one window, keyboard first.":
+                            ["Bills, stock, udhaar and reports — one window, keyboard first.",
+                             "বিল, স্টক, ধার আর রিপোর্ট — এক উইন্ডোতে, কিবোর্ড দিয়ে।",
+                             "बिल, स्टॉक, उधार और रिपोर्ट — एक विंडो में, कीबोर्ड से।"],
+    "Show":                 ["Show",                     "দেখাও",              "दिखाओ"],
+    "Hide":                 ["Hide",                     "লুকাও",              "छिपाओ"],
+    "First run? Use admin / admin123, then change it in Settings.":
+                            ["First run? Use admin / admin123, then change it in Settings.",
+                             "প্রথমবার? admin / admin123 দিয়ে ঢুকো, তারপর সেটিংসে বদলে নাও।",
+                             "पहली बार? admin / admin123 से लॉगिन करें, फिर सेटिंग्स में बदल लें।"],
+    "Backed up today":      ["Backed up today",          "আজ ব্যাকআপ হয়েছে",   "आज बैकअप हुआ"],
+    "No backup yet":        ["No backup yet",            "এখনো ব্যাকআপ নেই",    "अभी तक बैकअप नहीं"],
 
     # ══════════════════════════════════════════════════════════════
     # Field labels from Settings

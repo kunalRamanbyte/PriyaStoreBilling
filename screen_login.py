@@ -1,165 +1,231 @@
 """
 screen_login.py — Login screen
-Large, colorful, simple — designed for 60+ age users.
-Default: admin / admin123
+
+Direction B: a single split card centred on the app canvas. The left panel
+is the deep blue brand block; the right panel is the form. Solid fills,
+hairline borders and generous radii only — no photographic background, no
+gradient, no glass. Default: admin / admin123
 """
 
 import os
-from PIL import Image
+import glob
+from datetime import datetime
 import customtkinter as ctk
-import tkinter as tk
-from config import COLORS, FONTS, APP_TITLE, SHOP_NAME, resource_path
+from config import (COLORS, FONTS, RADII, METRICS, APP_VERSION, SHOP_NAME,
+                    DB_PATH)
 from lang import t
 
 
 class LoginScreen(ctk.CTkFrame):
     def __init__(self, parent, on_success_callback):
-        super().__init__(parent, fg_color="#1A237E", corner_radius=0)
+        super().__init__(parent, fg_color=COLORS["bg_main"], corner_radius=0)
         self.on_success = on_success_callback
         self._lang = getattr(self.winfo_toplevel(), "current_lang", "English") or "English"
+        self._pwd_shown = False
         self._build()
 
-    def _build(self):
-        # ── Background image ───────────────────────────────
-        # Track sizes to prevent unnecessary resize loops
-        self._current_width = 1366
-        self._current_height = 768
-        
+    # ── Helpers ─────────────────────────────────────────────
+    def _backup_chip_text(self):
+        """Direction B shows a backup chip on the brand panel. Report what
+        is actually on disk rather than a decorative 'Backed up today'."""
+        L = self._lang
         try:
-            bg_path = resource_path("assets", "login_bg.png")
-            if os.path.exists(bg_path):
-                pil_img = Image.open(bg_path)
-                self.bg_image = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(1366, 768))
-                self.bg_label = ctk.CTkLabel(self, image=self.bg_image, text="")
-                self.bg_label.place(x=0, y=0, relwidth=1, relheight=1)
-                self.bind("<Configure>", self._on_resize)
-            else:
-                self.configure(fg_color="#1A237E")
-        except Exception as e:
-            print("Error loading background image:", e)
-            self.configure(fg_color="#1A237E")
+            db = getattr(self.winfo_toplevel(), "db", None)
+            folder = None
+            if db is not None:
+                folder = db.get_setting("backup_folder", "") or None
+            if not folder:
+                folder = os.path.join(os.path.dirname(DB_PATH), "backups")
+            files = glob.glob(os.path.join(folder, "billing_backup*.db"))
+            if not files:
+                return t("No backup yet", L)
+            newest = max(files, key=os.path.getmtime)
+            when = datetime.fromtimestamp(os.path.getmtime(newest))
+            if when.date() == datetime.now().date():
+                return t("Backed up today", L)
+            return f"{t('Last backup', L)} {when.strftime('%d %b')}"
+        except Exception:
+            return t("No backup yet", L)
 
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=1)
+    def _chip(self, parent, text):
+        """A 32px white pill on the blue brand panel."""
+        chip = ctk.CTkFrame(parent, fg_color=COLORS["on_accent"],
+                            corner_radius=16, height=32)
+        chip.pack(side="left", padx=(0, 10))
+        chip.pack_propagate(False)
+        ctk.CTkLabel(chip, text=text, font=FONTS["caption"],
+                     text_color=COLORS["accent_action_deep"]
+                     ).pack(padx=14, pady=6)
+        return chip
 
-        # ── Centre card (glassmorphic) ────────────────────────
-        card = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=24,
-                             width=480, height=580,
-                             border_width=2, border_color=COLORS["glass_border"])
+    def _field(self, parent, show=None):
+        """A 52px pill field that takes a blue focus ring, matching the
+        password field's focused state in the artboard."""
+        e = ctk.CTkEntry(
+            parent,
+            show=show,
+            font=("Segoe UI", 17),
+            height=52,
+            border_width=2,
+            border_color=COLORS["bg_input"],   # invisible until focused
+            fg_color=COLORS["bg_input"],
+            text_color=COLORS["text_dark"],
+            corner_radius=26,
+        )
+        e.bind("<FocusIn>", lambda _e: e.configure(
+            border_color=COLORS["accent_action"], fg_color=COLORS["bg_white"]))
+        e.bind("<FocusOut>", lambda _e: e.configure(
+            border_color=COLORS["bg_input"], fg_color=COLORS["bg_input"]))
+        return e
+
+    # ── Build ───────────────────────────────────────────────
+    def _build(self):
+        L = self._lang
+
+        # ── The split card ───────────────────────────────────
+        card = ctk.CTkFrame(self, fg_color=COLORS["bg_card"],
+                            corner_radius=RADII["hero"],
+                            width=940, height=560,
+                            border_width=1, border_color=COLORS["hairline"])
         card.place(relx=0.5, rely=0.5, anchor="center")
         card.pack_propagate(False)
 
-        # Gradient-inspired top banner
-        banner = ctk.CTkFrame(card, fg_color="#1E3A5F", corner_radius=0,
-                               height=130)
-        banner.pack(fill="x")
-        banner.pack_propagate(False)
+        # ── Left: brand panel ────────────────────────────────
+        # CustomTkinter cannot clip a child to its parent's rounded corners,
+        # so the blue block is inset and carries its own radius instead of
+        # sitting flush to the card edge.
+        brand = ctk.CTkFrame(card, fg_color=COLORS["accent_action_deep"],
+                             corner_radius=RADII["pill_lg"], width=376)
+        brand.pack(side="left", fill="y", padx=12, pady=12)
+        brand.pack_propagate(False)
 
-        ctk.CTkLabel(banner, text="🛒", font=("Segoe UI", 52),
-                     text_color="white").pack(pady=(18, 0))
-        ctk.CTkLabel(banner, text=SHOP_NAME,
-                     font=("Segoe UI", 18, "bold"),
-                     text_color="#93C5FD").pack()
+        # Top: mark + name
+        top = ctk.CTkFrame(brand, fg_color="transparent")
+        top.pack(fill="x", padx=32, pady=(32, 0))
 
-        # ── Form ─────────────────────────────────────────────
+        mark = ctk.CTkFrame(top, fg_color=COLORS["on_accent"],
+                            corner_radius=15, width=42, height=42)
+        mark.pack(side="left", padx=(0, 11))
+        mark.pack_propagate(False)
+        ctk.CTkLabel(mark, text=SHOP_NAME[0].upper(),
+                     font=("Segoe UI Semibold", 18, "bold"),
+                     text_color=COLORS["accent_action_deep"]
+                     ).place(relx=0.5, rely=0.5, anchor="center")
+        ctk.CTkLabel(top, text=SHOP_NAME,
+                     font=("Segoe UI Semibold", 17, "bold"),
+                     text_color=COLORS["on_accent"]).pack(side="left")
+
+        # Middle: the promise
+        mid = ctk.CTkFrame(brand, fg_color="transparent")
+        mid.pack(fill="both", expand=True, padx=32)
+        ctk.CTkLabel(mid, text=t("Ring it up in seconds.", L),
+                     font=("Segoe UI Semibold", 32, "bold"),
+                     text_color=COLORS["on_accent"],
+                     wraplength=300, justify="left", anchor="w"
+                     ).pack(anchor="w", pady=(0, 12))
+        ctk.CTkLabel(
+            mid,
+            text=t("Bills, stock, udhaar and reports — one window, keyboard first.", L),
+            font=FONTS["body"], text_color=COLORS["on_accent_soft"],
+            wraplength=300, justify="left", anchor="w"
+        ).pack(anchor="w")
+
+        # Bottom: status chips
+        chips = ctk.CTkFrame(brand, fg_color="transparent")
+        chips.pack(fill="x", padx=32, pady=(0, 32))
+        self._chip(chips, f"v{APP_VERSION}")
+        self._chip(chips, self._backup_chip_text())
+
+        # ── Right: form ──────────────────────────────────────
         form = ctk.CTkFrame(card, fg_color="transparent")
-        form.pack(fill="both", expand=True, padx=40, pady=20)
+        form.pack(side="left", fill="both", expand=True, padx=(44, 56), pady=52)
 
-        L = self._lang
-        ctk.CTkLabel(form, text=t("Welcome Back!", L) + " 👋",
-                     font=("Segoe UI", 22, "bold"),
-                     text_color=COLORS["text_dark"]).pack(pady=(10, 4))
-        ctk.CTkLabel(form, text=t("Please sign in to continue", L),
-                     font=("Segoe UI", 15),
-                     text_color=COLORS["text_muted"]).pack(pady=(0, 20))
+        inner = ctk.CTkFrame(form, fg_color="transparent")
+        inner.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0)
+
+        ctk.CTkLabel(inner, text=t("Welcome back", L),
+                     font=("Segoe UI Semibold", 30, "bold"),
+                     text_color=COLORS["text_dark"], anchor="w"
+                     ).pack(fill="x")
+        ctk.CTkLabel(inner, text=t("Sign in to open the counter.", L),
+                     font=FONTS["body"], text_color=COLORS["text_muted"],
+                     anchor="w").pack(fill="x", pady=(6, 28))
 
         # Username
-        ctk.CTkLabel(form, text=t("Username", L),
-                     font=FONTS["label_form"],
-                     text_color=COLORS["text_dark"],
-                     anchor="w").pack(fill="x")
-        self.username_entry = ctk.CTkEntry(
-            form,
-            placeholder_text=t("Enter your username", L),
-            font=FONTS["input"],
-            height=50,
-            border_width=2,
-            border_color=COLORS["glass_border"],
-            fg_color=COLORS["bg_input"],
-            text_color=COLORS["text_dark"],
-            corner_radius=14,
-        )
-        self.username_entry.pack(fill="x", pady=(4, 14))
+        ctk.CTkLabel(inner, text=t("Username", L), font=FONTS["small"],
+                     text_color=COLORS["text_secondary"], anchor="w"
+                     ).pack(fill="x", pady=(0, 7))
+        self.username_entry = self._field(inner)
+        self.username_entry.pack(fill="x", pady=(0, 16))
 
-        # Password
-        ctk.CTkLabel(form, text=t("Password", L),
-                     font=FONTS["label_form"],
-                     text_color=COLORS["text_dark"],
-                     anchor="w").pack(fill="x")
-        self.password_entry = ctk.CTkEntry(
-            form,
-            placeholder_text=t("Enter your password", L),
-            show="●",
-            font=FONTS["input"],
-            height=50,
-            border_width=2,
-            border_color=COLORS["glass_border"],
-            fg_color=COLORS["bg_input"],
-            text_color=COLORS["text_dark"],
-            corner_radius=14,
+        # Password + show/hide
+        ctk.CTkLabel(inner, text=t("Password", L), font=FONTS["small"],
+                     text_color=COLORS["text_secondary"], anchor="w"
+                     ).pack(fill="x", pady=(0, 7))
+
+        pwd_row = ctk.CTkFrame(inner, fg_color="transparent")
+        pwd_row.pack(fill="x")
+        self.password_entry = self._field(pwd_row, show="●")
+        self.password_entry.pack(side="left", fill="x", expand=True)
+
+        self.show_btn = ctk.CTkButton(
+            pwd_row, text=t("Show", L), width=62, height=52,
+            font=FONTS["button"], fg_color="transparent",
+            hover_color=COLORS["accent_action_tint"],
+            text_color=COLORS["accent_action"],
+            corner_radius=26, border_width=0,
+            command=self._toggle_password,
         )
-        self.password_entry.pack(fill="x", pady=(4, 5))
+        self.show_btn.pack(side="left", padx=(6, 0))
 
         # Error label
         self.error_label = ctk.CTkLabel(
-            form, text="", font=("Segoe UI", 14),
-            text_color=COLORS["btn_danger"]
+            inner, text="", font=FONTS["small"],
+            text_color=COLORS["accent_danger"], anchor="w",
         )
-        self.error_label.pack(pady=(0, 8))
+        self.error_label.pack(fill="x", pady=(8, 0))
 
-        # Login button (gradient-inspired)
+        # Sign in — the one solid blue CTA on the screen
         self.login_btn = ctk.CTkButton(
-            form,
-            text="🔓   " + t("Sign In", L),
-            font=("Segoe UI", 18, "bold"),
-            fg_color=COLORS["btn_primary"],
+            inner,
+            text="🔒   " + t("Sign In", L),
+            font=("Segoe UI Semibold", 17, "bold"),
+            fg_color=COLORS["accent_action"],
             hover_color=COLORS["btn_primary_h"],
-            text_color="white",
-            height=55,
-            corner_radius=18,
-            border_width=2,
-            border_color=COLORS["glass_glow"],
+            text_color=COLORS["on_accent"],
+            height=METRICS["control_lg"],
+            corner_radius=RADII["pill_lg"],
+            border_width=0,
             command=self._do_login,
         )
-        self.login_btn.pack(fill="x", pady=(5, 10))
+        self.login_btn.pack(fill="x", pady=(16, 0))
 
-        # Hint — only while the seeded default admin password is still in place,
-        # so we don't advertise credentials that no longer work (or that a
-        # security-conscious owner has already changed).
+        # Hint — only while the seeded default admin password is still in
+        # place, so we don't advertise credentials that no longer work (or
+        # that a security-conscious owner has already changed).
         try:
             show_hint = self.winfo_toplevel().db.is_default_admin_active()
         except Exception:
             show_hint = False
         if show_hint:
-            ctk.CTkLabel(form, text=t("Default: admin / admin123", L),
-                         font=("Segoe UI", 13),
-                         text_color="#94A3B8").pack()
+            ctk.CTkLabel(
+                inner,
+                text=t("First run? Use admin / admin123, then change it in Settings.", L),
+                font=FONTS["small"], text_color=COLORS["text_muted"],
+                anchor="w", justify="left", wraplength=420,
+            ).pack(fill="x", pady=(16, 0))
 
         # Keyboard bindings
         self.username_entry.bind("<Return>", lambda e: self.password_entry.focus())
         self.password_entry.bind("<Return>", lambda e: self._do_login())
         self.after(100, self.username_entry.focus)
 
-    def _on_resize(self, event):
-        # Update background image size dynamically on resize (bulletproof check)
-        w = self.winfo_width()
-        h = self.winfo_height()
-        if w > 10 and h > 10 and (w != self._current_width or h != self._current_height):
-            self._current_width = w
-            self._current_height = h
-            if hasattr(self, 'bg_image') and hasattr(self, 'bg_label'):
-                self.bg_image.configure(size=(w, h))
-                self.bg_label.configure(image=self.bg_image)
+    # ── Behaviour ───────────────────────────────────────────
+    def _toggle_password(self):
+        self._pwd_shown = not self._pwd_shown
+        self.password_entry.configure(show="" if self._pwd_shown else "●")
+        self.show_btn.configure(
+            text=t("Hide" if self._pwd_shown else "Show", self._lang))
 
     def _do_login(self):
         L = self._lang
@@ -170,7 +236,6 @@ class LoginScreen(ctk.CTkFrame):
             self.error_label.configure(text="⚠  " + t("Please enter username and password.", L))
             return
 
-        # Import db from parent
         app = self.winfo_toplevel()
         user = app.db.authenticate(username, password)
 
