@@ -53,7 +53,7 @@ class PurchaseScreen(ctk.CTkFrame):
         # GRN-4: show auto-generated next GRN number
         self.grn_no_label = ctk.CTkLabel(
             hdr, text=f"{t('GRN No', L)}: —",
-            font=FONTS["body_bold"], text_color="white",
+            font=FONTS["body_bold"], text_color=COLORS["on_accent"],
             fg_color=COLORS["btn_primary"], corner_radius=10,
             padx=14, pady=6,
         )

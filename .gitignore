@@ -35,3 +35,5 @@ crash_log.txt
 .DS_Store
 .fuse_hidden*
 Thumbs.db
+
+.impeccable/

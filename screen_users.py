@@ -216,7 +216,7 @@ class UserScreen(ctk.CTkFrame):
         hdr.pack_propagate(False)
         ctk.CTkLabel(hdr,
                      text=t("Edit User", L) if is_edit else t("Add New User", L),
-                     font=FONTS["subheading"], text_color="white").pack(
+                     font=FONTS["subheading"], text_color=COLORS["on_accent"]).pack(
                           side="left", padx=20, pady=14)
 
         body = ctk.CTkFrame(dlg, fg_color=COLORS["bg_main"])
@@ -327,7 +327,7 @@ class UserScreen(ctk.CTkFrame):
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
         ctk.CTkLabel(hdr, text=t("Change Password", L) + f" — {u['name']}",
-                     font=FONTS["body_bold"], text_color="white").pack(
+                     font=FONTS["body_bold"], text_color=COLORS["on_accent"]).pack(
                           side="left", padx=20, pady=14)
 
         body = ctk.CTkFrame(dlg, fg_color=COLORS["bg_main"])

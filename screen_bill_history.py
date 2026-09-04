@@ -32,11 +32,11 @@ class BillHistoryScreen(ctk.CTkFrame):
         tint with dark ink, which is how Direction B ranks actions."""
         tints = {
             "primary": (COLORS["accent_action"], COLORS["btn_primary_h"], COLORS["on_accent"]),
-            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_deep"]),
-            "money":   (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money"]),
+            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_fg"]),
+            "money":   (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money_fg"]),
             "expiry":  (COLORS["accent_expiry_tint"], COLORS["accent_expiry_tint"], COLORS["accent_expiry_fg"]),
             "stock":   (COLORS["accent_stock_tint"], COLORS["accent_stock_tint"], COLORS["accent_stock_fg"]),
-            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger_tint"], COLORS["accent_danger"]),
+            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger_tint"], COLORS["accent_danger_fg"]),
             "plain":   (COLORS["bg_main"], COLORS["glass_glow"], COLORS["text_dark"]),
         }
         fg, hov, ink = tints.get(kind, tints["plain"])
@@ -50,9 +50,9 @@ class BillHistoryScreen(ctk.CTkFrame):
     def _stat_chip(self, parent, kind):
         """A 34px status count chip in its own hue tint."""
         tints = {
-            "paid":  (COLORS["accent_money_tint"], COLORS["accent_money"]),
+            "paid":  (COLORS["accent_money_tint"], COLORS["accent_money_fg"]),
             "due":   (COLORS["accent_expiry_tint"], COLORS["accent_expiry_fg"]),
-            "void":  (COLORS["accent_danger_tint"], COLORS["accent_danger"]),
+            "void":  (COLORS["accent_danger_tint"], COLORS["accent_danger_fg"]),
             "draft": (COLORS["accent_counts_tint"], COLORS["accent_counts_fg"]),
         }
         bg, ink = tints[kind]
@@ -805,7 +805,7 @@ class BillHistoryScreen(ctk.CTkFrame):
             self._load_bills()
 
         ctk.CTkButton(btns, text=t("Process Return", L), font=FONTS["button"],
-                      fg_color=COLORS["accent_stock_fg"], hover_color=COLORS["accent_danger"], height=44, width=180,
+                      fg_color=COLORS["accent_stock"], hover_color=COLORS["accent_stock_fg"], height=44, width=180,
                       command=_confirm).pack(side="left")
         ctk.CTkButton(btns, text=t("Cancel", L), font=FONTS["button"],
                       fg_color=COLORS["btn_secondary"], height=44, width=120,

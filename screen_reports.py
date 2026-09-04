@@ -120,8 +120,8 @@ class ReportScreen(ctk.CTkFrame):
               height=None):
         tints = {
             "primary": (COLORS["accent_action"], COLORS["btn_primary_h"], COLORS["on_accent"]),
-            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_deep"]),
-            "money":   (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money"]),
+            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_fg"]),
+            "money":   (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money_fg"]),
             "counts":  (COLORS["accent_counts_tint"], COLORS["accent_counts_tint"], COLORS["accent_counts_fg"]),
             "plain":   (COLORS["bg_white"], COLORS["bg_main"], COLORS["text_dark"]),
         }
@@ -738,7 +738,7 @@ class ReportScreen(ctk.CTkFrame):
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
         ctk.CTkLabel(hdr, text=f"📅  " + t("Bills for", L) + f" {date_str}",
-                     font=FONTS["subheading"], text_color="white"
+                     font=FONTS["subheading"], text_color=COLORS["on_accent"]
                     ).pack(side="left", padx=20, pady=10)
         active = [b for b in bills if b.get("status") == "Active"]
         grand  = sum(float(b.get("grand_total", 0)) for b in active)

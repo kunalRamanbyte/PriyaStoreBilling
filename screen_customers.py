@@ -286,7 +286,7 @@ class CustomerScreen(ctk.CTkFrame):
         bal = cust.get("credit_balance") or 0
         change_bal = cust.get("change_balance") or 0
         ctk.CTkLabel(hdr, text=f"📖  {cust['name']}  |  " + t("Phone", L) + f": {cust.get('phone','—')}",
-                     font=FONTS["body_bold"], text_color="white"
+                     font=FONTS["body_bold"], text_color=COLORS["on_accent"]
                     ).pack(side="left", padx=20, pady=10)
         bal_text = t("Current Balance", L) + f": ₹{bal:,.2f}"
         if change_bal > 0:
@@ -296,8 +296,8 @@ class CustomerScreen(ctk.CTkFrame):
                      font=FONTS["body_bold"],
                      fg_color=(COLORS["accent_danger_tint"] if owed
                                else COLORS["accent_money_tint"]),
-                     text_color=(COLORS["accent_danger"] if owed
-                                 else COLORS["accent_money"]),
+                     text_color=(COLORS["accent_danger_fg"] if owed
+                                 else COLORS["accent_money_fg"]),
                      corner_radius=RADII["badge"], height=32,
                     ).pack(side="right", padx=20)
 

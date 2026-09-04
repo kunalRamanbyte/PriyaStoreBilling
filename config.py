@@ -151,6 +151,9 @@ LIGHT_COLORS = {
     "accent_action"      : "#2F6BD8",
     "accent_action_deep" : "#2558B4",
     "accent_action_tint" : "#EAF1FF",
+    "accent_action_fg"   : "#2558B4",
+    "accent_money_fg"    : "#0B7268",
+    "accent_danger_fg"   : "#A32F2F",
     "accent_counts"      : "#7B61FF",
     "accent_counts_fg"   : "#5340BB",
     "accent_counts_tint" : "#F1EDFF",
@@ -213,7 +216,7 @@ LIGHT_COLORS = {
     "row_draft"       : "#F1EDFF",
     "row_inactive"    : "#F4F6FB",
     "row_admin"       : "#F1EDFF",
-    "fg_inactive"     : "#8A92A6",
+    "fg_inactive"     : "#646C82",
     "fg_void"         : "#C23A3A",
     "bg_expiry_alert" : "#FFF7E6",
     "fg_expiry_alert" : "#7A5210",
@@ -267,13 +270,13 @@ DARK_COLORS = {
 
     # ── Buttons ──────────────────────────────────────────────
     "btn_primary"   : "#2F6BD8",
-    "btn_primary_h" : "#4880E4",
+    "btn_primary_h" : "#2555AE",
     "btn_success"   : "#0B7268",
-    "btn_success_h" : "#0E8A7E",
+    "btn_success_h" : "#08564F",
     "btn_danger"    : "#C23A3A",
-    "btn_danger_h"  : "#D14A4A",
+    "btn_danger_h"  : "#9E2F2F",
     "btn_warning"   : "#9A6510",
-    "btn_warning_h" : "#B67B1D",
+    "btn_warning_h" : "#7A5210",
     "btn_secondary" : "#3A4359",
     "btn_secondary_h": "#4A5570",
     "btn_purple"    : "#5340BB",
@@ -329,13 +332,16 @@ DARK_COLORS = {
     "cat_default"   : "#98A2BD",
 
     # ── Direction B semantic accents ─────────────────────────
-    "accent_action"      : "#4880E4",
-    "accent_action_deep" : "#2F6BD8",
+    "accent_action"      : "#2F6BD8",
+    "accent_action_deep" : "#24539F",
     "accent_action_tint" : "#18243F",
+    "accent_action_fg"   : "#9EC1FF",
+    "accent_money_fg"    : "#5FD3C2",
+    "accent_danger_fg"   : "#F09A9A",
     "accent_counts"      : "#8E78FF",
     "accent_counts_fg"   : "#B9AAFF",
     "accent_counts_tint" : "#221D3D",
-    "accent_money"       : "#2FA093",
+    "accent_money"       : "#0B7268",
     "accent_money_tint"  : "#10322E",
     "accent_expiry"      : "#F0B429",
     "accent_expiry_fg"   : "#E8C46B",
@@ -343,7 +349,7 @@ DARK_COLORS = {
     "accent_stock"       : "#FF7A4D",
     "accent_stock_fg"    : "#FFA383",
     "accent_stock_tint"  : "#331D13",
-    "accent_danger"      : "#E05555",
+    "accent_danger"      : "#C23A3A",
     "accent_danger_tint" : "#331616",
     "on_accent"          : "#FFFFFF",
     "on_accent_soft"     : "#C3D3F2",
@@ -388,7 +394,7 @@ DARK_COLORS = {
     "row_draft"       : "#221D3D",
     "row_inactive"    : "#1D2437",
     "row_admin"       : "#221D3D",
-    "fg_inactive"     : "#6B7490",
+    "fg_inactive"     : "#9AA3BC",
     "fg_void"         : "#F08A8A",
     "bg_expiry_alert" : "#2E2411",
     "fg_expiry_alert" : "#E8C46B",
@@ -497,6 +503,32 @@ METRICS = {
     "row_lg"     : 62,   # Bill-history row
     "hairline"   : 1,
 }
+
+# --- Responsive breakpoints ---
+# Measured on the LOGICAL width (window px / widget scaling), because every
+# widget size in this app is expressed in logical units. A 1366px window at
+# the 1.0 baseline is "standard"; the same window on a machine that scaled up
+# for a tall screen can be "compact", which is exactly the case that used to
+# clip the cart and the report header.
+BREAKPOINTS = {
+    "compact":  0,      # < 1180 logical - 720p panels, or a resized window
+    "standard": 1180,   # the 1366x768 shop PC at scale 1.0
+    "wide":     1560,   # 1600x900 and up
+}
+
+
+def breakpoint_for(logical_width: float) -> str:
+    """Name the layout class for a logical content width."""
+    if logical_width >= BREAKPOINTS["wide"]:
+        return "wide"
+    if logical_width >= BREAKPOINTS["standard"]:
+        return "standard"
+    return "compact"
+
+
+# Page gutter per breakpoint. One source, so screens stop inventing 12/20/
+# 24/25/26/28 independently.
+GUTTERS = {"compact": 18, "standard": 28, "wide": 36}
 
 # --- Units ---
 UNITS = ["piece", "kg", "gram", "litre", "ml", "box", "pack", "dozen", "bottle"]

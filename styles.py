@@ -84,9 +84,14 @@ def setup_ttk_styles(mode="light"):
         relief="flat",
     )
 
+    # Selection must be unmistakable: Bill History's Void button acts on it.
+    # The old pairing was tbl_select on bg_white -- 1.13:1 against an
+    # unselected row, with no foreground change. A solid accent fill with
+    # white ink is the only state a shopkeeper can be sure of before
+    # destroying a bill.
     _select = dict(
-        background=[("selected", COLORS["tbl_select"])],
-        foreground=[("selected", COLORS["text_dark"])],
+        background=[("selected", COLORS["accent_action"])],
+        foreground=[("selected", COLORS["on_accent"])],
     )
 
     # A header must not flash a raised 3-D box when hovered or clicked;
@@ -102,6 +107,9 @@ def setup_ttk_styles(mode="light"):
         hdr = f"{name}.Treeview.Heading"
 
         s.configure(tv, **{**_row, "rowheight": ROW_HEIGHTS.get(name, METRICS["row"])})
+        # clam draws a raised 3-D rectangle inside the card that holds the
+        # table; flatten it so the rounded card is the only frame.
+        s.layout(tv, [(f"{name}.Treeview.treearea", {"sticky": "nswe"})])
         s.configure(hdr, **_heading)
         s.map(tv, **_select)
         s.map(hdr, **_heading_map)

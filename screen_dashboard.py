@@ -18,11 +18,11 @@ from lang import t
 # amber expiry, teal money-in. The tint is the bubble, the vivid colour is
 # the icon, and the sub-label takes the dark ink of the same family.
 KPI_HUES = {
-    "action": ("accent_action_tint", "accent_action",    "accent_action"),
+    "action": ("accent_action_tint", "accent_action",    "accent_action_fg"),
     "counts": ("accent_counts_tint", "accent_counts",    "accent_counts_fg"),
     "stock" : ("accent_stock_tint",  "accent_stock",     "accent_stock_fg"),
     "expiry": ("accent_expiry_tint", "accent_expiry",    "accent_expiry_fg"),
-    "money" : ("accent_money_tint",  "accent_money",     "accent_money"),
+    "money" : ("accent_money_tint",  "accent_money",     "accent_money_fg"),
 }
 
 PERIODS = ("Today", "Week", "All")
@@ -47,9 +47,9 @@ class DashboardScreen(ctk.CTkFrame):
         secondary actions quiet and still at 4.5:1."""
         tints = {
             "primary": (COLORS["accent_action"], COLORS["btn_primary_h"], COLORS["on_accent"]),
-            "action" : (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_deep"]),
+            "action" : (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_fg"]),
             "counts" : (COLORS["accent_counts_tint"], COLORS["accent_counts_tint"], COLORS["accent_counts_fg"]),
-            "money"  : (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money"]),
+            "money"  : (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money_fg"]),
             "expiry" : (COLORS["accent_expiry_tint"], COLORS["accent_expiry_tint"], COLORS["accent_expiry_fg"]),
             "stock"  : (COLORS["accent_stock_tint"], COLORS["accent_stock_tint"], COLORS["accent_stock_fg"]),
             "plain"  : (COLORS["bg_white"], COLORS["bg_main"], COLORS["text_dark"]),

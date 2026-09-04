@@ -84,10 +84,10 @@ class SettingsScreen(ctk.CTkFrame):
               height=None):
         tints = {
             "primary": (COLORS["accent_action"], COLORS["btn_primary_h"], COLORS["on_accent"]),
-            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_deep"]),
-            "money":   (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money"]),
+            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_fg"]),
+            "money":   (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money_fg"]),
             "expiry":  (COLORS["accent_expiry_tint"], COLORS["accent_expiry_tint"], COLORS["accent_expiry_fg"]),
-            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger_tint"], COLORS["accent_danger"]),
+            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger_tint"], COLORS["accent_danger_fg"]),
             "danger_solid": (COLORS["accent_danger"], COLORS["btn_danger_h"], COLORS["on_accent"]),
             "plain":   (COLORS["bg_main"], COLORS["glass_glow"], COLORS["text_dark"]),
         }

@@ -60,12 +60,12 @@ class BillingScreen(ctk.CTkFrame):
               height=None, font=None):
         tints = {
             "primary": (COLORS["accent_action"], COLORS["btn_primary_h"], COLORS["on_accent"]),
-            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_deep"]),
+            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"], COLORS["accent_action_fg"]),
             "counts":  (COLORS["accent_counts_tint"], COLORS["accent_counts_tint"], COLORS["accent_counts_fg"]),
             "money":   (COLORS["accent_money"], COLORS["btn_success_h"], COLORS["on_accent"]),
-            "money_tint": (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money"]),
+            "money_tint": (COLORS["accent_money_tint"], COLORS["accent_money_tint"], COLORS["accent_money_fg"]),
             "expiry":  (COLORS["accent_expiry_tint"], COLORS["accent_expiry_tint"], COLORS["accent_expiry_fg"]),
-            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger_tint"], COLORS["accent_danger"]),
+            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger_tint"], COLORS["accent_danger_fg"]),
             "plain":   (COLORS["bg_white"], COLORS["bg_main"], COLORS["text_dark"]),
         }
         fg, hov, ink = tints.get(kind, tints["plain"])
@@ -339,7 +339,7 @@ class BillingScreen(ctk.CTkFrame):
             COLORS["accent_expiry_tint"], COLORS["accent_expiry_fg"],
             t("Prev. Udhaar", L), "lbl_udhaar_adj")
         self.change_row_frame = tint_row(
-            COLORS["accent_money_tint"], COLORS["accent_money"],
+            COLORS["accent_money_tint"], COLORS["accent_money_fg"],
             t("Change Used", L), "lbl_change_adj")
         self.roundoff_row_frame = tint_row(
             COLORS["bg_input"], COLORS["text_muted"],
@@ -407,7 +407,7 @@ class BillingScreen(ctk.CTkFrame):
             height=44, width=130, font=("Segoe UI Semibold", 17, "bold"),
             border_width=0, corner_radius=22,
             fg_color=COLORS["accent_money_tint"],
-            text_color=COLORS["accent_money"], justify="right")
+            text_color=COLORS["accent_money_fg"], justify="right")
         self.cash_entry.pack(side="right")
 
         change_f = ctk.CTkFrame(pay, fg_color=COLORS["accent_money_tint"],
@@ -421,11 +421,11 @@ class BillingScreen(ctk.CTkFrame):
         ch_inner.pack(fill="x", padx=16, pady=10)
         ctk.CTkLabel(ch_inner, text=t("Change Due :", L),
                      font=FONTS["body_bold"],
-                     text_color=COLORS["accent_money"]).pack(side="left")
+                     text_color=COLORS["accent_money_fg"]).pack(side="left")
         self.lbl_change = ctk.CTkLabel(
             ch_inner, text="\u20b9 0.00",
             font=("Segoe UI Semibold", 24, "bold"),
-            text_color=COLORS["accent_money"], anchor="e")
+            text_color=COLORS["accent_money_fg"], anchor="e")
         self.lbl_change.pack(side="right")
 
         self._paint_payment_chips()
@@ -505,12 +505,12 @@ class BillingScreen(ctk.CTkFrame):
         """Direction B chip: a pale tint with the dark ink of the same hue.
         `kind` names the meaning, never a raw colour."""
         tints = {
-            "action":  (COLORS["accent_action_tint"], COLORS["accent_action_deep"]),
+            "action":  (COLORS["accent_action_tint"], COLORS["accent_action_fg"]),
             "counts":  (COLORS["accent_counts_tint"], COLORS["accent_counts_fg"]),
-            "money":   (COLORS["accent_money_tint"], COLORS["accent_money"]),
+            "money":   (COLORS["accent_money_tint"], COLORS["accent_money_fg"]),
             "expiry":  (COLORS["accent_expiry_tint"], COLORS["accent_expiry_fg"]),
             "stock":   (COLORS["accent_stock_tint"], COLORS["accent_stock_fg"]),
-            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger"]),
+            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger_fg"]),
             "neutral": (COLORS["bg_input"], COLORS["text_secondary"]),
         }
         bg, ink = tints.get(kind, tints["neutral"])
@@ -1566,8 +1566,10 @@ class BillingScreen(ctk.CTkFrame):
         except ValueError:
             cash = grand = 0
         change = max(0, round(cash - grand))
-        self.lbl_change.configure(text=f"₹  {change:,}",
-                                   text_color="white")
+        # No text_color here. It used to force "white", left over from when
+        # this panel was solid teal; on the Direction B mint tint that is
+        # 1.09:1 -- the change handed across the counter was invisible.
+        self.lbl_change.configure(text=f"₹  {change:,}")
         if self._selected_customer_id:
             if cash < grand and cash > 0:
                 self._set_status(f"ℹ️  Unpaid ₹{grand - cash:,.2f} will go to Udhaar.")
