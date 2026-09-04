@@ -420,6 +420,13 @@ T = {
     "reorder now":          ["reorder now",              "এখনই অর্ডার করো",     "अभी ऑर्डर करें"],
     "this shift":           ["this shift",               "এই শিফটে",             "इस शिफ्ट में"],
     "expired":              ["expired",                  "মেয়াদ শেষ",             "एक्सपायर्ड"],
+
+    # Direction B bill history
+    "7 days":               ["7 days",                   "৭ দিন",                "7 दिन"],
+    "30 days":              ["30 days",                  "৩০ দিন",               "30 दिन"],
+    "collected":            ["collected",                "জমা হয়েছে",           "जमा हुआ"],
+    "selected":             ["selected",                 "সিলেক্ট করা",          "चुना गया"],
+    "No bill selected":     ["No bill selected",         "কোনো বিল সিলেক্ট করা নেই", "कोई बिल नहीं चुना"],
     "Saved":                ["Saved",                    "সেভ হয়েছে",          "सेव हो गया"],
     "Settings saved successfully!":
         ["Settings saved successfully!",
