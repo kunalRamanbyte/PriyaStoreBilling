@@ -278,14 +278,35 @@ def test_dashboard():
 
 check("Dashboard — loads without error", test_dashboard)
 
-# ── 14. Cart.Treeview header colour ──────────────────────────────────────────
-def test_cart_header_violet():
+# ── 14. Direction B table headers ────────────────────────────────────────────
+def test_table_headers_direction_b():
+    """Direction B gives every table the same quiet uppercase header sitting
+    on the card surface, with exactly one deliberate exception: the dashboard
+    expiry panel, which owns amber. A screen that reintroduces its own header
+    colour (the old violet POS cart, the old near-black band) breaks the
+    single-surface reading of the card, so pin both halves of the rule."""
     from tkinter import ttk
+    from styles import STYLE_NAMES
     s2 = ttk.Style()
-    bg = s2.lookup("Cart.Treeview.Heading", "background")
-    assert bg == "#4C1D95", f"Cart header expected #4C1D95, got {bg!r}"
 
-check("styles.py — Cart.Treeview.Heading is violet #4C1D95", test_cart_header_violet)
+    shared_bg = COLORS["tbl_header_bg"]
+    shared_fg = COLORS["tbl_header_fg"]
+    for name in STYLE_NAMES:
+        if name == "Exp":
+            continue
+        hdr = f"{name}.Treeview.Heading"
+        bg = s2.lookup(hdr, "background")
+        fg = s2.lookup(hdr, "foreground")
+        assert bg == shared_bg, f"{hdr} background expected {shared_bg}, got {bg!r}"
+        assert fg == shared_fg, f"{hdr} foreground expected {shared_fg}, got {fg!r}"
+
+    exp_bg = s2.lookup("Exp.Treeview.Heading", "background")
+    exp_fg = s2.lookup("Exp.Treeview.Heading", "foreground")
+    assert exp_bg == COLORS["accent_expiry_tint"],         f"Exp header expected the amber tint {COLORS['accent_expiry_tint']}, got {exp_bg!r}"
+    assert exp_fg == COLORS["accent_expiry_fg"],         f"Exp header expected the dark amber ink {COLORS['accent_expiry_fg']}, got {exp_fg!r}"
+
+check("styles.py — Direction B headers (shared + amber Exp override)",
+      test_table_headers_direction_b)
 
 # ── 15. ROW_COLORS in config ──────────────────────────────────────────────────
 def test_row_colors_config():

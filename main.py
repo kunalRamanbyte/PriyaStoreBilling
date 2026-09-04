@@ -31,7 +31,7 @@ except Exception:
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
 
-from config import (COLORS, FONTS, RADII, APP_TITLE, APP_VERSION, SHOP_NAME,
+from config import (COLORS, FONTS, RADII, METRICS, APP_TITLE, APP_VERSION, SHOP_NAME,
                     WINDOW_WIDTH, WINDOW_HEIGHT, SIDEBAR_WIDTH, resource_path)
 from database import Database
 from lang import t
@@ -72,6 +72,7 @@ class BillingApp(ctk.CTk):
 
         self.screens      = {}
         self.nav_buttons  = {}
+        self.nav_icons    = {}
 
         setup_ttk_styles(ctk.get_appearance_mode().lower())              # register all ttk styles once
         self._setup_window()
@@ -273,94 +274,40 @@ class BillingApp(ctk.CTk):
         for w in self.winfo_children():
             w.destroy()
 
-        self._build_header()
-
+        # Direction B has no global header band: the brand lives in the
+        # sidebar and each screen owns its own title header, so the content
+        # area starts at the top of the window.
         body = ctk.CTkFrame(self, fg_color=COLORS["bg_main"], corner_radius=0)
         body.pack(fill="both", expand=True)
-        body.grid_columnconfigure(1, weight=1)
+        body.grid_columnconfigure(2, weight=1)
         body.grid_rowconfigure(0, weight=1)
 
         sidebar = self._build_sidebar(body)
         sidebar.grid(row=0, column=0, sticky="nsew")
 
+        # Hairline between sidebar and content — a solid 1px frame, since a
+        # CTkFrame border would draw on all four sides.
+        ctk.CTkFrame(body, fg_color=COLORS["hairline"], corner_radius=0,
+                     width=1).grid(row=0, column=1, sticky="ns")
+
         self.content_area = ctk.CTkFrame(body, fg_color=COLORS["bg_main"],
                                           corner_radius=0)
-        self.content_area.grid(row=0, column=1, sticky="nsew")
+        self.content_area.grid(row=0, column=2, sticky="nsew")
 
         self.navigate_to("dashboard")
 
-    def _build_header(self):
-        """Modern frosted-glass header with gradient accent."""
-        hdr = ctk.CTkFrame(self, fg_color=COLORS["bg_header"],
-                            corner_radius=0, height=64)
-        hdr.pack(fill="x")
-        hdr.pack_propagate(False)
-
-        # Gradient accent line at bottom (simulated with layered frames)
-        accent_outer = ctk.CTkFrame(hdr, fg_color=COLORS["btn_primary"],
-                                     corner_radius=0, height=3)
-        accent_outer.pack(side="bottom", fill="x")
-
-        ctk.CTkLabel(
-            hdr, text="🛒  Priya Store",
-            font=("Segoe UI Semibold", 19, "bold"),
-            text_color=COLORS["text_dark"],
-        ).pack(side="left", padx=28, pady=14)
-
-        # User badge — modern pill with glass effect
-        user_badge = ctk.CTkFrame(hdr, fg_color=COLORS["btn_primary"],
-                                   corner_radius=18,
-                                   border_width=2,
-                                   border_color=COLORS["glass_glow"])
-        user_badge.pack(side="right", padx=24, pady=13)
-        ctk.CTkLabel(
-            user_badge,
-            text=f"  👤  {self.current_user['name']}  •  {self.current_role.title()}  ",
-            font=FONTS["small_bold"],
-            text_color="white",
-        ).pack(padx=10, pady=5)
+    def _nav_font(self, active: bool):
+        """Direction B weights the active nav label bold and the rest regular."""
+        family, size = FONTS["sidebar"][0], FONTS["sidebar"][1]
+        return (family, size, "bold") if active else (family, size)
 
     def _build_sidebar(self, parent):
-        """Modern dark-navy glassmorphic sidebar with glow active states."""
+        """Direction B sidebar: a white surface, a rounded brand mark, and
+        44px nav pills where a solid blue fill — not a glow or a border —
+        marks the screen you are on."""
         sidebar = ctk.CTkFrame(parent, fg_color=COLORS["bg_sidebar"],
                                 corner_radius=0, width=SIDEBAR_WIDTH)
         sidebar.pack_propagate(False)
-
-        # Draw dynamic royal-blue-to-navy-blue gradient on sidebar
-        sidebar_canvas = tk.Canvas(sidebar, borderwidth=0, highlightthickness=0)
-        sidebar_canvas.place(x=0, y=0, relwidth=1, relheight=1)
-        sidebar_canvas._grad_size = (0, 0)   # last (w, h) actually drawn
-        sidebar_canvas._grad_job = None      # pending debounce callback
-
-        def _render_sidebar_grad():
-            sidebar_canvas._grad_job = None
-            w, h = sidebar_canvas.winfo_width(), sidebar_canvas.winfo_height()
-            if w <= 1 or h <= 1 or (w, h) == sidebar_canvas._grad_size:
-                return
-            sidebar_canvas._grad_size = (w, h)
-            sidebar_canvas.delete("grad")
-            # Dynamic sidebar gradient colors loaded from config
-            c_start = COLORS.get("sidebar_grad_start", "#1E3A8A")
-            c_end = COLORS.get("sidebar_grad_end", "#0F172A")
-            r1, g1, b1 = int(c_start[1:3], 16), int(c_start[3:5], 16), int(c_start[5:7], 16)
-            r2, g2, b2 = int(c_end[1:3], 16), int(c_end[3:5], 16), int(c_end[5:7], 16)
-            # Step by 2px and draw a thick band — visually identical at half the line count.
-            for y in range(0, h, 2):
-                f = y / h
-                r = int(r1 + (r2 - r1) * f)
-                g = int(g1 + (g2 - g1) * f)
-                b = int(b1 + (b2 - b1) * f)
-                sidebar_canvas.create_line(0, y, w, y, width=2,
-                                           fill=f"#{r:02x}{g:02x}{b:02x}", tags="grad")
-
-        def _draw_sidebar_grad(_event=None):
-            # Debounce: coalesce the burst of <Configure> events fired during a
-            # window-resize drag into a single redraw once the drag settles.
-            if sidebar_canvas._grad_job is not None:
-                sidebar_canvas.after_cancel(sidebar_canvas._grad_job)
-            sidebar_canvas._grad_job = sidebar_canvas.after(60, _render_sidebar_grad)
-
-        sidebar_canvas.bind("<Configure>", _draw_sidebar_grad)
 
         NAV = [
             ("🏠", "Dashboard",    "dashboard",    ["admin", "cashier", "stock_manager"]),
@@ -378,46 +325,42 @@ class BillingApp(ctk.CTk):
             ("📋", "Activity Log", "activity_log", ["admin"]),
         ]
 
-        # Authoritative screen→roles map, consulted by navigate_to() so that
+        # Authoritative screen->roles map, consulted by navigate_to() so that
         # non-sidebar entry points (dashboard quick actions, resume-draft, etc.)
         # cannot escalate a role past what the sidebar allows.
         self._screen_roles = {key: roles for _, _, key, roles in NAV}
 
-        # ── App brand block (premium) ────────────────────
+        # -- Brand block ------------------------------------------
         brand = ctk.CTkFrame(sidebar, fg_color="transparent")
-        brand.pack(fill="x", padx=18, pady=(12, 6)) # Reduced padding to fit small screens
+        brand.pack(fill="x", padx=20, pady=(18, 14))
 
-        # Glow circle behind icon
-        icon_frame = ctk.CTkFrame(brand, fg_color=COLORS["sidebar_active"],
-                                   corner_radius=22, width=44, height=44,
-                                   border_width=2, border_color=COLORS["sidebar_glow"])
-        icon_frame.pack(side="left", padx=(0, 12))
-        icon_frame.pack_propagate(False)
-        ctk.CTkLabel(icon_frame, text="🛒",
-                     font=("Segoe UI", 20), text_color=COLORS["sidebar_accent"]
+        mark = ctk.CTkFrame(brand, fg_color=COLORS["accent_action"],
+                            corner_radius=RADII["bubble"],
+                            width=METRICS["bubble"], height=METRICS["bubble"])
+        mark.pack(side="left", padx=(0, 11))
+        mark.pack_propagate(False)
+        ctk.CTkLabel(mark, text=SHOP_NAME[0].upper(),
+                     font=("Segoe UI Semibold", 17, "bold"),
+                     text_color=COLORS["on_accent"]
                     ).place(relx=0.5, rely=0.5, anchor="center")
 
         brand_text = ctk.CTkFrame(brand, fg_color="transparent")
         brand_text.pack(side="left")
-        ctk.CTkLabel(brand_text, text="FMCG Billing",
-                     font=("Segoe UI Semibold", 16, "bold"),
-                     text_color="#F1F5F9").pack(anchor="w")
-        ctk.CTkLabel(brand_text, text="v1.0  •  Modern",
+        ctk.CTkLabel(brand_text, text=SHOP_NAME,
+                     font=("Segoe UI Semibold", 15, "bold"),
+                     text_color=COLORS["text_dark"]).pack(anchor="w")
+        ctk.CTkLabel(brand_text, text=f"Billing {APP_VERSION}",
                      font=FONTS["caption"],
-                     text_color="#475569").pack(anchor="w")
+                     text_color=COLORS["text_muted"]).pack(anchor="w")
 
-        # Divider
-        ctk.CTkFrame(sidebar, fg_color=COLORS["sidebar_divider"],
-                     height=1).pack(fill="x", padx=18, pady=(0, 10))
-
-        # ── Nav buttons — inside a scrollable area so they never overflow
-        # on low-res or short screens (mousewheel scrolls the nav list).
+        # -- Nav pills — inside a scrollable area so they never overflow on
+        # low-res or short screens (mousewheel scrolls the nav list).
         nav_scroll = ctk.CTkScrollableFrame(
             sidebar,
             fg_color="transparent",
             scrollbar_fg_color=COLORS["bg_sidebar"],
-            scrollbar_button_color=COLORS["sidebar_hover"],
-            scrollbar_button_hover_color=COLORS["sidebar_active"],
+            scrollbar_button_color=COLORS["hairline"],
+            scrollbar_button_hover_color=COLORS["text_muted"],
             corner_radius=0,
         )
         nav_scroll.pack(fill="both", expand=True, padx=0, pady=0)
@@ -428,13 +371,14 @@ class BillingApp(ctk.CTk):
             btn = ctk.CTkButton(
                 nav_scroll,
                 text=f"          {t(label, self.current_lang)}",
-                font=FONTS["sidebar"],
+                font=self._nav_font(False),
                 fg_color="transparent",
                 hover_color=COLORS["sidebar_hover"],
                 text_color=COLORS["sidebar_text"],
                 anchor="w",
-                height=38,
+                height=METRICS["nav_item"],
                 corner_radius=RADII["sidebar"],
+                border_width=0,
                 command=lambda s=screen: self.navigate_to(s),
             )
             btn.pack(fill="x", padx=12, pady=1)
@@ -449,36 +393,66 @@ class BillingApp(ctk.CTk):
             )
             icon_lbl.place(x=16, rely=0.5, anchor="w")
             icon_lbl.bind("<Button-1>", lambda e, s=screen: self.navigate_to(s))
+            self.nav_icons[screen] = icon_lbl
 
-        # ── Logout ───────────────────────────────────
+        # -- Divider ----------------------------------------------
         ctk.CTkFrame(sidebar, fg_color=COLORS["sidebar_divider"],
-                     height=1).pack(fill="x", padx=18, pady=(0, 6))
+                     height=1).pack(fill="x", padx=20, pady=(8, 10))
 
+        # -- Signed-in user ---------------------------------------
+        # Direction B parks identity on the violet "counts" tint, the one
+        # place that hue appears outside a count.
+        who = ctk.CTkFrame(sidebar, fg_color="transparent")
+        who.pack(fill="x", padx=20, pady=(0, 8))
+
+        avatar = ctk.CTkFrame(who, fg_color=COLORS["accent_counts_tint"],
+                              corner_radius=20, width=40, height=40)
+        avatar.pack(side="left", padx=(0, 11))
+        avatar.pack_propagate(False)
+        ctk.CTkLabel(avatar, text=self.current_user["name"][:1].upper(),
+                     font=("Segoe UI Semibold", 15, "bold"),
+                     text_color=COLORS["accent_counts_fg"]
+                    ).place(relx=0.5, rely=0.5, anchor="center")
+
+        who_text = ctk.CTkFrame(who, fg_color="transparent")
+        who_text.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(who_text, text=self.current_user["name"],
+                     font=("Segoe UI Semibold", 15, "bold"),
+                     text_color=COLORS["text_dark"], anchor="w",
+                     justify="left").pack(anchor="w", fill="x")
+        ctk.CTkLabel(who_text, text=self.current_role.replace("_", " ").title(),
+                     font=FONTS["caption"],
+                     text_color=COLORS["text_muted"], anchor="w",
+                     justify="left").pack(anchor="w", fill="x")
+
+        # -- Sign out ---------------------------------------------
         logout_btn = ctk.CTkButton(
             sidebar,
             text=f"          {t('Sign Out', self.current_lang)}",
-            font=FONTS["sidebar"],
+            font=self._nav_font(False),
             fg_color="transparent",
-            hover_color=COLORS["btn_danger"],
-            text_color=COLORS["sidebar_text"],
+            hover_color=COLORS["accent_danger_tint"],
+            text_color=COLORS["accent_danger"],
             anchor="w",
-            height=38,                         # Compacted height
+            height=METRICS["nav_item"],
             corner_radius=RADII["sidebar"],
+            border_width=0,
             command=self.logout,
         )
-        logout_btn.pack(fill="x", padx=12, pady=(2, 6)) # Aligned and reduced padding
+        logout_btn.pack(fill="x", padx=12, pady=(0, 14))
 
         logout_icon = ctk.CTkLabel(
             logout_btn,
             text="🚪",
             font=("Segoe UI", 16),
-            text_color=COLORS["sidebar_text"],
+            text_color=COLORS["accent_danger"],
             fg_color="transparent"
         )
         logout_icon.place(x=16, rely=0.5, anchor="w")
         logout_icon.bind("<Button-1>", lambda e: self.logout())
 
         return sidebar
+
 
     # ─────────────────────────────────────────────────────────────
     # Navigation
@@ -506,10 +480,17 @@ class BillingApp(ctk.CTk):
             is_active = name == screen_name
             btn.configure(
                 fg_color=COLORS["sidebar_active"] if is_active else "transparent",
-                border_width=2 if is_active else 0,
-                border_color=COLORS["sidebar_glow"] if is_active else COLORS["bg_sidebar"],
-                text_color="#FFFFFF" if is_active else COLORS["sidebar_text"],
+                border_width=0,
+                hover_color=(COLORS["sidebar_active"] if is_active
+                             else COLORS["sidebar_hover"]),
+                text_color=(COLORS["on_accent"] if is_active
+                            else COLORS["sidebar_text"]),
+                font=self._nav_font(is_active),
             )
+            icon = self.nav_icons.get(name)
+            if icon is not None:
+                icon.configure(text_color=COLORS["on_accent"] if is_active
+                               else COLORS["sidebar_text"])
 
         for w in self.content_area.winfo_children():
             w.pack_forget()

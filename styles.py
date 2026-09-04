@@ -3,23 +3,25 @@ styles.py — Centralised ttk.Style configuration
 Call setup_ttk_styles() ONCE at app startup (before any screen is built).
 Fixes the problem of 15 separate Style() instantiations across screens.
 
-Apple-standard design system:
-  · Near-black table headers  (#1D1D1F)
-  · 48px row height for 60+ readability
-  · Soft blue selection
-  · Clean white backgrounds with subtle zebra rows
+Direction B table system:
+  · Quiet uppercase 13px column headers on the card surface — the old
+    near-black header band is gone, so the card reads as one surface
+  · 56px rows (62 on Bill History, 60 in the POS cart, 58 on Reports)
+  · Pale blue selection (#EAF1FF) with dark ink, never a dark fill
+  · Hairline borders and solid fills only — no gradient, no shadow
 """
 
 from tkinter import ttk
-from config import COLORS, FONTS
+from config import COLORS, FONTS, METRICS
 
 
 # ── Every named style used in the app ────────────────────────
 # Every name a screen passes as style="X.Treeview" MUST appear here.
 # ttk resolves an unregistered name to the base Treeview style without
-# raising, so a missing entry silently loses the 48px rows and the dark
-# header — it looks wrong rather than failing loudly. verify_screens.py
-# walks the built screens and fails on any tree whose style is not listed.
+# raising, so a missing entry silently loses the row height and the
+# Direction B header — it looks wrong rather than failing loudly.
+# verify_screens.py walks the built screens and fails on any tree whose
+# style is not listed.
 STYLE_NAMES = [
     "Dash",        # Dashboard recent bills
     "Bill",        # Bill History
@@ -40,25 +42,41 @@ STYLE_NAMES = [
     "Led",         # Customer Ledger
 ]
 
+# Row heights the design pins down per table. Anything not listed uses
+# METRICS["row"].
+ROW_HEIGHTS = {
+    "Bill": METRICS["row_lg"],   # 62 — Bill History carries an avatar
+    "Cart": 60,                  # POS cart rows hold a stepper control
+    "Rpt" : 58,                  # Reports rows carry a share-of-period bar
+    "Exp" : 44,                  # Compact dashboard side panel
+}
+
 
 def setup_ttk_styles(mode="light"):
-    """Register every Treeview and Scrollbar style used across the app."""
+    """Register every Treeview and Scrollbar style used across the app.
+
+    `mode` is accepted for call-site compatibility; every colour now comes
+    from COLORS, which config.apply_theme_mode() has already swapped to the
+    right theme by the time this runs.
+    """
     s = ttk.Style()
     s.theme_use("clam")   # clam allows the most colour overrides
 
     # ── Shared heading style (all tables) ────────────────────
+    # Direction B: the header is part of the card, not a band across it.
     _heading = dict(
         font=FONTS["table_hdr"],
         background=COLORS["tbl_header_bg"],
         foreground=COLORS["tbl_header_fg"],
         relief="flat",
-        padding=(10, 0),
+        borderwidth=0,
+        padding=(12, 6),
     )
 
     # ── Shared row style ─────────────────────────────────────
     _row = dict(
         font=FONTS["table"],
-        rowheight=48,                  # 60+ friendly row height
+        rowheight=METRICS["row"],
         background=COLORS["bg_white"],
         foreground=COLORS["text_dark"],
         fieldbackground=COLORS["bg_white"],
@@ -71,16 +89,24 @@ def setup_ttk_styles(mode="light"):
         foreground=[("selected", COLORS["text_dark"])],
     )
 
+    # A header must not flash a raised 3-D box when hovered or clicked;
+    # clam does that by default and it breaks the flat surface.
+    _heading_map = dict(
+        background=[("active", COLORS["tbl_header_bg"])],
+        relief=[("active", "flat"), ("pressed", "flat")],
+    )
+
     # ── Register every named style used in the app (see STYLE_NAMES above) ──
     for name in STYLE_NAMES:
         tv  = f"{name}.Treeview"
         hdr = f"{name}.Treeview.Heading"
 
-        s.configure(tv, **_row)
+        s.configure(tv, **{**_row, "rowheight": ROW_HEIGHTS.get(name, METRICS["row"])})
         s.configure(hdr, **_heading)
         s.map(tv, **_select)
+        s.map(hdr, **_heading_map)
 
-        # Scrollbar — thin, modern, macOS-style
+        # Scrollbar — thin, hairline, no arrows competing for attention
         sb = f"{name}.Vertical.TScrollbar"
         s.configure(sb,
             background=COLORS["glass_border"],
@@ -89,29 +115,31 @@ def setup_ttk_styles(mode="light"):
             borderwidth=0, relief="flat",
         )
 
-    # ── Expiry panel uses a warm header ──────────────────────
-    exp_bg = "#FFF9F0" if mode.lower() == "light" else "#2D1E10"
+    # ── Expiry panel — the one deliberate header override ────
+    # Expiry owns amber in Direction B, so the panel sits on the amber
+    # tint and takes the dark amber ink (never white on amber, which
+    # cannot reach 4.5:1).
     s.configure("Exp.Treeview",
-        background=exp_bg,
-        fieldbackground=exp_bg,
+        background=COLORS["accent_expiry_tint"],
+        fieldbackground=COLORS["accent_expiry_tint"],
+        foreground=COLORS["text_dark"],
         font=FONTS["table"],
-        rowheight=44,
+        rowheight=ROW_HEIGHTS["Exp"],
+        borderwidth=0,
+        relief="flat",
     )
 
     s.configure("Exp.Treeview.Heading",
         font=FONTS["table_hdr"],
-        background=COLORS["btn_warning"],
-        foreground="#FFFFFF",
+        background=COLORS["accent_expiry_tint"],
+        foreground=COLORS["accent_expiry_fg"],
         relief="flat",
+        borderwidth=0,
+        padding=(12, 6),
     )
-
-    # ── Cart table gets a vibrant violet header ──────────────
-    s.configure("Cart.Treeview.Heading",
-        font=FONTS["table_hdr"],
-        background="#4C1D95",
-        foreground="#FFFFFF",
-        relief="flat",
-        padding=(10, 0),
+    s.map("Exp.Treeview.Heading",
+        background=[("active", COLORS["accent_expiry_tint"])],
+        relief=[("active", "flat"), ("pressed", "flat")],
     )
 
     # ── Global Scrollbar (horizontal + vertical fallback) ─────

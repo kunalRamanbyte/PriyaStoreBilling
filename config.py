@@ -1,7 +1,12 @@
 """
 config.py — App-wide constants: colors, fonts, dimensions
-Design: Apple-standard, modern, vibrant — optimised for 60+ age users
-Color philosophy: macOS Ventura palette · SF-Pro scale · vivid accents
+Design: Direction B — soft, rounded, colour with a job
+Imported from Claude Design: "Priya Store - Before & After.dc.html"
+
+Three-step text scale (13 caption / 14-15 label / 16-17 body and every
+figure), 44px pill controls, 24px card corners, and five accent hues each
+locked to one meaning. Solid fills, hairline borders and corner radii only —
+no gradient, blur or shadow, since CustomTkinter cannot draw them.
 """
 
 import sys as _sys, os as _os
@@ -38,106 +43,145 @@ def resource_path(*parts):
 # ─── Window ─────────────────────────────────────────────────
 WINDOW_WIDTH  = 1366
 WINDOW_HEIGHT = 768
-SIDEBAR_WIDTH = 240
+SIDEBAR_WIDTH = 236
 
-# ─── Apple-Standard Color Palette ───────────────────────────
+# ─── Direction B Palette — "soft, rounded, colour with a job" ───────
 #
-#  UPGRADED: Modern glassmorphism + gradient design system
-#  Sidebar   : Deep navy gradient feel (#0F172A)
-#  Background: Warm blue-tinted off-white (#EEF2FF)
-#  Cards     : Semi-transparent glass white
-#  Accents   : Vivid gradients with Apple system colors
+#  Imported from Claude Design: "Priya Store - Before & After.dc.html".
+#
+#  One vivid blue carries every action; four supporting hues are each
+#  locked to a single meaning and never used decoratively:
+#      blue   #2F6BD8  action          violet #7B61FF  counts
+#      teal   #0B7268  money in        amber  #F0B429  expiry
+#      coral  #FF7A4D  stock risk      red    #C23A3A  destructive
+#
+#  Every surface is a solid fill, a hairline border or a corner radius —
+#  no gradient, blur or translucency anywhere, because CustomTkinter
+#  cannot draw them. Vivid hues appear as icons, pills and accents on
+#  their own pale tint; body text on a tint is always the dark variant,
+#  so every foreground clears 4.5:1.
 #
 LIGHT_COLORS = {
     # ── Backgrounds ──────────────────────────────────────────
-    "bg_main"       : "#EEF2FF",   # Warm blue-tinted off-white
-    "bg_sidebar"    : "#1B2A4E",   # Deep gradient blue fallback
-    "bg_header"     : "#FFFFFF",   # Clean white header
+    "bg_main"       : "#F4F6FB",   # App canvas — cool near-white
+    "bg_sidebar"    : "#FFFFFF",   # Sidebar is a white surface now
+    "bg_header"     : "#FFFFFF",
     "bg_white"      : "#FFFFFF",
-    "bg_card"       : "#FFFFFF",   # White card (glass overlay via border)
-    "bg_input"      : "#F1F5F9",   # Cool slate input bg
+    "bg_card"       : "#FFFFFF",   # Solid card + hairline border
+    "bg_input"      : "#F4F6FB",   # Filled pill inputs
 
     # ── Text ─────────────────────────────────────────────────
-    "text_dark"     : "#0F172A",   # Deep navy primary text
+    "text_dark"     : "#16224A",   # Ink — primary
     "text_light"    : "#FFFFFF",
-    "text_muted"    : "#64748B",   # Slate secondary text
-    "text_blue"     : "#3B82F6",   # Vivid Blue
-    "text_green"    : "#10B981",   # Emerald Green
-    "text_red"      : "#EF4444",   # Modern Red
+    "text_muted"    : "#5F6880",   # Secondary — 5.6:1 on white
+    "text_blue"     : "#2558B4",
+    "text_green"    : "#0B7268",
+    "text_red"      : "#C23A3A",
 
-    # ── Modern Gradient Buttons ──────────────────────────────
-    "btn_primary"   : "#3B82F6",   # Blue 500
-    "btn_primary_h" : "#2563EB",   # Blue 600 (hover)
-    "btn_success"   : "#10B981",   # Emerald 500
-    "btn_success_h" : "#059669",   # Emerald 600
-    "btn_danger"    : "#EF4444",   # Red 500
-    "btn_danger_h"  : "#DC2626",   # Red 600
-    "btn_warning"   : "#F59E0B",   # Amber 500
-    "btn_warning_h" : "#D97706",   # Amber 600
-    "btn_secondary" : "#64748B",   # Slate 500
-    "btn_secondary_h": "#475569",  # Slate 600
-    "btn_purple"    : "#8B5CF6",   # Violet 500
-    "btn_purple_h"  : "#7C3AED",   # Violet 600
+    # ── Buttons — solid fills that carry white text at 4.9:1+ ─
+    "btn_primary"   : "#2F6BD8",
+    "btn_primary_h" : "#2558B4",
+    "btn_success"   : "#0B7268",
+    "btn_success_h" : "#095C54",
+    "btn_danger"    : "#C23A3A",
+    "btn_danger_h"  : "#A32F2F",
+    "btn_warning"   : "#9A6510",   # Deepened amber — white text needs 4.5:1
+    "btn_warning_h" : "#7A5210",
+    "btn_secondary" : "#5F6880",
+    "btn_secondary_h": "#4A5266",
+    "btn_purple"    : "#5340BB",   # Deepened violet, same reason
+    "btn_purple_h"  : "#43349A",
 
-    # ── Sidebar (dark navy glassmorphism) ────────────────────
-    "sidebar_grad_start": "#1E3A8A", # Royal Blue
-    "sidebar_grad_end"  : "#0F172A", # Navy Blue
-    "sidebar_active": "#1E3A5F",   # Active item — deep blue glass
-    "sidebar_hover" : "#1E293B",   # Hover — subtle lighten
-    "sidebar_text"  : "#E2E8F0",   # Slate 200 — soft white
-    "sidebar_accent": "#60A5FA",   # Blue 400 — brand accent
-    "sidebar_glow"  : "#3B82F6",   # Active glow indicator
-    "sidebar_divider": "#1E293B",  # Subtle divider
+    # ── Sidebar — white surface, blue pill marks the active screen ──
+    # The gradient is gone; the *_grad_* keys stay so any reader still
+    # resolves, and both ends are the flat surface colour.
+    "sidebar_grad_start": "#FFFFFF",
+    "sidebar_grad_end"  : "#FFFFFF",
+    "sidebar_active": "#2F6BD8",   # Active pill fill
+    "sidebar_hover" : "#F4F6FB",
+    "sidebar_text"  : "#5F6880",
+    "sidebar_accent": "#2F6BD8",
+    "sidebar_glow"  : "#2F6BD8",
+    "sidebar_divider": "#E8EBF3",
 
-    # ── Status Badges ────────────────────────────────────────
-    "badge_active"  : "#D1FAE5",   # Emerald 100
-    "badge_void"    : "#FEE2E2",   # Red 100
-    "badge_draft"   : "#FEF3C7",   # Amber 100
-    "badge_low"     : "#FEE2E2",
-    "badge_ok"      : "#D1FAE5",
+    # ── Status Badges — pale tint, dark ink ──────────────────
+    "badge_active"  : "#E6FAF7",
+    "badge_void"    : "#FFECEC",
+    "badge_draft"   : "#F1EDFF",
+    "badge_low"     : "#FFF0EA",
+    "badge_ok"      : "#E6FAF7",
 
-    # ── Tables ───────────────────────────────────────────────
-    "tbl_header_bg" : "#0F172A",   # Deep navy header
-    "tbl_header_fg" : "#F8FAFC",   # Near white
-    "tbl_row_alt"   : "#F8FAFC",   # Barely-there zebra (Slate 50)
-    "tbl_select"    : "#DBEAFE",   # Blue 100 — soft selection
-    "tbl_low_stock" : "#FEE2E2",   # Soft red
+    # ── Tables — white field, quiet uppercase header ─────────
+    "tbl_header_bg" : "#FFFFFF",
+    "tbl_header_fg" : "#5F6880",
+    "tbl_row_alt"   : "#F7F9FD",
+    "tbl_select"    : "#EAF1FF",
+    "tbl_low_stock" : "#FFF0EA",
 
-    # ── KPI Card Gradient Colors (start → end) ──────────────
-    "kpi_blue"      : "#3B82F6",
-    "kpi_blue_end"  : "#6366F1",   # Blue → Indigo gradient
-    "kpi_green"     : "#10B981",
-    "kpi_green_end" : "#14B8A6",   # Emerald → Teal gradient
-    "kpi_orange"    : "#F59E0B",
-    "kpi_orange_end": "#EF4444",   # Amber → Red gradient
-    "kpi_purple"    : "#8B5CF6",
-    "kpi_purple_end": "#EC4899",   # Violet → Pink gradient
-    "kpi_red"       : "#EF4444",
-    "kpi_red_end"   : "#F97316",   # Red → Orange gradient
-    "kpi_teal"      : "#14B8A6",
-    "kpi_pink"      : "#EC4899",
-    "kpi_yellow"    : "#EAB308",
+    # ── KPI accents — one hue per meaning. No gradients, so each
+    #    *_end key mirrors its base and stays a valid colour. ──
+    "kpi_blue"      : "#2F6BD8",
+    "kpi_blue_end"  : "#2F6BD8",
+    "kpi_green"     : "#0B7268",
+    "kpi_green_end" : "#0B7268",
+    "kpi_orange"    : "#FF7A4D",
+    "kpi_orange_end": "#FF7A4D",
+    "kpi_purple"    : "#7B61FF",
+    "kpi_purple_end": "#7B61FF",
+    "kpi_red"       : "#C23A3A",
+    "kpi_red_end"   : "#C23A3A",
+    "kpi_teal"      : "#0B7268",
+    "kpi_pink"      : "#7B61FF",
+    "kpi_yellow"    : "#F0B429",
 
-    # ── Glass Effect Tokens ──────────────────────────────────
-    "glass_card"    : "#FFFFFF",   # Glass card background
-    "glass_border"  : "#E2E8F0",   # Subtle glass border
-    "glass_glow"    : "#BFDBFE",   # Blue glow accent
+    # ── Surface tokens (formerly "glass" — now solid + hairline) ──
+    "glass_card"    : "#FFFFFF",
+    "glass_border"  : "#E8EBF3",
+    "glass_glow"    : "#EAF1FF",
 
     # -- Border / Divider --
-    "border"        : "#CBD5E1",   # Slate 300 — refined separator
-    "border_focus"  : "#3B82F6",   # Blue focus ring
+    "border"        : "#E8EBF3",
+    "border_focus"  : "#2F6BD8",
 
     # -- Category default --
-    "cat_default"   : "#64748B",
+    "cat_default"   : "#5F6880",
 
-    # ── Rotating row palette (6 soft pastels, used across all treeviews) ──
+    # ── Direction B semantic accents ─────────────────────────
+    # Each vivid hue with its pale tint and the dark ink to put on it.
+    "accent_action"      : "#2F6BD8",
+    "accent_action_deep" : "#2558B4",
+    "accent_action_tint" : "#EAF1FF",
+    "accent_counts"      : "#7B61FF",
+    "accent_counts_fg"   : "#5340BB",
+    "accent_counts_tint" : "#F1EDFF",
+    "accent_money"       : "#0B7268",
+    "accent_money_tint"  : "#E6FAF7",
+    "accent_expiry"      : "#F0B429",
+    "accent_expiry_fg"   : "#7A5210",
+    "accent_expiry_tint" : "#FFF7E6",
+    "accent_stock"       : "#FF7A4D",
+    "accent_stock_fg"    : "#B8431F",
+    "accent_stock_tint"  : "#FFF0EA",
+    "accent_danger"      : "#C23A3A",
+    "accent_danger_tint" : "#FFECEC",
+    "on_accent"          : "#FFFFFF",
+    "on_accent_soft"     : "#DBE6FA",   # Muted text on a deep blue panel
+    "text_secondary"     : "#5B6480",
+    "hairline"           : "#E8EBF3",
+    "row_sep"            : "#F0F2F8",
+
+    # ── Rotating row palette (all treeviews) ─────────────────
+    # Direction B uses colour as *coding*, not as fills behind numbers,
+    # so the rotation is a whisper zebra that only helps the eye track a
+    # row across the width. Meaning still arrives via the override tags
+    # below (low stock, void, draft...), which take precedence.
     "ROW_COLORS": [
-        "#E3F2FD",   # Light Blue
-        "#E8F5E9",   # Light Green
-        "#F3E5F5",   # Light Purple
-        "#FFF3E0",   # Light Orange
-        "#E0F7FA",   # Light Teal
-        "#FCE4EC",   # Light Pink
+        "#FFFFFF",
+        "#F7F9FD",
+        "#FFFFFF",
+        "#F7F9FD",
+        "#FFFFFF",
+        "#F7F9FD",
     ],
 
     # ── Activity-log row colors, keyed by action PREFIX (Light) ──
@@ -145,211 +189,236 @@ LIGHT_COLORS = {
     # shorter than the action it catches ("BILL_VOID" catches "BILL_VOIDED").
     # Only list prefixes some code actually writes via db.log_activity().
     "LOG_ROW_COLORS": {
-        "LOGIN"                 : ("#E8F5E9", "#1A1A2E"),   # Green
-        "LOGOUT"                : ("#EEEEEE", "#1A1A2E"),   # Grey
-        "BILL_SAVED"            : ("#DBEAFE", "#1A1A2E"),   # Blue
-        "BILL_VOID"             : ("#FFEBEE", "#1A1A2E"),   # Red
-        "RETURN_SAVED"          : ("#FFEDD5", "#1A1A2E"),   # Orange
-        "CUSTOMER_CHANGE_CLEAR" : ("#FCE4EC", "#1A1A2E"),   # Pink — money movement
-        "USER_"                 : ("#F3E5F5", "#1A1A2E"),   # Purple
-        "SETTINGS_SAVED"        : ("#E0F7FA", "#1A1A2E"),   # Teal
-        "PWD_CHANGED"           : ("#FFF3E0", "#1A1A2E"),   # Amber
-        "FORMAT_DATA"           : ("#FFCDD2", "#1A1A2E"),   # Strong red — factory reset
+        "LOGIN"                 : ("#E6FAF7", "#16224A"),   # Teal
+        "LOGOUT"                : ("#F4F6FB", "#16224A"),   # Neutral
+        "BILL_SAVED"            : ("#EAF1FF", "#16224A"),   # Action blue
+        "BILL_VOID"             : ("#FFECEC", "#16224A"),   # Destructive
+        "RETURN_SAVED"          : ("#FFF0EA", "#16224A"),   # Coral
+        "CUSTOMER_CHANGE_CLEAR" : ("#FDF2F8", "#16224A"),   # Pink — money movement
+        "USER_"                 : ("#F1EDFF", "#16224A"),   # Violet
+        "SETTINGS_SAVED"        : ("#EFF9F8", "#16224A"),   # Pale teal
+        "PWD_CHANGED"           : ("#FFF7E6", "#16224A"),   # Amber
+        "FORMAT_DATA"           : ("#FFD9D9", "#16224A"),   # Loudest red — factory reset
     },
-    "LOG_ROW_DEFAULT" : ("white", "#1A1A2E"),
+    "LOG_ROW_DEFAULT" : ("#FFFFFF", "#16224A"),
 
     # ── Table row alert/tag colors (Light) ───────────────────
-    "row_expired"     : "#FFEBEE",
-    "row_expiring"    : "#FFF8E1",
-    "row_low_stock"   : "#FFF9C4",
-    "row_ok"          : "#E8F5E9",
-    "row_credit"      : "#FFF3E0",
-    "row_payment"     : "#E8F5E9",
-    "row_void"        : "#FFEBEE",
-    "row_draft"       : "#FFF8E1",
-    "row_inactive"    : "#EEEEEE",
-    "row_admin"       : "#F3E5F5",
-    "fg_inactive"     : "#9E9E9E",
-    "fg_void"         : "#CC2200",
-    "bg_expiry_alert" : "#FFF4E6",
-    "fg_expiry_alert" : "#E65100",
-    "bg_popup_item"   : "#F5F7FF",
-    "bg_summary_panel": "#FFF4F8",
-    "border_summary_panel": "#F5D0FE",
+    "row_expired"     : "#FFECEC",
+    "row_expiring"    : "#FFF7E6",
+    "row_low_stock"   : "#FFF0EA",
+    "row_ok"          : "#E6FAF7",
+    "row_credit"      : "#FFF7E6",
+    "row_payment"     : "#E6FAF7",
+    "row_void"        : "#FFECEC",
+    "row_draft"       : "#F1EDFF",
+    "row_inactive"    : "#F4F6FB",
+    "row_admin"       : "#F1EDFF",
+    "fg_inactive"     : "#8A92A6",
+    "fg_void"         : "#C23A3A",
+    "bg_expiry_alert" : "#FFF7E6",
+    "fg_expiry_alert" : "#7A5210",
+    "bg_popup_item"   : "#F4F6FB",
+    "bg_summary_panel": "#FFFFFF",
+    "border_summary_panel": "#E8EBF3",
     "bg_summary_card": "#FFFFFF",
-    "border_summary_card": "#E9D5FF",
-    "fg_summary_entry": "#FEFCE8",
-    "border_summary_entry": "#FDE68A",
+    "border_summary_card": "#E8EBF3",
+    "fg_summary_entry": "#F4F6FB",
+    "border_summary_entry": "#E8EBF3",
     "fg_summary_pm_btn": "#FFFFFF",
-    "text_summary_row": "#1A1A2E",
-    "bg_summary_udhaar": "#FFF7ED",
-    "border_summary_udhaar": "#FED7AA",
-    "text_summary_udhaar": "#C2410C",
-    "bg_summary_change": "#F0FDF4",
-    "border_summary_change": "#BBF7D0",
-    "text_summary_change": "#15803D",
-    "text_summary_pm_btn": "#7C3AED",
+    "text_summary_row": "#16224A",
+    "bg_summary_udhaar": "#FFF7E6",
+    "border_summary_udhaar": "#F0DDB0",
+    "text_summary_udhaar": "#7A5210",
+    "bg_summary_change": "#E6FAF7",
+    "border_summary_change": "#B7E6DF",
+    "text_summary_change": "#0B7268",
+    "text_summary_pm_btn": "#2558B4",
     "dropdown_fg_summary_pm": "#FFFFFF",
-    "dropdown_text_summary_pm": "#334155",
-    "bg_summary_cash": "#ECFDF5",
-    "border_summary_cash": "#A7F3D0",
-    "text_summary_cash": "#059669",
-    "bg_customer_entry": "#F8FFFE",
-    "border_customer_entry": "#99F6E4",
-    "bg_chip_new_bill": "#F8E9FF",
-    "fg_chip_new_bill": "#A21CAF",
+    "dropdown_text_summary_pm": "#16224A",
+    "bg_summary_cash": "#E6FAF7",
+    "border_summary_cash": "#B7E6DF",
+    "text_summary_cash": "#0B7268",
+    "bg_customer_entry": "#F4F6FB",
+    "border_customer_entry": "#E8EBF3",
+    "bg_chip_new_bill": "#F1EDFF",
+    "fg_chip_new_bill": "#5340BB",
 }
 
+# Direction B after dark: the same six meanings, re-grounded on deep navy
+# surfaces. Accents lift slightly so they still read against the dark field;
+# tints become low-luminance versions of the same hue, and ink flips to a
+# near-white so every pairing keeps its 4.5:1.
 DARK_COLORS = {
     # ── Backgrounds ──────────────────────────────────────────
-    "bg_main"       : "#0F172A",   # Slate 900
-    "bg_sidebar"    : "#070A13",   # Very dark navy
-    "bg_header"     : "#1E293B",   # Slate 800
-    "bg_white"      : "#1E293B",
-    "bg_card"       : "#1E293B",   # Slate 800 card
-    "bg_input"      : "#0F172A",   # Slate 900 input
+    "bg_main"       : "#0E1220",
+    "bg_sidebar"    : "#151A2B",
+    "bg_header"     : "#151A2B",
+    "bg_white"      : "#151A2B",
+    "bg_card"       : "#151A2B",
+    "bg_input"      : "#1D2437",
 
     # ── Text ─────────────────────────────────────────────────
-    "text_dark"     : "#F8FAFC",   # Slate 50 white text
+    "text_dark"     : "#EAEEF8",   # "dark" = primary ink; light in dark mode
     "text_light"    : "#FFFFFF",
-    "text_muted"    : "#94A3B8",   # Slate 400 muted text
-    "text_blue"     : "#60A5FA",
-    "text_green"    : "#34D399",
-    "text_red"      : "#F87171",
+    "text_muted"    : "#98A2BD",
+    "text_blue"     : "#7FA9F0",
+    "text_green"    : "#4FC3B4",
+    "text_red"      : "#F08A8A",
 
-    # ── Modern Accent Buttons ────────────────────────────────
-    "btn_primary"   : "#2563EB",   # Vibrant Blue
-    "btn_primary_h" : "#1D4ED8",
-    "btn_success"   : "#059669",   # Emerald Green
-    "btn_success_h" : "#047857",
-    "btn_danger"    : "#DC2626",   # Crimson Red
-    "btn_danger_h"  : "#B91C1C",
-    "btn_warning"   : "#D97706",   # Amber
-    "btn_warning_h" : "#B45309",
-    "btn_secondary" : "#475569",   # Slate Grey
-    "btn_secondary_h": "#334155",
-    "btn_purple"    : "#7C3AED",   # Violet Accent
-    "btn_purple_h"  : "#6D28D9",
+    # ── Buttons ──────────────────────────────────────────────
+    "btn_primary"   : "#2F6BD8",
+    "btn_primary_h" : "#4880E4",
+    "btn_success"   : "#0B7268",
+    "btn_success_h" : "#0E8A7E",
+    "btn_danger"    : "#C23A3A",
+    "btn_danger_h"  : "#D14A4A",
+    "btn_warning"   : "#9A6510",
+    "btn_warning_h" : "#B67B1D",
+    "btn_secondary" : "#3A4359",
+    "btn_secondary_h": "#4A5570",
+    "btn_purple"    : "#5340BB",
+    "btn_purple_h"  : "#6A55D6",
 
-    # ── Sidebar (dark navy glassmorphism) ────────────────────
-    "sidebar_grad_start": "#0F172A", # Navy
-    "sidebar_grad_end"  : "#070B14", # Vantablack Blue
-    "sidebar_active": "#1E293B",   # Slate 800
-    "sidebar_hover" : "#334155",   # Slate 700
-    "sidebar_text"  : "#F3F4F6",   # Soft white
-    "sidebar_accent": "#93C5FD",   # Soft blue
-    "sidebar_glow"  : "#60A5FA",
-    "sidebar_divider": "#334155",
+    # ── Sidebar ──────────────────────────────────────────────
+    "sidebar_grad_start": "#151A2B",
+    "sidebar_grad_end"  : "#151A2B",
+    "sidebar_active": "#2F6BD8",
+    "sidebar_hover" : "#1D2437",
+    "sidebar_text"  : "#98A2BD",
+    "sidebar_accent": "#7FA9F0",
+    "sidebar_glow"  : "#2F6BD8",
+    "sidebar_divider": "#232B40",
 
     # ── Status Badges ────────────────────────────────────────
-    "badge_active"  : "#064E3B",   # Dark green
-    "badge_void"    : "#7F1D1D",   # Dark red
-    "badge_draft"   : "#78350F",   # Dark amber
-    "badge_low"     : "#7F1D1D",
-    "badge_ok"      : "#064E3B",
+    "badge_active"  : "#123A35",
+    "badge_void"    : "#3B1A1A",
+    "badge_draft"   : "#241E45",
+    "badge_low"     : "#3A2015",
+    "badge_ok"      : "#123A35",
 
     # ── Tables ───────────────────────────────────────────────
-    "tbl_header_bg" : "#1E293B",   # Slate 800 header
-    "tbl_header_fg" : "#F8FAFC",
-    "tbl_row_alt"   : "#1E293B",
-    "tbl_select"    : "#374151",   # Soft grey selection
-    "tbl_low_stock" : "#451A1A",   # Muted red row
+    "tbl_header_bg" : "#151A2B",
+    "tbl_header_fg" : "#98A2BD",
+    "tbl_row_alt"   : "#192031",
+    "tbl_select"    : "#1E3358",
+    "tbl_low_stock" : "#3A2015",
 
-    # ── KPI Card Colors ──────────────────────────────────────
-    "kpi_blue"      : "#2563EB",
-    "kpi_blue_end"  : "#4F46E5",
-    "kpi_green"     : "#059669",
-    "kpi_green_end" : "#0D9488",
-    "kpi_orange"    : "#D97706",
-    "kpi_orange_end": "#DC2626",
-    "kpi_purple"    : "#7C3AED",
-    "kpi_purple_end": "#DB2777",
-    "kpi_red"       : "#DC2626",
-    "kpi_red_end"   : "#EA580C",
-    "kpi_teal"      : "#0D9488",
-    "kpi_pink"      : "#DB2777",
-    "kpi_yellow"    : "#CA8A04",
+    # ── KPI accents ──────────────────────────────────────────
+    "kpi_blue"      : "#4880E4",
+    "kpi_blue_end"  : "#4880E4",
+    "kpi_green"     : "#2FA093",
+    "kpi_green_end" : "#2FA093",
+    "kpi_orange"    : "#FF7A4D",
+    "kpi_orange_end": "#FF7A4D",
+    "kpi_purple"    : "#8E78FF",
+    "kpi_purple_end": "#8E78FF",
+    "kpi_red"       : "#E05555",
+    "kpi_red_end"   : "#E05555",
+    "kpi_teal"      : "#2FA093",
+    "kpi_pink"      : "#8E78FF",
+    "kpi_yellow"    : "#F0B429",
 
-    # ── Glass Effect Tokens ──────────────────────────────────
-    "glass_card"    : "#1E293B",
-    "glass_border"  : "#334155",
-    "glass_glow"    : "#1E3A8A",
+    # ── Surface tokens ───────────────────────────────────────
+    "glass_card"    : "#151A2B",
+    "glass_border"  : "#232B40",
+    "glass_glow"    : "#1E3358",
 
     # -- Border / Divider --
-    "border"        : "#334155",
-    "border_focus"  : "#60A5FA",
-    "cat_default"   : "#94A3B8",
+    "border"        : "#232B40",
+    "border_focus"  : "#4880E4",
+    "cat_default"   : "#98A2BD",
 
-    # ── Muted dark table colors ──────────────────────────────
+    # ── Direction B semantic accents ─────────────────────────
+    "accent_action"      : "#4880E4",
+    "accent_action_deep" : "#2F6BD8",
+    "accent_action_tint" : "#18243F",
+    "accent_counts"      : "#8E78FF",
+    "accent_counts_fg"   : "#B9AAFF",
+    "accent_counts_tint" : "#221D3D",
+    "accent_money"       : "#2FA093",
+    "accent_money_tint"  : "#10322E",
+    "accent_expiry"      : "#F0B429",
+    "accent_expiry_fg"   : "#E8C46B",
+    "accent_expiry_tint" : "#2E2411",
+    "accent_stock"       : "#FF7A4D",
+    "accent_stock_fg"    : "#FFA383",
+    "accent_stock_tint"  : "#331D13",
+    "accent_danger"      : "#E05555",
+    "accent_danger_tint" : "#331616",
+    "on_accent"          : "#FFFFFF",
+    "on_accent_soft"     : "#C3D3F2",
+    "text_secondary"     : "#98A2BD",
+    "hairline"           : "#232B40",
+    "row_sep"            : "#1E2537",
+
+    # ── Rotating row palette (whisper zebra, dark) ───────────
     "ROW_COLORS": [
-        "#1E293B",   # Dark slate
-        "#143A26",   # Muted Green
-        "#2D1D3A",   # Muted Purple
-        "#3D271A",   # Muted Orange
-        "#173A3C",   # Muted Teal
-        "#3C1D2A",   # Muted Pink
+        "#151A2B",
+        "#192031",
+        "#151A2B",
+        "#192031",
+        "#151A2B",
+        "#192031",
     ],
 
-    # ── Activity-log row colors, keyed by action PREFIX (Dark) ───
-    # Same keys as LIGHT_COLORS["LOG_ROW_COLORS"] — keep the two in step.
+    # ── Activity-log row colors, keyed by action PREFIX (Dark) ──
+    # Key set is kept identical to LIGHT_COLORS on purpose.
     "LOG_ROW_COLORS": {
-        "LOGIN"                 : ("#143A26", "#F8FAFC"),   # Muted Green
-        "LOGOUT"                : ("#374151", "#F8FAFC"),   # Muted Slate
-        "BILL_SAVED"            : ("#1E293B", "#F8FAFC"),   # Blue-Slate
-        "BILL_VOID"             : ("#5F1E24", "#F8FAFC"),   # Muted Red
-        "RETURN_SAVED"          : ("#4A2410", "#F8FAFC"),   # Orange-Brown
-        "CUSTOMER_CHANGE_CLEAR" : ("#3C1D2A", "#F8FAFC"),   # Muted Pink
-        "USER_"                 : ("#3A1E5C", "#F8FAFC"),   # Muted Purple
-        "SETTINGS_SAVED"        : ("#173A3C", "#F8FAFC"),   # Muted Cyan
-        "PWD_CHANGED"           : ("#3D271A", "#F8FAFC"),   # Muted Orange
-        "FORMAT_DATA"           : ("#7F1D1D", "#F8FAFC"),   # Strong red — factory reset
+        "LOGIN"                 : ("#10322E", "#EAEEF8"),
+        "LOGOUT"                : ("#1D2437", "#EAEEF8"),
+        "BILL_SAVED"            : ("#18243F", "#EAEEF8"),
+        "BILL_VOID"             : ("#331616", "#EAEEF8"),
+        "RETURN_SAVED"          : ("#331D13", "#EAEEF8"),
+        "CUSTOMER_CHANGE_CLEAR" : ("#331B29", "#EAEEF8"),
+        "USER_"                 : ("#221D3D", "#EAEEF8"),
+        "SETTINGS_SAVED"        : ("#122E2C", "#EAEEF8"),
+        "PWD_CHANGED"           : ("#2E2411", "#EAEEF8"),
+        "FORMAT_DATA"           : ("#4A1A1A", "#FFFFFF"),
     },
-    # Distinct from BILL_SAVED: an unmapped action must not look like a saved bill.
-    "LOG_ROW_DEFAULT" : ("#0F172A", "#F8FAFC"),
+    "LOG_ROW_DEFAULT" : ("#151A2B", "#EAEEF8"),
 
     # ── Table row alert/tag colors (Dark) ────────────────────
-    "row_expired"     : "#5F1E24",
-    "row_expiring"    : "#5C4E15",
-    "row_low_stock"   : "#5C5515",
-    "row_ok"          : "#154A28",
-    "row_credit"      : "#5C3E15",
-    "row_payment"     : "#154A28",
-    "row_void"        : "#5F1E24",
-    "row_draft"       : "#5C4E15",
-    "row_inactive"    : "#374151",
-    "row_admin"       : "#3A1E5C",
-    "fg_inactive"     : "#9CA3AF",
-    "fg_void"         : "#F87171",
-    "bg_expiry_alert" : "#3D2100",
-    "fg_expiry_alert" : "#FDBA74",
-    "bg_popup_item"   : "#1E293B",
-    "bg_summary_panel": "#1E152A",
-    "border_summary_panel": "#4A1D5A",
-    "bg_summary_card": "#1E293B",
-    "border_summary_card": "#334155",
-    "fg_summary_entry": "#0F172A",
-    "border_summary_entry": "#475569",
-    "fg_summary_pm_btn": "#1E293B",
-    "text_summary_row": "#F8FAFC",
-    "bg_summary_udhaar": "#3E2723",
-    "border_summary_udhaar": "#5C3E15",
-    "text_summary_udhaar": "#FDBA74",
-    "bg_summary_change": "#064E3B",
-    "border_summary_change": "#047857",
-    "text_summary_change": "#34D399",
-    "text_summary_pm_btn": "#C084FC",
-    "dropdown_fg_summary_pm": "#1E293B",
-    "dropdown_text_summary_pm": "#F8FAFC",
-    "bg_summary_cash": "#064E3B",
-    "border_summary_cash": "#047857",
-    "text_summary_cash": "#34D399",
-    "bg_customer_entry": "#0F172A",
-    "border_customer_entry": "#0D9488",
-    "bg_chip_new_bill": "#4A044E",
-    "fg_chip_new_bill": "#F0ABFC",
+    "row_expired"     : "#331616",
+    "row_expiring"    : "#2E2411",
+    "row_low_stock"   : "#331D13",
+    "row_ok"          : "#10322E",
+    "row_credit"      : "#2E2411",
+    "row_payment"     : "#10322E",
+    "row_void"        : "#331616",
+    "row_draft"       : "#221D3D",
+    "row_inactive"    : "#1D2437",
+    "row_admin"       : "#221D3D",
+    "fg_inactive"     : "#6B7490",
+    "fg_void"         : "#F08A8A",
+    "bg_expiry_alert" : "#2E2411",
+    "fg_expiry_alert" : "#E8C46B",
+    "bg_popup_item"   : "#1D2437",
+    "bg_summary_panel": "#151A2B",
+    "border_summary_panel": "#232B40",
+    "bg_summary_card": "#151A2B",
+    "border_summary_card": "#232B40",
+    "fg_summary_entry": "#1D2437",
+    "border_summary_entry": "#232B40",
+    "fg_summary_pm_btn": "#FFFFFF",
+    "text_summary_row": "#EAEEF8",
+    "bg_summary_udhaar": "#2E2411",
+    "border_summary_udhaar": "#4A3A16",
+    "text_summary_udhaar": "#E8C46B",
+    "bg_summary_change": "#10322E",
+    "border_summary_change": "#1C5049",
+    "text_summary_change": "#4FC3B4",
+    "text_summary_pm_btn": "#7FA9F0",
+    "dropdown_fg_summary_pm": "#FFFFFF",
+    "dropdown_text_summary_pm": "#EAEEF8",
+    "bg_summary_cash": "#10322E",
+    "border_summary_cash": "#1C5049",
+    "text_summary_cash": "#4FC3B4",
+    "bg_customer_entry": "#1D2437",
+    "border_customer_entry": "#232B40",
+    "bg_chip_new_bill": "#221D3D",
+    "fg_chip_new_bill": "#B9AAFF",
 }
 
-# The active color map — dynamically populated
 COLORS = dict(LIGHT_COLORS)
 
 def apply_theme_mode(mode: str):
@@ -374,37 +443,59 @@ CAT_COLORS = [
 ]
 
 # --- Typography ---
+# Direction B keeps a strict three-step scale: 13px captions, 14-15px
+# labels, 16-17px body and every figure. Headings and figures step up
+# from there; nothing sits between the steps.
 F  = "Segoe UI"
 FB = "Segoe UI Semibold"
 
 FONTS = {
-    "heading"     : (F,  27, "bold"),
-    "subheading"  : (F,  21, "bold"),
+    "heading"     : (F,  26, "bold"),   # Screen title
+    "subheading"  : (FB, 19, "bold"),   # Card / section title
     "body"        : (F,  16),
-    "body_bold"   : (F,  16, "bold"),
-    "button"      : (F,  16, "bold"),
-    "label_form"  : (FB, 15),
-    "input"       : (F,  15),
+    "body_bold"   : (FB, 16, "bold"),
+    "button"      : (FB, 15, "bold"),   # Pill control label
+    "label_form"  : (F,  15),
+    "input"       : (F,  16),
     "small"       : (F,  14),
-    "small_bold"  : (F,  14, "bold"),
+    "small_bold"  : (FB, 14, "bold"),
     "caption"     : (F,  13),
-    "sidebar"     : (F,  15, "bold"),
+    "sidebar"     : (F,  15),           # Nav label — weight comes from state
     "sidebar_sm"  : (F,  13),
-    "table"       : (F,  14),
-    "table_hdr"   : (F,  14, "bold"),
+    "table"       : (F,  15),
+    "table_hdr"   : (FB, 13, "bold"),   # Quiet uppercase column header
     "num_sm"      : (FB, 22, "bold"),
-    "num_md"      : (FB, 30, "bold"),
-    "num_lg"      : (FB, 42, "bold"),
-    "num_xl"      : (FB, 56, "bold"),
+    "num_md"      : (FB, 28, "bold"),   # KPI value
+    "num_lg"      : (FB, 32, "bold"),   # Report hero figure
+    "num_xl"      : (FB, 42, "bold"),   # POS grand total
 }
 
-# --- Corner Radii (Modern squircle feel) ---
+# --- Corner Radii (Direction B: generous, pill-first) ---
+# A pill's radius is always half its height, so a 44px control takes 22.
 RADII = {
-    "card"    : 20,
-    "button"  : 14,
-    "input"   : 12,
-    "badge"   : 8,
-    "sidebar" : 12,
+    "card"    : 24,   # Cards, tables, panels
+    "button"  : 22,   # 44px pill control
+    "input"   : 22,   # 44px pill field
+    "badge"   : 14,   # 28px status pill
+    "sidebar" : 14,   # 44px nav item
+    "pill_sm" : 17,   # 34px segmented-control chip
+    "pill_lg" : 28,   # 56px primary CTA / search bar
+    "bubble"  : 14,   # 40px icon square
+    "hero"    : 36,   # Login card
+}
+
+# --- Control metrics (Direction B) ---
+# Heights the design pins down, so screens stop inventing their own.
+METRICS = {
+    "nav_item"   : 44,
+    "control"    : 44,   # Standard pill button / field
+    "control_lg" : 56,   # Primary CTA, POS search
+    "control_sm" : 34,   # Segmented-control chip
+    "bubble"     : 40,   # KPI / avatar icon square
+    "header"     : 76,   # Screen header band
+    "row"        : 56,   # Table row
+    "row_lg"     : 62,   # Bill-history row
+    "hairline"   : 1,
 }
 
 # --- Units ---
