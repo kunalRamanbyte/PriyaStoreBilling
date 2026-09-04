@@ -10,7 +10,9 @@ from tkinter import ttk, messagebox, filedialog
 from datetime import date, timedelta
 import os
 
-from config import COLORS, FONTS, RADII, METRICS
+from config import COLORS, FONTS, RADII, METRICS, GUTTERS
+from responsive import (ResponsiveMixin, fit_columns, widget_scaling,
+                        autohide_scrollbar)
 from ui_utils import place_popup
 from lang import t
 
@@ -98,7 +100,7 @@ REPORTS = [
 ]
 
 
-class ReportScreen(ctk.CTkFrame):
+class ReportScreen(ResponsiveMixin, ctk.CTkFrame):
     def __init__(self, parent, db, current_user, app):
         super().__init__(parent, fg_color=COLORS["bg_main"], corner_radius=0)
         self.db           = db
@@ -166,7 +168,8 @@ class ReportScreen(ctk.CTkFrame):
         # -- Report list (second sidebar column) --------------
         left = ctk.CTkScrollableFrame(self, fg_color=COLORS["bg_sidebar"],
                                       corner_radius=0, width=244)
-        left.grid(row=0, column=0, rowspan=2, sticky="nsew")
+        self._left = left
+        left.grid(row=0, column=0, rowspan=2, sticky="nsew", padx=(0, 1))
         ctk.CTkLabel(left, text=t("SELECT REPORT", L),
                      font=FONTS["table_hdr"], text_color=COLORS["text_muted"]
                      ).pack(pady=(18, 10), padx=14, anchor="w")
@@ -191,6 +194,7 @@ class ReportScreen(ctk.CTkFrame):
 
         # -- Header band --------------------------------------
         hdr = ctk.CTkFrame(self, fg_color="transparent", height=METRICS["header"])
+        self._hdr = hdr
         hdr.grid(row=0, column=1, sticky="ew", padx=26)
         hdr.grid_propagate(False)
 
@@ -200,7 +204,7 @@ class ReportScreen(ctk.CTkFrame):
             titles, text=t("Reports & Analytics", L),
             font=("Segoe UI Semibold", 26, "bold"),
             text_color=COLORS["text_dark"], anchor="w")
-        self._title_lbl.pack(anchor="w", pady=(16, 0), fill="x")
+        self._title_lbl.pack(anchor="w", pady=(16, 0))
         self._range_lbl = ctk.CTkLabel(
             titles, text=t("\u2190 Select a report from the left panel", L),
             font=FONTS["small"], text_color=COLORS["text_muted"], anchor="w")
@@ -208,17 +212,34 @@ class ReportScreen(ctk.CTkFrame):
 
         acts = ctk.CTkFrame(hdr, fg_color="transparent")
         acts.pack(side="right", fill="y")
-        self._pill(acts, "\u25b6  " + t("Generate", L), kind="primary", width=116,
-                   command=self._generate).pack(side="right", pady=16)
-        self._pill(acts, t("PDF", L), kind="counts", width=62,
-                   command=self._export_pdf).pack(side="right", padx=(0, 6), pady=16)
-        self._pill(acts, t("CSV", L), kind="plain", width=62,
-                   command=self._export_csv).pack(side="right", padx=(0, 6), pady=16)
-        self._pill(acts, t("Excel", L), kind="money", width=72,
-                   command=self._export_excel).pack(side="right", padx=(0, 6), pady=16)
+        self._gen_btn = self._pill(acts, "\u25b6  " + t("Generate", L),
+                                   kind="primary", width=116,
+                                   command=self._generate)
+        self._gen_btn.pack(side="right", pady=16)
+
+        # One export control, not three. Three pills could not fit beside the
+        # report title at 1366 and Excel lost, rendering as an unlabelled
+        # 15px sliver.
+        self._export_menu = ctk.CTkOptionMenu(
+            acts, values=[t("Excel", L), t("CSV", L), t("PDF", L)],
+            width=132, height=METRICS["control"],
+            corner_radius=RADII["button"],
+            font=FONTS["button"],
+            fg_color=COLORS["accent_action_tint"],
+            button_color=COLORS["accent_action_tint"],
+            button_hover_color=COLORS["glass_glow"],
+            text_color=COLORS["accent_action_fg"],
+            dropdown_fg_color=COLORS["bg_card"],
+            dropdown_text_color=COLORS["text_dark"],
+            dropdown_hover_color=COLORS["accent_action_tint"],
+            command=self._on_export_pick,
+        )
+        self._export_menu.set(t("Export", L))
+        self._export_menu.pack(side="right", padx=(0, 8), pady=16)
 
         # -- Right content panel ------------------------------
         right = ctk.CTkFrame(self, fg_color="transparent")
+        self._right = right
         right.grid(row=1, column=1, sticky="nsew", padx=26, pady=(0, 20))
         right.grid_rowconfigure(2, weight=1)
         right.grid_columnconfigure(0, weight=1)
@@ -292,7 +313,10 @@ class ReportScreen(ctk.CTkFrame):
         )
         vsb = ttk.Scrollbar(tbl_frame, orient="vertical",   command=self.tree.yview)
         hsb = ttk.Scrollbar(tbl_frame, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        _hgrid = dict(row=1, column=0, sticky="ew", padx=(10, 0), pady=(0, 8))
+        self.tree.configure(
+            yscrollcommand=vsb.set,
+            xscrollcommand=autohide_scrollbar(self.tree, hsb, _hgrid))
         self.tree.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=(10, 0))
         vsb.grid(row=0, column=1, sticky="ns",  pady=(10, 0), padx=(0, 8))
         hsb.grid(row=1, column=0, sticky="ew",  padx=(10, 0), pady=(0, 8))
@@ -303,8 +327,35 @@ class ReportScreen(ctk.CTkFrame):
         self.tree.tag_configure("alt",     background=COLORS["ROW_COLORS"][1],
                                 foreground=COLORS["text_dark"])
         self.tree.bind("<Double-1>", self._on_tree_drilldown)
+        tbl_frame.bind("<Configure>", lambda _e: self._fit_report_columns(), add="+")
+        self.bind_responsive()
 
     # -- Stat row --------------------------------------------
+    def _on_export_pick(self, choice):
+        L = self.app.current_lang
+        {t("Excel", L): self._export_excel,
+         t("CSV", L): self._export_csv,
+         t("PDF", L): self._export_pdf}.get(choice, lambda: None)()
+        self._export_menu.set(t("Export", L))   # stays a verb, not a state
+
+    def on_breakpoint(self, bp, logical_w):
+        g = GUTTERS[bp]
+        self._hdr.grid_configure(padx=g)
+        self._right.grid_configure(padx=g, pady=(0, 20))
+        # Two white rails side by side eat the screen on a small panel.
+        # 190 was too narrow for "Supplier Payables" and clipped half the
+        # catalogue; the list must stay wide enough for its longest label.
+        self._left.configure(width={"compact": 224, "standard": 244,
+                                    "wide": 268}[bp])
+        self._fit_report_columns()
+
+    def _fit_report_columns(self):
+        tree = getattr(self, "tree", None)
+        spec = getattr(self, "_rpt_colspec", None)
+        if tree is None or not spec or tree.winfo_width() <= 1:
+            return
+        fit_columns(tree, spec, tree.winfo_width(), widget_scaling(self))
+
     def _sum_col(self, data, col):
         total = 0.0
         for row in data:
@@ -455,6 +506,8 @@ class ReportScreen(ctk.CTkFrame):
         self.tree.delete(*self.tree.get_children())
         cols = [c[0] for c in rpt["cols"]]
         self.tree.configure(columns=cols)
+        self._rpt_colspec = [(k, 1 if i == 0 else 0, max(70, w))
+                             for i, (k, _h, w) in enumerate(rpt["cols"])]
         for key, head, w in rpt["cols"]:
             # Align columns and headings consistently: right-align numeric/currency, center-align codes/dates, left-align text
             anch = "w"
@@ -463,7 +516,8 @@ class ReportScreen(ctk.CTkFrame):
             elif any(term in key for term in ["qty", "count", "bills", "items", "rank", "age", "phone", "date", "grn", "code", "status", "unit", "txn", "created", "at", "time", "sold", "stock", "reorder", "shortage"]):
                 anch = "center"
             self.tree.heading(key, text=t(head, L), anchor=anch)
-            self.tree.column(key, width=w, anchor=anch, minwidth=50)
+            self.tree.column(key, width=w, anchor=anch, minwidth=max(70, w))
+        self.after(30, self._fit_report_columns)
 
         # Row colouring for certain reports
         danger_keys  = {"out_of_stock", "Out of Stock"}

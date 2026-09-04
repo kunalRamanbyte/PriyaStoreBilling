@@ -10,7 +10,8 @@ Today/Week/All segmented control.
 import customtkinter as ctk
 from tkinter import ttk
 from datetime import datetime, timedelta
-from config import COLORS, FONTS, RADII, METRICS
+from config import COLORS, FONTS, RADII, METRICS, GUTTERS
+from responsive import ResponsiveMixin
 from lang import t
 
 
@@ -28,7 +29,7 @@ KPI_HUES = {
 PERIODS = ("Today", "Week", "All")
 
 
-class DashboardScreen(ctk.CTkFrame):
+class DashboardScreen(ResponsiveMixin, ctk.CTkFrame):
     def __init__(self, parent, db, current_user, app):
         super().__init__(parent, fg_color=COLORS["bg_main"], corner_radius=0)
         self.db = db
@@ -38,6 +39,7 @@ class DashboardScreen(ctk.CTkFrame):
         self._period_chips = {}
         self._clock_job = None
         self._build()
+        self.bind_responsive()
 
     # ── Small Direction B primitives ────────────────────────
     def _pill_button(self, parent, text, kind="primary", command=None,
@@ -76,6 +78,7 @@ class DashboardScreen(ctk.CTkFrame):
         # ── Header band ──────────────────────────────────────
         header = ctk.CTkFrame(self, fg_color="transparent",
                               height=METRICS["header"])
+        self._header = header
         header.pack(fill="x", padx=28, pady=(0, 4))
         header.pack_propagate(False)
 
@@ -103,10 +106,12 @@ class DashboardScreen(ctk.CTkFrame):
         # ── Scrollable body ──────────────────────────────────
         body = ctk.CTkScrollableFrame(self, fg_color=COLORS["bg_main"],
                                       corner_radius=0)
+        self._body = body
         body.pack(fill="both", expand=True, padx=28, pady=(0, 20))
 
         # ── KPI cards ────────────────────────────────────────
         kpi_row = ctk.CTkFrame(body, fg_color="transparent")
+        self._kpi_row = kpi_row
         kpi_row.pack(fill="x", pady=(4, 16))
 
         self.kpi_sales  = self._kpi_card(kpi_row, "💰", t("Today's Sales", L),      "action")
@@ -115,10 +120,9 @@ class DashboardScreen(ctk.CTkFrame):
         self.kpi_expiry = self._kpi_card(kpi_row, "📅", t("Expiring (30 days)", L), "expiry")
         self.kpi_disc   = self._kpi_card(kpi_row, "🏷️", t("Discount Given", L),     "money")
 
-        for i, card in enumerate((self.kpi_sales, self.kpi_bills, self.kpi_low,
-                                  self.kpi_expiry, self.kpi_disc)):
-            card.pack(side="left", fill="both", expand=True,
-                      padx=(0 if i == 0 else 7, 0))
+        self._kpi_cards = (self.kpi_sales, self.kpi_bills, self.kpi_low,
+                           self.kpi_expiry, self.kpi_disc)
+        self._layout_kpis("standard")
 
         # ── Attention banner (coral) ─────────────────────────
         # Direction B leads with one sentence, not a table.
@@ -256,6 +260,32 @@ class DashboardScreen(ctk.CTkFrame):
         scroll.pack(side="right", fill="y", padx=(0, 8), pady=(0, 10))
 
         self._paint_period_chips()
+
+    def _layout_kpis(self, bp):
+        """Five cards across needs room. Below `standard` they wrap to a 3+2
+        grid rather than shrinking until "Expiring (30 days)" clips."""
+        for c in self._kpi_cards:
+            c.pack_forget()
+            c.grid_forget()
+        for i in range(3):
+            self._kpi_row.grid_columnconfigure(i, weight=0, uniform="")
+        if bp == "compact":
+            for i in range(3):
+                self._kpi_row.grid_columnconfigure(i, weight=1, uniform="kpi")
+            for i, c in enumerate(self._kpi_cards):
+                c.grid(row=i // 3, column=i % 3, sticky="nsew",
+                       padx=(0 if i % 3 == 0 else 8, 0),
+                       pady=(0 if i < 3 else 8, 0))
+        else:
+            for i, c in enumerate(self._kpi_cards):
+                c.pack(side="left", fill="both", expand=True,
+                       padx=(0 if i == 0 else 7, 0))
+
+    def on_breakpoint(self, bp, logical_w):
+        g = GUTTERS[bp]
+        self._header.pack_configure(padx=g)
+        self._body.pack_configure(padx=g)
+        self._layout_kpis(bp)
 
     # ── KPI card ────────────────────────────────────────────
     def _kpi_card(self, parent, icon, title, hue):

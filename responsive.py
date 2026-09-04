@@ -107,7 +107,9 @@ def fit_columns(tree, spec, avail_px, scaling=1.0, min_scale=0.62):
     """
     if avail_px <= 1:
         return
-    logical = avail_px / max(0.1, scaling)
+    # Leave a couple of px for the treeview's own border, otherwise the
+    # columns exactly equal the width and ttk shows a scrollbar for nothing.
+    logical = (avail_px - 4) / max(0.1, scaling)
     total_min = sum(m for _, _, m in spec)
     total_weight = sum(w for _, w, _ in spec) or 1
 
@@ -123,3 +125,18 @@ def fit_columns(tree, spec, avail_px, scaling=1.0, min_scale=0.62):
     for col, weight, m in spec:
         tree.column(col, width=int(m + surplus * weight / total_weight),
                     minwidth=m)
+
+
+def autohide_scrollbar(widget, bar, grid_kw):
+    """Show a scrollbar only when it can actually scroll.
+
+    ttk scrollbars are always visible once gridded, so a table whose columns
+    already fit still carried a dead bar across its bottom edge.
+    """
+    def _set(first, last):
+        bar.set(first, last)
+        if float(first) <= 0.0 and float(last) >= 1.0:
+            bar.grid_remove()
+        else:
+            bar.grid(**grid_kw)
+    return _set

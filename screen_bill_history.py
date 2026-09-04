@@ -7,12 +7,14 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from datetime import date, timedelta
-from config import COLORS, FONTS, RADII, METRICS
+from config import COLORS, FONTS, RADII, METRICS, GUTTERS
+from responsive import (ResponsiveMixin, fit_columns, widget_scaling,
+                        autohide_scrollbar)
 from ui_utils import place_popup
 from lang import t
 
 
-class BillHistoryScreen(ctk.CTkFrame):
+class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
     def __init__(self, parent, db, current_user, app):
         super().__init__(parent, fg_color=COLORS["bg_main"], corner_radius=0)
         self.db           = db
@@ -68,6 +70,7 @@ class BillHistoryScreen(ctk.CTkFrame):
         # -- Header band -------------------------------------
         header = ctk.CTkFrame(self, fg_color="transparent",
                               height=METRICS["header"])
+        self._header = header
         header.pack(fill="x", padx=28)
         header.pack_propagate(False)
 
@@ -111,6 +114,7 @@ class BillHistoryScreen(ctk.CTkFrame):
 
         # -- Filter row --------------------------------------
         fbar = ctk.CTkFrame(self, fg_color="transparent")
+        self._fbar = fbar
         fbar.pack(fill="x", padx=28, pady=(0, 12))
 
         seg = ctk.CTkFrame(fbar, fg_color=COLORS["bg_white"],
@@ -172,9 +176,10 @@ class BillHistoryScreen(ctk.CTkFrame):
                        width=112, height=46, command=self._void_bill
                        ).pack(side="right", padx=(0, 28), pady=15)
 
-        self._pill(act_bar, t("View Bill", L), kind="primary", width=112,
-                   height=46, command=self._view_bill
-                   ).pack(side="left", padx=(0, 8), pady=15)
+        self._first_action = self._pill(act_bar, t("View Bill", L),
+                                        kind="primary", width=112,
+                                        height=46, command=self._view_bill)
+        self._first_action.pack(side="left", padx=(0, 8), pady=15)
         self._pill(act_bar, t("Reprint", L), kind="plain", width=100,
                    height=46, command=self._reprint_bill
                    ).pack(side="left", padx=(0, 8), pady=15)
@@ -189,6 +194,7 @@ class BillHistoryScreen(ctk.CTkFrame):
 
         # -- Bills table -------------------------------------
         tbl_frame = self._card(self)
+        self._tbl = tbl_frame
         tbl_frame.pack(fill="both", expand=True, padx=28, pady=(0, 12))
 
         cols = ("bill_number", "date", "customer", "items", "subtotal",
@@ -197,28 +203,44 @@ class BillHistoryScreen(ctk.CTkFrame):
             tbl_frame, columns=cols, show="headings",
             style="Bill.Treeview", selectmode="browse"
         )
+        # No currency glyph in the headers: it clipped to a stub at narrow
+        # widths, and repeating it three times says nothing the summary line
+        # above the table does not already say.
         heads  = (t("Bill No.", L), t("Date & Time", L), t("Customer", L),
-                  t("Items", L), f"{t('Subtotal', L)} \u20b9",
-                  f"{t('Discount', L)} \u20b9", f"{t('Total', L)} \u20b9",
+                  t("Items", L), t("Subtotal", L),
+                  t("Discount", L), t("Total", L),
                   t("Mode", L), t("Status", L))
-        widths = (100, 140, 150, 50, 88, 78, 92, 104, 74)
-        for col, head, w in zip(cols, heads, widths):
+        # Customer takes the surplus; money columns keep a floor wide
+        # enough for their widest real value so a figure never clips.
+        self.HIST_COLSPEC = [
+            ("bill_number", 0, 104), ("date", 0, 140), ("customer", 1, 150),
+            ("items", 0, 58), ("subtotal", 0, 96), ("discount", 0, 90),
+            ("grand_total", 0, 100), ("mode", 0, 108), ("status", 0, 80),
+        ]
+        for (col, _w, m), head in zip(self.HIST_COLSPEC, heads):
             self.tree.heading(col, text=head,
                               command=lambda c=col: self._sort_by(c))
             anch = "e" if col in ("subtotal", "discount", "grand_total", "items") else "w"
-            self.tree.column(col, width=w, anchor=anch, minwidth=50)
+            self.tree.column(col, width=m, anchor=anch, minwidth=m,
+                             stretch=(col == "customer"))
 
         vsb = ttk.Scrollbar(tbl_frame, orient="vertical",   command=self.tree.yview)
         hsb = ttk.Scrollbar(tbl_frame, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        _hgrid = dict(row=1, column=0, sticky="ew", padx=(10, 0), pady=(0, 8))
+        self.tree.configure(
+            yscrollcommand=vsb.set,
+            xscrollcommand=autohide_scrollbar(self.tree, hsb, _hgrid))
         self.tree.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=(10, 0))
         vsb.grid(row=0, column=1, sticky="ns",  pady=(10, 0), padx=(0, 8))
         hsb.grid(row=1, column=0, sticky="ew",  padx=(10, 0), pady=(0, 8))
         tbl_frame.grid_rowconfigure(0, weight=1)
         tbl_frame.grid_columnconfigure(0, weight=1)
         self.tree.bind("<<TreeviewSelect>>", lambda _e: self._update_selection_label())
+        tbl_frame.bind("<Configure>", lambda _e: self._fit_hist_columns(), add="+")
 
         # -- Store sort state --------------------------------
+        self._sel_pad = (28, 14)
+        self.bind_responsive()
         self._sort_col  = "date"
         self._sort_asc  = False
         self._all_bills = []
@@ -226,6 +248,27 @@ class BillHistoryScreen(ctk.CTkFrame):
         self._paint_range_chips()
 
     # -- Filter helpers --------------------------------------
+    def _fit_hist_columns(self):
+        tree = getattr(self, "tree", None)
+        if tree is None or tree.winfo_width() <= 1:
+            return
+        fit_columns(tree, self.HIST_COLSPEC, tree.winfo_width(),
+                    widget_scaling(self))
+
+    def on_breakpoint(self, bp, logical_w):
+        g = GUTTERS[bp]
+        for w in (self._header, self._fbar, self._tbl):
+            w.pack_configure(padx=g)
+        self._sel_pad = (g, 14)
+        self.sel_label.pack_configure(padx=self._sel_pad)
+        # Five footer actions do not fit a compact window. The label goes
+        # first: the selected bill is already named in the confirm dialog.
+        if bp == "compact":
+            self.sel_label.pack_forget()
+        else:
+            self.sel_label.pack(side="left", padx=self._sel_pad, before=self._first_action)
+        self._fit_hist_columns()
+
     def _paint_range_chips(self):
         for label, chip in self._range_chips.items():
             on = label == getattr(self, "_range_key", None)

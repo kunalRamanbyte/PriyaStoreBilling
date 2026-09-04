@@ -8,13 +8,14 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
-from config import COLORS, FONTS, RADII, METRICS, PAYMENT_MODES
+from config import COLORS, FONTS, RADII, METRICS, PAYMENT_MODES, GUTTERS
+from responsive import ResponsiveMixin, fit_columns, widget_scaling
 from ui_utils import place_popup
 from lang import t
 from webcam_scanner import WebcamScanner
 
 
-class BillingScreen(ctk.CTkFrame):
+class BillingScreen(ResponsiveMixin, ctk.CTkFrame):
     _RESPONSIVE_SUMMARY_BREAK = 1000
     _RESPONSIVE_BUTTON_BREAK = 860
 
@@ -35,7 +36,6 @@ class BillingScreen(ctk.CTkFrame):
         self._inline_entry   = None   # active inline-edit Entry widget
         self._build()
         self._bind_keys()
-        self.bind("<Configure>", self._on_resize)
 
     # ─────────────────────────────────────────────────────────────
     # Build UI
@@ -49,6 +49,7 @@ class BillingScreen(ctk.CTkFrame):
         self._build_top_bar()
         self._build_body()
         self._build_status_bar()
+        self.bind_responsive()
 
     # -- Direction B primitives ------------------------------
     def _card(self, parent, **kw):
@@ -241,6 +242,10 @@ class BillingScreen(ctk.CTkFrame):
         right_panel.grid(row=0, column=1, rowspan=3, sticky="nsew")
         right_panel.grid_propagate(False)
         right_panel.grid_rowconfigure(0, weight=1)
+        # Without a column weight the summary panel keeps its own requested
+        # width and spills past the rail, which is what clipped "₹ 470" to
+        # "₹ 47" on a 1280 screen.
+        right_panel.grid_columnconfigure(0, weight=1)
         self.right_panel = right_panel
 
         self._build_totals_panel(right_panel)
@@ -255,12 +260,20 @@ class BillingScreen(ctk.CTkFrame):
         )
         L = self.app.current_lang
         heads  = ("#", t("Product Name_col", L), t("Unit", L), t("Qty", L),
-                  t("Price ₹", L), t("Disc ₹", L), t("Total ₹", L), "")
-        widths = (30,  150,           50,     52,    72,       64,       80,       38)
-        for col, h, w in zip(cols, heads, widths):
+                  t("Price", L), t("Disc", L), t("Total", L), "")
+        # (column, weight, min_px). Minimums are the widest real value the
+        # column must hold: a quantity is "9999.999", so 78px at 15px type.
+        # Product name takes all the surplus.
+        self.CART_COLSPEC = [
+            ("#", 0, 34), ("product", 1, 150), ("unit", 0, 56),
+            ("qty", 0, 78), ("price", 0, 84), ("disc", 0, 72),
+            ("total", 0, 90), ("action", 0, 40),
+        ]
+        for (col, _w, m), h in zip(self.CART_COLSPEC, heads):
             self.cart_tree.heading(col, text=h)
             anch = "e" if col in ("qty", "price", "disc", "total") else "center"
-            self.cart_tree.column(col, width=w, anchor=anch, minwidth=w)
+            self.cart_tree.column(col, width=m, anchor=anch, minwidth=m,
+                                  stretch=(col == "product"))
 
         vsb = ttk.Scrollbar(parent, orient="vertical", command=self.cart_tree.yview)
         self.cart_tree.configure(yscrollcommand=vsb.set)
@@ -269,6 +282,7 @@ class BillingScreen(ctk.CTkFrame):
         vsb.grid(row=0, column=1, sticky="ns", pady=(6, 6), padx=(0, 4))
 
         # Click Qty/Price to inline-edit; double-click other cols for full dialog
+        parent.bind("<Configure>", lambda _e: self._fit_cart_columns(), add="+")
         self.cart_tree.bind("<Button-1>", self._on_cart_click)
         self.cart_tree.bind("<Double-1>", self._on_cart_double_click)
         self.cart_tree.bind("<Delete>",   lambda e: self._remove_selected())
@@ -279,6 +293,59 @@ class BillingScreen(ctk.CTkFrame):
             font=FONTS["body"], text_color=COLORS["text_muted"],
             justify="center"
         )
+
+    def _fit_cart_columns(self):
+        """Divide the real card width across the cart columns."""
+        tree = getattr(self, "cart_tree", None)
+        if tree is None:
+            return
+        avail = tree.winfo_width()
+        if avail <= 1:
+            return
+        fit_columns(tree, self.CART_COLSPEC, avail, widget_scaling(self))
+
+    def on_breakpoint(self, bp, logical_w):
+        """The single resize authority for this screen.
+
+        Two systems used to fight over the rail width — a legacy raw-pixel
+        handler and the breakpoint one — which is why the rail overflowed the
+        window. Everything lives here now.
+        """
+        g = GUTTERS[bp]
+        self.top_bar.grid_configure(padx=g)
+        self.body_frame.grid_configure(padx=g)
+
+        # Below ~940 logical the cart and a side rail cannot both hold their
+        # content, so the rail moves under the cart and goes full width.
+        stacked = logical_w < 940
+        if stacked:
+            self.cart_frame.grid_configure(row=1, column=0, columnspan=2,
+                                           padx=0, pady=(0, 10))
+            self.right_panel.grid_configure(row=2, column=0, columnspan=2,
+                                            rowspan=1, sticky="ew", pady=0)
+            self.action_panel.grid_configure(row=3, column=0, columnspan=2,
+                                             padx=0, pady=(10, 0))
+            self.right_panel.configure(width=0)
+        else:
+            rail = {"compact": 300, "standard": 340, "wide": 380}[bp]
+            self.cart_frame.grid_configure(row=1, column=0, columnspan=1,
+                                           padx=(0, 12), pady=0)
+            self.right_panel.grid_configure(row=0, column=1, columnspan=1,
+                                            rowspan=3, sticky="nsew", pady=0)
+            self.action_panel.grid_configure(row=2, column=0, columnspan=1,
+                                             padx=(0, 12), pady=(12, 0))
+            self.right_panel.configure(width=rail)
+
+        # A compact header cannot hold the field, the New pill and the chip.
+        self.customer_entry.configure(width=200 if bp == "compact" else 280)
+        if bp == "compact":
+            self.walkin_badge.pack_forget()
+        else:
+            self._update_walkin_badge()
+
+        self._layout_payment_chips(bp)
+        self._layout_action_buttons(stacked=logical_w < 860)
+        self._fit_cart_columns()
 
     def _build_totals_panel(self, parent):
         """Direction B right rail: a quiet card of components, then the one
@@ -388,8 +455,9 @@ class BillingScreen(ctk.CTkFrame):
                 corner_radius=19, border_width=0,
                 command=lambda m=mode: self._pick_payment_mode(m),
             )
-            chip.pack(side="left", fill="x", expand=True, padx=2, pady=4)
             self._pm_chips[mode] = chip
+        self._pm_seg = seg
+        self._layout_payment_chips("standard")
         # Draft loading and _clear_cart set the var directly, so repaint from
         # the variable rather than only from the click.
         self.payment_mode_var.trace_add("write",
@@ -429,6 +497,24 @@ class BillingScreen(ctk.CTkFrame):
         self.lbl_change.pack(side="right")
 
         self._paint_payment_chips()
+
+    def _layout_payment_chips(self, bp):
+        """Four modes in one row needs ~340px of rail. On a 300px rail
+        "Udhaar" clips to "dha", so compact goes two-by-two instead.
+
+        grid, not pack: pack will not shrink a chip below its natural width,
+        so the fourth one used to fall off the rail entirely.
+        """
+        cols = 2 if bp == "compact" else 4
+        for c in self._pm_chips.values():
+            c.grid_forget()
+        for i in range(4):
+            self._pm_seg.grid_columnconfigure(i, weight=0, uniform="")
+        for i in range(cols):
+            self._pm_seg.grid_columnconfigure(i, weight=1, uniform="pm")
+        for i, chip in enumerate(self._pm_chips.values()):
+            chip.grid(row=i // cols, column=i % cols, sticky="ew",
+                      padx=2, pady=(4 if i < cols else 0, 4))
 
     def _pick_payment_mode(self, mode):
         self.payment_mode_var.set(mode)     # trace repaints the chips
@@ -518,49 +604,6 @@ class BillingScreen(ctk.CTkFrame):
             parent, text=text, font=FONTS["small_bold"],
             text_color=ink, fg_color=bg,
             corner_radius=height // 2, height=height, padx=14, pady=6)
-
-    def _on_resize(self, _event=None):
-        # Debounce: a resize drag fires <Configure> continuously; coalesce into
-        # one relayout once the drag settles instead of re-gridding every tick.
-        if getattr(self, "_resize_job", None) is not None:
-            self.after_cancel(self._resize_job)
-        self._resize_job = self.after(80, self._apply_responsive_layout)
-
-    def _apply_responsive_layout(self):
-        self._resize_job = None
-        width = self.winfo_width()
-        if width <= 1 or not hasattr(self, "right_panel"):
-            return
-
-        summary_below = width < self._RESPONSIVE_SUMMARY_BREAK
-        buttons_stacked = width < self._RESPONSIVE_BUTTON_BREAK
-
-        # Skip the full re-grid when the layout class hasn't actually changed —
-        # dragging within a breakpoint band shouldn't touch the widget tree.
-        layout_state = (summary_below, buttons_stacked, width < 980)
-        if layout_state == getattr(self, "_last_layout_state", None):
-            return
-        self._last_layout_state = layout_state
-
-        if summary_below:
-            self.cart_frame.grid_configure(row=1, column=0, columnspan=2, padx=(0, 0), pady=(0, 10))
-            self.right_panel.grid_configure(row=2, column=0, columnspan=2, rowspan=1, sticky="ew", pady=(0, 0))
-            self.action_panel.grid_configure(row=3, column=0, columnspan=2, padx=(0, 0), pady=(10, 0))
-            self.right_panel.configure(width=0)
-        else:
-            self.cart_frame.grid_configure(row=1, column=0, columnspan=1, padx=(0, 12), pady=(0, 0))
-            self.right_panel.grid_configure(row=0, column=1, columnspan=1, rowspan=3, sticky="nsew", pady=(0, 0))
-            self.action_panel.grid_configure(row=2, column=0, columnspan=1, padx=(0, 12), pady=(12, 0))
-            self.right_panel.configure(width=340)
-
-        if width < 980:
-            self.context_left.grid_configure(row=0, column=0, sticky="ew")
-            self.customer_entry.configure(width=240)
-        else:
-            self.context_left.grid_configure(row=0, column=0, sticky="w")
-            self.customer_entry.configure(width=280)
-
-        self._layout_action_buttons(stacked=buttons_stacked)
 
     def _layout_action_buttons(self, stacked: bool):
         for i in range(3):

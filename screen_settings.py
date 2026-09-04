@@ -15,7 +15,8 @@ import os
 import shutil
 import sqlite3
 from datetime import datetime
-from config import COLORS, FONTS, RADII, METRICS
+from config import COLORS, FONTS, RADII, METRICS, GUTTERS
+from responsive import ResponsiveMixin
 from lang import LANGUAGES, LANG_DB_VALUES, t
 
 
@@ -37,7 +38,7 @@ def _is_valid_sqlite(path: str) -> bool:
         return False
 
 
-class SettingsScreen(ctk.CTkFrame):
+class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
 
     FIELDS = [
         # (key, label, placeholder, section)
@@ -131,6 +132,7 @@ class SettingsScreen(ctk.CTkFrame):
 
         # -- Header band -------------------------------------
         hdr = ctk.CTkFrame(self, fg_color="transparent", height=METRICS["header"])
+        self._hdr = hdr
         hdr.grid(row=0, column=0, columnspan=2, sticky="ew", padx=28)
         hdr.grid_propagate(False)
 
@@ -150,6 +152,7 @@ class SettingsScreen(ctk.CTkFrame):
 
         # -- Section nav -------------------------------------
         nav = ctk.CTkFrame(self, fg_color="transparent", width=200)
+        self._nav = nav
         nav.grid(row=1, column=0, sticky="nsew", padx=(28, 0), pady=(0, 20))
         nav.pack_propagate(False)
 
@@ -159,6 +162,7 @@ class SettingsScreen(ctk.CTkFrame):
         # -- Content stack -----------------------------------
         stack = ctk.CTkFrame(self, fg_color="transparent")
         stack.grid(row=1, column=1, sticky="nsew", padx=(20, 28), pady=(0, 20))
+        self._stack_holder = stack
         self._stack = stack
 
         def make_section(key, label, icon):
@@ -328,6 +332,14 @@ class SettingsScreen(ctk.CTkFrame):
 
         self._show_section("shop")
         self._load()
+        self.bind_responsive()
+
+    def on_breakpoint(self, bp, logical_w):
+        g = GUTTERS[bp]
+        self._hdr.grid_configure(padx=g)
+        self._nav.grid_configure(padx=(g, 0))
+        self._stack_holder.grid_configure(padx=(16 if bp == "compact" else 20, g))
+        self._nav.configure(width=160 if bp == "compact" else 200)
 
     # -- Section switching ------------------------------------
     def _show_section(self, key):
