@@ -260,7 +260,9 @@ class DashboardScreen(ctk.CTkFrame):
     # ── KPI card ────────────────────────────────────────────
     def _kpi_card(self, parent, icon, title, hue):
         tint_key, icon_key, sub_key = KPI_HUES[hue]
-        card = self._card(parent, height=136)
+        # width=1 so five cards divide the row evenly instead of each
+        # demanding CTkFrame's default 200px and overflowing 1366.
+        card = self._card(parent, height=136, width=1)
         card.pack_propagate(False)
 
         inner = ctk.CTkFrame(card, fg_color="transparent")

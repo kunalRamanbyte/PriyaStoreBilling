@@ -88,15 +88,26 @@ class BillHistoryScreen(ctk.CTkFrame):
         search_wrap.pack(side="right", fill="y")
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self._load_bills())
-        ctk.CTkEntry(search_wrap, textvariable=self.search_var,
-                     placeholder_text="\U0001F50D  " + t("Bill no. or customer name", L),
-                     font=FONTS["label_form"], width=300,
-                     height=METRICS["control"],
-                     corner_radius=RADII["input"], border_width=1,
-                     border_color=COLORS["hairline"],
-                     fg_color=COLORS["bg_white"],
-                     text_color=COLORS["text_dark"]
-                     ).pack(side="right", pady=16)
+        self.search_entry = ctk.CTkEntry(
+            search_wrap, textvariable=self.search_var,
+            font=FONTS["label_form"], width=300,
+            height=METRICS["control"],
+            corner_radius=RADII["input"], border_width=1,
+            border_color=COLORS["hairline"],
+            fg_color=COLORS["bg_white"],
+            text_color=COLORS["text_dark"])
+        self.search_entry.pack(side="right", pady=16)
+        # A textvariable suppresses CTkEntry's own placeholder, and this field
+        # needs one to drive the filter trace. So draw the hint as a label over
+        # the empty field; it never touches the variable.
+        self._search_hint = ctk.CTkLabel(
+            self.search_entry,
+            text="\U0001F50D  " + t("Bill no. or customer name", L),
+            font=FONTS["label_form"], text_color=COLORS["text_muted"],
+            fg_color="transparent")
+        self._search_hint.place(x=18, rely=0.5, anchor="w")
+        self._search_hint.bind("<Button-1>",
+                               lambda _e: self.search_entry.focus_set())
 
         # -- Filter row --------------------------------------
         fbar = ctk.CTkFrame(self, fg_color="transparent")
@@ -132,12 +143,49 @@ class BillHistoryScreen(ctk.CTkFrame):
         self._pill(fbar, t("Filter", L), kind="action", width=100,
                    command=self._apply_manual_range).pack(side="left", padx=(10, 0))
 
-        chips = ctk.CTkFrame(fbar, fg_color="transparent")
-        chips.pack(side="right")
+        # Packed straight into fbar: an empty wrapper frame would hold
+        # CTkFrame's default 200x200 even with every chip hidden.
         self._status_chips = {}
-        for kind in ("paid", "due", "void", "draft"):
-            chip = self._stat_chip(chips, kind)
-            self._status_chips[kind] = chip
+        for kind in ("draft", "void", "due", "paid"):
+            self._status_chips[kind] = self._stat_chip(fbar, kind)
+
+        # -- Footer action bar -------------------------------
+        # Packed before the table: an expanding widget packed first would
+        # consume every remaining pixel and starve a later side="bottom".
+        act_bar = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0,
+                               height=METRICS["header"])
+        act_bar.pack(fill="x", side="bottom")
+        act_bar.pack_propagate(False)
+        ctk.CTkFrame(act_bar, fg_color=COLORS["hairline"], height=1,
+                     corner_radius=0).pack(fill="x", side="top")
+
+        self.sel_label = ctk.CTkLabel(act_bar, text=t("No bill selected", L),
+                                      font=FONTS["label_form"],
+                                      text_color=COLORS["text_muted"])
+        self.sel_label.pack(side="left", padx=(28, 14))
+
+        if self.current_user["role"] == "admin":
+            # Packed before the left-hand group: a side="right" widget only
+            # gets what earlier widgets leave, so Void was being squeezed off
+            # the edge entirely.
+            self._pill(act_bar, t("Void Bill", L), kind="danger",
+                       width=112, height=46, command=self._void_bill
+                       ).pack(side="right", padx=(0, 28), pady=15)
+
+        self._pill(act_bar, t("View Bill", L), kind="primary", width=112,
+                   height=46, command=self._view_bill
+                   ).pack(side="left", padx=(0, 8), pady=15)
+        self._pill(act_bar, t("Reprint", L), kind="plain", width=100,
+                   height=46, command=self._reprint_bill
+                   ).pack(side="left", padx=(0, 8), pady=15)
+        self._pill(act_bar, t("Resume Draft", L), kind="expiry", width=130,
+                   height=46, command=self._resume_draft
+                   ).pack(side="left", padx=(0, 8), pady=15)
+
+        if self.current_user["role"] == "admin":
+            self._pill(act_bar, t("Return / Refund", L), kind="stock",
+                       width=140, height=46, command=self._return_bill
+                       ).pack(side="left", padx=(0, 8), pady=15)
 
         # -- Bills table -------------------------------------
         tbl_frame = self._card(self)
@@ -153,7 +201,7 @@ class BillHistoryScreen(ctk.CTkFrame):
                   t("Items", L), f"{t('Subtotal', L)} \u20b9",
                   f"{t('Discount', L)} \u20b9", f"{t('Total', L)} \u20b9",
                   t("Mode", L), t("Status", L))
-        widths = (110, 155, 180, 55, 100, 80, 100, 120, 80)
+        widths = (100, 140, 150, 50, 88, 78, 92, 104, 74)
         for col, head, w in zip(cols, heads, widths):
             self.tree.heading(col, text=head,
                               command=lambda c=col: self._sort_by(c))
@@ -169,37 +217,6 @@ class BillHistoryScreen(ctk.CTkFrame):
         tbl_frame.grid_rowconfigure(0, weight=1)
         tbl_frame.grid_columnconfigure(0, weight=1)
         self.tree.bind("<<TreeviewSelect>>", lambda _e: self._update_selection_label())
-
-        # -- Footer action bar -------------------------------
-        act_bar = ctk.CTkFrame(self, fg_color=COLORS["bg_card"], corner_radius=0,
-                               height=METRICS["header"])
-        act_bar.pack(fill="x", side="bottom")
-        act_bar.pack_propagate(False)
-        ctk.CTkFrame(act_bar, fg_color=COLORS["hairline"], height=1,
-                     corner_radius=0).pack(fill="x", side="top")
-
-        self.sel_label = ctk.CTkLabel(act_bar, text=t("No bill selected", L),
-                                      font=FONTS["label_form"],
-                                      text_color=COLORS["text_muted"])
-        self.sel_label.pack(side="left", padx=(28, 14))
-
-        self._pill(act_bar, t("View Bill", L), kind="primary", width=136,
-                   height=46, command=self._view_bill
-                   ).pack(side="left", padx=(0, 8), pady=15)
-        self._pill(act_bar, t("Reprint", L), kind="plain", width=118,
-                   height=46, command=self._reprint_bill
-                   ).pack(side="left", padx=(0, 8), pady=15)
-        self._pill(act_bar, t("Resume Draft", L), kind="expiry", width=150,
-                   height=46, command=self._resume_draft
-                   ).pack(side="left", padx=(0, 8), pady=15)
-
-        if self.current_user["role"] == "admin":
-            self._pill(act_bar, "\u21a9  " + t("Return / Refund", L), kind="stock",
-                       width=168, height=46, command=self._return_bill
-                       ).pack(side="left", padx=(0, 8), pady=15)
-            self._pill(act_bar, t("Void Bill", L) + "\u2026", kind="danger",
-                       width=126, height=46, command=self._void_bill
-                       ).pack(side="right", padx=(0, 28), pady=15)
 
         # -- Store sort state --------------------------------
         self._sort_col  = "date"
@@ -247,6 +264,15 @@ class BillHistoryScreen(ctk.CTkFrame):
         self.sel_label.configure(text=f"{vals[0]} {t('selected', L)}",
                                  text_color=COLORS["text_dark"])
 
+    def _sync_search_hint(self):
+        hint = getattr(self, "_search_hint", None)
+        if hint is None:
+            return
+        if self.search_var.get():
+            hint.place_forget()
+        else:
+            hint.place(x=18, rely=0.5, anchor="w")
+
     def _update_summary(self, bills, capped):
         """Header subtitle + the status count chips."""
         L = self.app.current_lang
@@ -286,7 +312,7 @@ class BillHistoryScreen(ctk.CTkFrame):
             c = counts[kind]
             if c:
                 chip.configure(text=f"  {c} {labels[kind]}  ")
-                chip.pack(side="left", padx=(8, 0))
+                chip.pack(side="right", padx=(8, 0))
             else:
                 chip.pack_forget()
 
@@ -356,6 +382,7 @@ class BillHistoryScreen(ctk.CTkFrame):
         self._render_table(bills)
         self._update_summary(bills, capped=len(bills) >= self._LIMIT)
         self._update_selection_label()
+        self._sync_search_hint()
 
     def _render_table(self, bills):
         self.tree.delete(*self.tree.get_children())

@@ -200,7 +200,7 @@ class ReportScreen(ctk.CTkFrame):
             titles, text=t("Reports & Analytics", L),
             font=("Segoe UI Semibold", 26, "bold"),
             text_color=COLORS["text_dark"], anchor="w")
-        self._title_lbl.pack(anchor="w", pady=(16, 0))
+        self._title_lbl.pack(anchor="w", pady=(16, 0), fill="x")
         self._range_lbl = ctk.CTkLabel(
             titles, text=t("\u2190 Select a report from the left panel", L),
             font=FONTS["small"], text_color=COLORS["text_muted"], anchor="w")
@@ -208,14 +208,14 @@ class ReportScreen(ctk.CTkFrame):
 
         acts = ctk.CTkFrame(hdr, fg_color="transparent")
         acts.pack(side="right", fill="y")
-        self._pill(acts, "\u25b6  " + t("Generate", L), kind="primary", width=130,
+        self._pill(acts, "\u25b6  " + t("Generate", L), kind="primary", width=116,
                    command=self._generate).pack(side="right", pady=16)
-        self._pill(acts, t("PDF", L), kind="counts", width=76,
-                   command=self._export_pdf).pack(side="right", padx=(0, 8), pady=16)
-        self._pill(acts, t("CSV", L), kind="plain", width=76,
-                   command=self._export_csv).pack(side="right", padx=(0, 8), pady=16)
-        self._pill(acts, t("Excel", L), kind="money", width=86,
-                   command=self._export_excel).pack(side="right", padx=(0, 8), pady=16)
+        self._pill(acts, t("PDF", L), kind="counts", width=62,
+                   command=self._export_pdf).pack(side="right", padx=(0, 6), pady=16)
+        self._pill(acts, t("CSV", L), kind="plain", width=62,
+                   command=self._export_csv).pack(side="right", padx=(0, 6), pady=16)
+        self._pill(acts, t("Excel", L), kind="money", width=72,
+                   command=self._export_excel).pack(side="right", padx=(0, 6), pady=16)
 
         # -- Right content panel ------------------------------
         right = ctk.CTkFrame(self, fg_color="transparent")

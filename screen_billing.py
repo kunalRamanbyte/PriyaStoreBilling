@@ -82,7 +82,7 @@ class BillingScreen(ctk.CTkFrame):
         user moved to the app sidebar, so neither is repeated here."""
         L = self.app.current_lang
         top = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0,
-                           height=72)
+                           height=76)
         top.grid(row=0, column=0, sticky="ew", padx=24)
         top.grid_propagate(False)
         self.top_bar = top
@@ -97,11 +97,10 @@ class BillingScreen(ctk.CTkFrame):
             left, self.db.next_bill_number(), "action", 30)
         self.bill_no_label.pack(side="left", padx=(12, 0))
 
-        self.clock_label = ctk.CTkLabel(
-            top, text="", font=FONTS["caption"],
-            text_color=COLORS["text_muted"])
-        self.clock_label.pack(side="left", padx=16)
-        self._update_clock()
+        # The customer controls are built by _build_body and re-parented
+        # here; see the note there. The clock lives in the status bar.
+        self.header_right = ctk.CTkFrame(top, fg_color="transparent")
+        self.header_right.pack(side="right", fill="y")
 
     def _build_body(self):
         L = self.app.current_lang
@@ -109,13 +108,17 @@ class BillingScreen(ctk.CTkFrame):
         body.grid(row=1, column=0, sticky="nsew", padx=24, pady=(0, 8))
         body.grid_columnconfigure(0, weight=1)
         body.grid_columnconfigure(1, weight=0)
-        body.grid_rowconfigure(2, weight=1)
+        body.grid_rowconfigure(1, weight=1)
         self.body_frame = body
 
         # -- Customer row -------------------------------------
-        self.context_frame = ctk.CTkFrame(body, fg_color="transparent")
-        self.context_frame.grid(row=0, column=0, columnspan=2, sticky="ew",
-                                pady=(0, 12))
+        # Parented to the header, not the body: as its own row it cost the
+        # right rail ~68px, which is exactly what pushed "Change due" off a
+        # 768px screen. It stays a grid container because _select_customer
+        # grids the udhaar/change badges into columns 1 and 2.
+        self.context_frame = ctk.CTkFrame(self.header_right,
+                                          fg_color="transparent")
+        self.context_frame.pack(side="right", pady=16)
         self.context_frame.grid_columnconfigure(0, weight=1)
         self.context_left = ctk.CTkFrame(self.context_frame, fg_color="transparent")
         self.context_left.grid(row=0, column=0, sticky="w")
@@ -130,6 +133,7 @@ class BillingScreen(ctk.CTkFrame):
             border_color=COLORS["hairline"],
             fg_color=COLORS["bg_white"],
             text_color=COLORS["text_dark"],
+            placeholder_text_color=COLORS["text_muted"],
             corner_radius=RADII["input"],
         )
         self.customer_entry.pack(side="left", padx=(0, 10))
@@ -154,16 +158,23 @@ class BillingScreen(ctk.CTkFrame):
         # -- Product search -----------------------------------
         # The artboard's 56px search bar: a real blue ring, because this is
         # where every bill starts.
+        # One row holding the bar and the camera button, gridded in the cart
+        # column only. Putting the camera in the rail column cost the rail a
+        # whole row of height.
+        search_row = ctk.CTkFrame(body, fg_color="transparent")
+        search_row.grid(row=0, column=0, sticky="ew", pady=(0, 12),
+                        padx=(0, 12))
+        self.search_row = search_row
+
         search_frame = ctk.CTkFrame(
-            body,
+            search_row,
             fg_color=COLORS["bg_white"],
             corner_radius=RADII["pill_lg"],
             height=METRICS["control_lg"],
             border_width=2,
             border_color=COLORS["accent_action"],
         )
-        search_frame.grid(row=1, column=0, sticky="ew", pady=(0, 12),
-                          padx=(0, 12))
+        search_frame.pack(side="left", fill="x", expand=True)
         search_frame.grid_propagate(False)
         search_frame.grid_columnconfigure(0, weight=1)
         self.search_frame = search_frame
@@ -179,9 +190,20 @@ class BillingScreen(ctk.CTkFrame):
             border_width=0,
             fg_color=COLORS["bg_white"],
             text_color=COLORS["text_dark"],
+            placeholder_text_color=COLORS["text_muted"],
             corner_radius=22,
         )
         self.search_entry.grid(row=0, column=0, sticky="ew", padx=(20, 8), pady=6)
+        # Same story as Bill History: the textvariable driving the product
+        # lookup suppresses CTkEntry's placeholder, so draw the hint.
+        self._search_hint = ctk.CTkLabel(
+            self.search_entry,
+            text=t("Scan barcode or search product…", L),
+            font=("Segoe UI", 17), text_color=COLORS["text_muted"],
+            fg_color="transparent")
+        self._search_hint.place(x=4, rely=0.5, anchor="w")
+        self._search_hint.bind("<Button-1>",
+                               lambda _e: self.search_entry.focus_set())
 
         ctk.CTkLabel(search_frame, text="F2", font=FONTS["caption"],
                      fg_color=COLORS["accent_action_tint"],
@@ -191,7 +213,7 @@ class BillingScreen(ctk.CTkFrame):
 
         # Camera scan sits outside the bar as its own round button.
         self.scan_btn = ctk.CTkButton(
-            body,
+            search_row,
             text="\U0001F4F7",
             font=("Segoe UI", 20),
             fg_color=COLORS["accent_money"],
@@ -202,11 +224,11 @@ class BillingScreen(ctk.CTkFrame):
             corner_radius=RADII["pill_lg"],
             command=self._open_webcam_scanner,
         )
-        self.scan_btn.grid(row=1, column=1, sticky="e", pady=(0, 12))
+        self.scan_btn.pack(side="left", padx=(12, 0))
 
         # -- Cart ---------------------------------------------
         cart_frame = self._card(body)
-        cart_frame.grid(row=2, column=0, sticky="nsew", padx=(0, 12))
+        cart_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
         cart_frame.grid_rowconfigure(0, weight=1)
         cart_frame.grid_columnconfigure(0, weight=1)
         self.cart_frame = cart_frame
@@ -216,7 +238,7 @@ class BillingScreen(ctk.CTkFrame):
 
         right_panel = ctk.CTkFrame(body, fg_color="transparent",
                                    corner_radius=0, width=340)
-        right_panel.grid(row=2, column=1, rowspan=2, sticky="nsew")
+        right_panel.grid(row=0, column=1, rowspan=3, sticky="nsew")
         right_panel.grid_propagate(False)
         right_panel.grid_rowconfigure(0, weight=1)
         self.right_panel = right_panel
@@ -234,7 +256,7 @@ class BillingScreen(ctk.CTkFrame):
         L = self.app.current_lang
         heads  = ("#", t("Product Name_col", L), t("Unit", L), t("Qty", L),
                   t("Price ₹", L), t("Disc ₹", L), t("Total ₹", L), "")
-        widths = (40,  200,           65,     65,    85,       75,       90,       50)
+        widths = (30,  150,           50,     52,    72,       64,       80,       38)
         for col, h, w in zip(cols, heads, widths):
             self.cart_tree.heading(col, text=h)
             anch = "e" if col in ("qty", "price", "disc", "total") else "center"
@@ -269,7 +291,7 @@ class BillingScreen(ctk.CTkFrame):
 
         def money_row(parent_card, label, attr, ink=None):
             f = ctk.CTkFrame(parent_card, fg_color="transparent")
-            f.pack(fill="x", padx=20, pady=6)
+            f.pack(fill="x", padx=20, pady=(9 if attr == "lbl_subtotal" else 4))
             ctk.CTkLabel(f, text=label, font=FONTS["body"],
                          text_color=COLORS["text_secondary"], anchor="w"
                          ).pack(side="left")
@@ -280,14 +302,13 @@ class BillingScreen(ctk.CTkFrame):
 
         # -- Components card ----------------------------------
         comp = self._card(panel)
-        comp.pack(fill="x", pady=(0, 10))
-        ctk.CTkFrame(comp, fg_color="transparent", height=6).pack()
+        comp.pack(fill="x", pady=(0, 8))
         money_row(comp, t("Subtotal :", L), "lbl_subtotal")
         money_row(comp, t("Line discounts", L), "lbl_discount",
                   COLORS["accent_money"])
 
         disc_f = ctk.CTkFrame(comp, fg_color="transparent")
-        disc_f.pack(fill="x", padx=20, pady=(6, 14))
+        disc_f.pack(fill="x", padx=20, pady=(6, 12))
         ctk.CTkLabel(disc_f, text=t("Bill Discount (\u20b9):", L),
                      font=FONTS["body"], text_color=COLORS["text_secondary"],
                      anchor="w").pack(side="left")
@@ -333,9 +354,9 @@ class BillingScreen(ctk.CTkFrame):
         # -- Total ---------------------------------------------
         gt_frame = ctk.CTkFrame(panel, fg_color=COLORS["accent_action_deep"],
                                 corner_radius=RADII["card"])
-        gt_frame.pack(fill="x", pady=(10, 10))
+        gt_frame.pack(fill="x", pady=(0, 8))
         gt_inner = ctk.CTkFrame(gt_frame, fg_color="transparent")
-        gt_inner.pack(fill="x", padx=20, pady=18)
+        gt_inner.pack(fill="x", padx=20, pady=14)
         ctk.CTkLabel(gt_inner, text=t("TOTAL", L),
                      font=("Segoe UI Semibold", 15, "bold"),
                      text_color=COLORS["on_accent_soft"]).pack(side="left")
@@ -347,11 +368,10 @@ class BillingScreen(ctk.CTkFrame):
         # -- Payment -------------------------------------------
         pay = self._card(panel)
         pay.pack(fill="x")
-        ctk.CTkFrame(pay, fg_color="transparent", height=6).pack()
 
         ctk.CTkLabel(pay, text=t("Payment Mode", L), font=FONTS["small"],
                      text_color=COLORS["text_muted"], anchor="w"
-                     ).pack(fill="x", padx=20, pady=(6, 6))
+                     ).pack(fill="x", padx=20, pady=(14, 4))
 
         seg = ctk.CTkFrame(pay, fg_color=COLORS["bg_input"], corner_radius=22)
         seg.pack(fill="x", padx=20)
@@ -376,7 +396,7 @@ class BillingScreen(ctk.CTkFrame):
                                         lambda *_: self._paint_payment_chips())
 
         self.cash_frame = ctk.CTkFrame(pay, fg_color="transparent")
-        self.cash_frame.pack(fill="x", padx=20, pady=(14, 0))
+        self.cash_frame.pack(fill="x", padx=20, pady=(12, 0))
         ctk.CTkLabel(self.cash_frame, text=t("Cash Received (\u20b9)", L),
                      font=FONTS["body"], text_color=COLORS["text_secondary"],
                      anchor="w").pack(side="left")
@@ -392,13 +412,13 @@ class BillingScreen(ctk.CTkFrame):
 
         change_f = ctk.CTkFrame(pay, fg_color=COLORS["accent_money_tint"],
                                 corner_radius=18)
-        change_f.pack(fill="x", padx=20, pady=(14, 18))
+        change_f.pack(fill="x", padx=20, pady=(12, 16))
         # _on_payment_mode_change re-packs cash_frame when Cash is reselected;
         # without an anchor pack() would append it after this panel.
         self._change_panel = change_f
-        self._cash_pack = dict(fill="x", padx=20, pady=(14, 0))
+        self._cash_pack = dict(fill="x", padx=20, pady=(12, 0))
         ch_inner = ctk.CTkFrame(change_f, fg_color="transparent")
-        ch_inner.pack(fill="x", padx=16, pady=12)
+        ch_inner.pack(fill="x", padx=16, pady=10)
         ctk.CTkLabel(ch_inner, text=t("Change Due :", L),
                      font=FONTS["body_bold"],
                      text_color=COLORS["accent_money"]).pack(side="left")
@@ -429,21 +449,21 @@ class BillingScreen(ctk.CTkFrame):
 
     def _build_action_buttons(self, parent):
         btn_panel = ctk.CTkFrame(parent, fg_color="transparent")
-        btn_panel.grid(row=3, column=0, sticky="ew", padx=(0, 12), pady=(12, 0))
+        btn_panel.grid(row=2, column=0, sticky="ew", padx=(0, 12), pady=(12, 0))
         self.action_panel = btn_panel
 
         L = self.app.current_lang
         # Print & save is the commit action, so it takes money-in teal; hold
         # is amber (paused, not done); clear is destructive.
         specs = [
-            (t("F10 Print & Save", L), "money",  self._save_and_print),
-            (t("F8 Hold Bill", L),     "expiry", self._hold_bill),
-            (t("ESC Clear Cart", L),   "danger", self._clear_cart),
+            (t("Print & Save", L), "money",  self._save_and_print),
+            (t("Hold", L),         "expiry", self._hold_bill),
+            (t("Clear", L),        "danger", self._clear_cart),
         ]
         self.action_buttons = []
         for text, kind, cmd in specs:
             self.action_buttons.append(
-                self._pill(btn_panel, text, kind=kind,
+                self._pill(btn_panel, text, kind=kind, width=10,
                            height=METRICS["control_lg"], command=cmd))
 
         self._layout_action_buttons(stacked=False)
@@ -463,13 +483,23 @@ class BillingScreen(ctk.CTkFrame):
             "F10": "Print & Save",  "ESC": "Clear Cart",
             "Del": "Remove Item",  "Ctrl+N": "New Bill"
         }.items()])
-        ctk.CTkLabel(bar, text=shortcuts, font=FONTS["caption"],
-                     text_color=COLORS["text_muted"]).pack(side="left", padx=24)
+        self.clock_label = ctk.CTkLabel(
+            bar, text="", font=FONTS["caption"],
+            text_color=COLORS["text_secondary"])
+        self.clock_label.pack(side="left", padx=(24, 0))
+        self._update_clock()
 
+        # Status is packed before the legend so it always keeps its width; the
+        # legend then takes what is left and truncates, instead of shoving the
+        # status message off the right edge.
         self.status_label = ctk.CTkLabel(
             bar, text="Ready", font=FONTS["caption"],
             text_color=COLORS["accent_money"])
         self.status_label.pack(side="right", padx=24)
+
+        ctk.CTkLabel(bar, text=f"   \u00b7   {shortcuts}", font=FONTS["caption"],
+                     text_color=COLORS["text_muted"], anchor="w"
+                     ).pack(side="left", fill="x", expand=True)
 
     def _make_chip(self, parent, text, kind="neutral", height=40):
         """Direction B chip: a pale tint with the dark ink of the same hue.
@@ -513,14 +543,14 @@ class BillingScreen(ctk.CTkFrame):
         self._last_layout_state = layout_state
 
         if summary_below:
-            self.cart_frame.grid_configure(row=2, column=0, columnspan=2, padx=(0, 0), pady=(0, 10))
-            self.right_panel.grid_configure(row=3, column=0, columnspan=2, rowspan=1, sticky="ew", pady=(0, 0))
-            self.action_panel.grid_configure(row=4, column=0, columnspan=2, padx=(0, 0), pady=(10, 0))
+            self.cart_frame.grid_configure(row=1, column=0, columnspan=2, padx=(0, 0), pady=(0, 10))
+            self.right_panel.grid_configure(row=2, column=0, columnspan=2, rowspan=1, sticky="ew", pady=(0, 0))
+            self.action_panel.grid_configure(row=3, column=0, columnspan=2, padx=(0, 0), pady=(10, 0))
             self.right_panel.configure(width=0)
         else:
-            self.cart_frame.grid_configure(row=2, column=0, columnspan=1, padx=(0, 10), pady=(0, 0))
-            self.right_panel.grid_configure(row=2, column=1, columnspan=1, rowspan=2, sticky="nsew", pady=(0, 0))
-            self.action_panel.grid_configure(row=3, column=0, columnspan=1, padx=(0, 10), pady=(10, 0))
+            self.cart_frame.grid_configure(row=1, column=0, columnspan=1, padx=(0, 12), pady=(0, 0))
+            self.right_panel.grid_configure(row=0, column=1, columnspan=1, rowspan=3, sticky="nsew", pady=(0, 0))
+            self.action_panel.grid_configure(row=2, column=0, columnspan=1, padx=(0, 12), pady=(12, 0))
             self.right_panel.configure(width=340)
 
         if width < 980:
@@ -543,8 +573,10 @@ class BillingScreen(ctk.CTkFrame):
             for idx, btn in enumerate(self.action_buttons):
                 btn.grid(row=idx, column=0, sticky="ew", pady=(0 if idx == 0 else 8, 0))
         else:
-            for i in range(3):
-                self.action_panel.grid_columnconfigure(i, weight=1)
+            # Direction B weights the commit action: Print & Save takes twice
+            # the room, so its label stops clipping at 1366.
+            for i, weight in enumerate((2, 1, 1)):
+                self.action_panel.grid_columnconfigure(i, weight=weight)
             for idx, btn in enumerate(self.action_buttons):
                 btn.grid(row=0, column=idx, sticky="ew", padx=(0 if idx == 0 else 8, 0))
 
@@ -725,7 +757,17 @@ class BillingScreen(ctk.CTkFrame):
                 parent=self.winfo_toplevel()
             )
 
+    def _sync_search_hint(self):
+        hint = getattr(self, "_search_hint", None)
+        if hint is None:
+            return
+        if self.search_var.get():
+            hint.place_forget()
+        else:
+            hint.place(x=4, rely=0.5, anchor="w")
+
     def _on_search_change(self, *_):
+        self._sync_search_hint()
         # Debounce: avoid a DB query + popup rebuild on every keystroke. Closing
         # the popup on an empty box is immediate; the query is deferred.
         if getattr(self, "_search_job", None) is not None:

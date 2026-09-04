@@ -48,14 +48,15 @@ class LoginScreen(ctk.CTkFrame):
             return t("No backup yet", L)
 
     def _chip(self, parent, text):
-        """A 32px white pill on the blue brand panel."""
-        chip = ctk.CTkFrame(parent, fg_color=COLORS["on_accent"],
+        """A 32px white pill on the blue brand panel. This is a label, not a
+        frame: a CTkFrame would keep its default 200px width and clip the
+        text."""
+        chip = ctk.CTkLabel(parent, text=f"  {text}  ",
+                            font=FONTS["caption"],
+                            fg_color=COLORS["on_accent"],
+                            text_color=COLORS["accent_action_deep"],
                             corner_radius=16, height=32)
         chip.pack(side="left", padx=(0, 10))
-        chip.pack_propagate(False)
-        ctk.CTkLabel(chip, text=text, font=FONTS["caption"],
-                     text_color=COLORS["accent_action_deep"]
-                     ).pack(padx=14, pady=6)
         return chip
 
     def _field(self, parent, show=None):
@@ -155,8 +156,13 @@ class LoginScreen(ctk.CTkFrame):
         ctk.CTkLabel(inner, text=t("Username", L), font=FONTS["small"],
                      text_color=COLORS["text_secondary"], anchor="w"
                      ).pack(fill="x", pady=(0, 7))
-        self.username_entry = self._field(inner)
-        self.username_entry.pack(fill="x", pady=(0, 16))
+        user_row = ctk.CTkFrame(inner, fg_color="transparent")
+        user_row.pack(fill="x", pady=(0, 16))
+        self.username_entry = self._field(user_row)
+        self.username_entry.pack(side="left", fill="x", expand=True)
+        # Reserve the Show button's width so both fields end on the same edge.
+        ctk.CTkFrame(user_row, fg_color="transparent",
+                     width=68, height=1).pack(side="left")
 
         # Password + show/hide
         ctk.CTkLabel(inner, text=t("Password", L), font=FONTS["small"],

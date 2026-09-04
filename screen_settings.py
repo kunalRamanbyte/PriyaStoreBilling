@@ -100,19 +100,17 @@ class SettingsScreen(ctk.CTkFrame):
                              command=command, **kw)
 
     def _row(self, parent, label, hint=None):
-        """A label column plus a control column, the artboard's field row."""
+        """A label column plus a control column, the artboard's field row.
+
+        The label is a fixed-width CTkLabel rather than a frame: a frame with
+        pack_propagate(False) and no height keeps CTkFrame's default 200px and
+        turns every field row into a 200px block."""
         row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", padx=24, pady=9)
-        col = ctk.CTkFrame(row, fg_color="transparent", width=170)
-        col.pack(side="left", fill="y")
-        col.pack_propagate(False)
-        ctk.CTkLabel(col, text=label, font=FONTS["label_form"],
+        row.pack(fill="x", padx=24, pady=8)
+        text = f"{label}\n{hint}" if hint else label
+        ctk.CTkLabel(row, text=text, font=FONTS["label_form"],
                      text_color=COLORS["text_muted"], anchor="w",
-                     justify="left").pack(anchor="w")
-        if hint:
-            ctk.CTkLabel(col, text=hint, font=FONTS["caption"],
-                         text_color=COLORS["text_muted"], anchor="w",
-                         justify="left", wraplength=160).pack(anchor="w")
+                     justify="left", width=170).pack(side="left")
         return row
 
     def _entry(self, parent, placeholder="", width=None):

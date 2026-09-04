@@ -370,7 +370,7 @@ class BillingApp(ctk.CTk):
                 continue
             btn = ctk.CTkButton(
                 nav_scroll,
-                text=f"          {t(label, self.current_lang)}",
+                text=f"            {t(label, self.current_lang)}",
                 font=self._nav_font(False),
                 fg_color="transparent",
                 hover_color=COLORS["sidebar_hover"],
@@ -428,7 +428,7 @@ class BillingApp(ctk.CTk):
         # -- Sign out ---------------------------------------------
         logout_btn = ctk.CTkButton(
             sidebar,
-            text=f"          {t('Sign Out', self.current_lang)}",
+            text=f"            {t('Sign Out', self.current_lang)}",
             font=self._nav_font(False),
             fg_color="transparent",
             hover_color=COLORS["accent_danger_tint"],
