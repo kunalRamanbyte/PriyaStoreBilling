@@ -12,6 +12,7 @@ from responsive import (ResponsiveMixin, fit_columns, widget_scaling,
                         autohide_scrollbar)
 from ui_utils import place_popup, open_date_picker
 from lang import t
+from ui_utils import EmptyState
 from webcam_scanner import WebcamScanner
 
 
@@ -177,8 +178,9 @@ class ProductScreen(ResponsiveMixin, ctk.CTkFrame):
                             command=self.tree.yview, style="Prod.Vertical.TScrollbar")
         hsb = ttk.Scrollbar(tbl_frame, orient="horizontal", command=self.tree.xview)
         _hgrid = dict(row=1, column=0, sticky="ew", padx=(10, 0), pady=(0, 8))
+        _vgrid = dict(row=0, column=1, sticky="ns", pady=(10, 0), padx=(0, 8))
         self.tree.configure(
-            yscrollcommand=vsb.set,
+            yscrollcommand=autohide_scrollbar(self.tree, vsb, _vgrid),
             xscrollcommand=autohide_scrollbar(self.tree, hsb, _hgrid))
         self.tree.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=(10, 0))
         vsb.grid(row=0, column=1, sticky="ns", pady=(10, 0), padx=(0, 8))
@@ -206,6 +208,8 @@ class ProductScreen(ResponsiveMixin, ctk.CTkFrame):
                    width=140, height=46, command=self._deactivate_product
                    ).pack(side="left", pady=15)
 
+        self._empty = EmptyState(tbl_frame, t("No products found", L),
+                                 t("Add your first product, or clear the filters.", L))
         self.bind_responsive()
 
     def _fit_prod_columns(self):
@@ -299,6 +303,7 @@ class ProductScreen(ResponsiveMixin, ctk.CTkFrame):
         self.tree.tag_configure("low",      background=COLORS["tbl_low_stock"], foreground=COLORS["text_dark"])
         for idx, color in enumerate(COLORS["ROW_COLORS"]):
             self.tree.tag_configure(f"row{idx}", background=color, foreground=COLORS["text_dark"])
+        self._empty.sync(len(prods))
         self.count_label.configure(text=t("product(s)", L).format(n=len(prods)))
 
     def _get_selected_product_id(self):

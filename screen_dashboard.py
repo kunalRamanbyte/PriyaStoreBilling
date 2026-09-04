@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from config import COLORS, FONTS, RADII, METRICS, GUTTERS
 from responsive import ResponsiveMixin
 from lang import t
+from ui_utils import EmptyState
 
 
 # Each KPI owns one hue: blue action, violet counts, coral stock risk,
@@ -259,6 +260,8 @@ class DashboardScreen(ResponsiveMixin, ctk.CTkFrame):
                               padx=(10, 0), pady=(0, 10))
         scroll.pack(side="right", fill="y", padx=(0, 8), pady=(0, 10))
 
+        self._empty = EmptyState(self.bills_card, t("No bills yet", L),
+                                 t("Bills you save will appear here.", L))
         self._paint_period_chips()
 
     def _layout_kpis(self, bp):
@@ -445,6 +448,7 @@ class DashboardScreen(ResponsiveMixin, ctk.CTkFrame):
                 status,
             ), tags=(tag,))
 
+        self._empty.sync(len(rows))
         for i, color in enumerate(COLORS["ROW_COLORS"]):
             self.recent_tree.tag_configure(f"row{i}", background=color)
         self.recent_tree.tag_configure("void", background=COLORS["row_void"],

@@ -44,7 +44,7 @@ class CategoryScreen(ctk.CTkFrame):
         ctk.CTkLabel(list_frame, text=t("All Categories_list", L),
                      font=FONTS["subheading"], text_color=COLORS["btn_primary"]
                     ).pack(pady=(14, 6), padx=16, anchor="w")
-        ctk.CTkFrame(list_frame, fg_color=COLORS["tbl_select"], height=2
+        ctk.CTkFrame(list_frame, fg_color=COLORS["hairline"], height=1
                     ).pack(fill="x", padx=16, pady=(0, 10))
 
         self.cat_cards_frame = ctk.CTkFrame(list_frame, fg_color="transparent")
@@ -58,7 +58,7 @@ class CategoryScreen(ctk.CTkFrame):
         ctk.CTkLabel(form_outer, text=t("Add / Edit Category", L),
                      font=FONTS["subheading"], text_color=COLORS["btn_primary"]
                     ).pack(pady=(20, 8), padx=20, anchor="w")
-        ctk.CTkFrame(form_outer, fg_color=COLORS["tbl_select"], height=2
+        ctk.CTkFrame(form_outer, fg_color=COLORS["hairline"], height=1
                     ).pack(fill="x", padx=20, pady=(0, 16))
 
         ctk.CTkLabel(form_outer, text=t("Category Name *", L),

@@ -12,6 +12,7 @@ from responsive import (ResponsiveMixin, fit_columns, widget_scaling,
                         autohide_scrollbar)
 from ui_utils import place_popup
 from lang import t
+from ui_utils import EmptyState
 
 
 class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
@@ -214,7 +215,7 @@ class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
         # enough for their widest real value so a figure never clips.
         self.HIST_COLSPEC = [
             ("bill_number", 0, 104), ("date", 0, 140), ("customer", 1, 150),
-            ("items", 0, 58), ("subtotal", 0, 96), ("discount", 0, 90),
+            ("items", 0, 68), ("subtotal", 0, 96), ("discount", 0, 90),
             ("grand_total", 0, 100), ("mode", 0, 108), ("status", 0, 80),
         ]
         for (col, _w, m), head in zip(self.HIST_COLSPEC, heads):
@@ -227,8 +228,9 @@ class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
         vsb = ttk.Scrollbar(tbl_frame, orient="vertical",   command=self.tree.yview)
         hsb = ttk.Scrollbar(tbl_frame, orient="horizontal", command=self.tree.xview)
         _hgrid = dict(row=1, column=0, sticky="ew", padx=(10, 0), pady=(0, 8))
+        _vgrid = dict(row=0, column=1, sticky="ns", pady=(10, 0), padx=(0, 8))
         self.tree.configure(
-            yscrollcommand=vsb.set,
+            yscrollcommand=autohide_scrollbar(self.tree, vsb, _vgrid),
             xscrollcommand=autohide_scrollbar(self.tree, hsb, _hgrid))
         self.tree.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=(10, 0))
         vsb.grid(row=0, column=1, sticky="ns",  pady=(10, 0), padx=(0, 8))
@@ -239,6 +241,8 @@ class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
         tbl_frame.bind("<Configure>", lambda _e: self._fit_hist_columns(), add="+")
 
         # -- Store sort state --------------------------------
+        self._empty = EmptyState(self._tbl, t("No bills in this range", L),
+                                 t("Try a wider date range, or clear the search.", L))
         self._sel_pad = (28, 14)
         self.bind_responsive()
         self._sort_col  = "date"
@@ -450,6 +454,7 @@ class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
                 b["payment_mode"],
                 b["status"],
             ), tags=(tag,))
+        self._empty.sync(len(bills))
         self.tree.tag_configure("void",  background=COLORS["row_void"], foreground=COLORS["fg_void"])
         self.tree.tag_configure("draft", background=COLORS["row_draft"], foreground=COLORS["text_dark"])
         for idx, color in enumerate(_row_colors):
@@ -500,7 +505,7 @@ class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
         if bill.get("void_reason"):
             row("Void Reason:", bill["void_reason"])
 
-        ctk.CTkFrame(scroll, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=20, pady=8)
+        ctk.CTkFrame(scroll, fg_color=COLORS["hairline"], height=1).pack(fill="x", padx=20, pady=8)
         ctk.CTkLabel(scroll, text="Items", font=FONTS["body_bold"],
                      text_color=COLORS["btn_primary"]).pack(anchor="w", padx=20)
 
@@ -514,7 +519,7 @@ class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
                          font=FONTS["body_bold"], text_color=COLORS["btn_primary"],
                          anchor="e").pack(side="right", padx=10)
 
-        ctk.CTkFrame(scroll, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=20, pady=8)
+        ctk.CTkFrame(scroll, fg_color=COLORS["hairline"], height=1).pack(fill="x", padx=20, pady=8)
         row("Subtotal:",   f"₹ {bill['subtotal']:,.2f}")
         row("Discount:",   f"₹ {bill['discount']:,.2f}")
         row("TOTAL:",      f"₹ {bill['grand_total']:,.2f}", bold=True)

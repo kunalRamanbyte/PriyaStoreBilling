@@ -15,6 +15,7 @@ from responsive import (ResponsiveMixin, fit_columns, widget_scaling,
                         autohide_scrollbar)
 from ui_utils import place_popup
 from lang import t
+from ui_utils import EmptyState
 
 # ── Report catalogue ──────────────────────────────────────────
 REPORTS = [
@@ -314,8 +315,9 @@ class ReportScreen(ResponsiveMixin, ctk.CTkFrame):
         vsb = ttk.Scrollbar(tbl_frame, orient="vertical",   command=self.tree.yview)
         hsb = ttk.Scrollbar(tbl_frame, orient="horizontal", command=self.tree.xview)
         _hgrid = dict(row=1, column=0, sticky="ew", padx=(10, 0), pady=(0, 8))
+        _vgrid = dict(row=0, column=1, sticky="ns", pady=(10, 0), padx=(0, 8))
         self.tree.configure(
-            yscrollcommand=vsb.set,
+            yscrollcommand=autohide_scrollbar(self.tree, vsb, _vgrid),
             xscrollcommand=autohide_scrollbar(self.tree, hsb, _hgrid))
         self.tree.grid(row=0, column=0, sticky="nsew", padx=(10, 0), pady=(10, 0))
         vsb.grid(row=0, column=1, sticky="ns",  pady=(10, 0), padx=(0, 8))
@@ -328,6 +330,8 @@ class ReportScreen(ResponsiveMixin, ctk.CTkFrame):
                                 foreground=COLORS["text_dark"])
         self.tree.bind("<Double-1>", self._on_tree_drilldown)
         tbl_frame.bind("<Configure>", lambda _e: self._fit_report_columns(), add="+")
+        self._empty = EmptyState(tbl_frame, t("Nothing to show", L),
+                                 t("This report has no rows for the selected period.", L))
         self.bind_responsive()
 
     # -- Stat row --------------------------------------------
@@ -548,6 +552,7 @@ class ReportScreen(ResponsiveMixin, ctk.CTkFrame):
 
         # Stat row (Direction B) replaces the old single summary label.
         self._update_stats(rpt, data)
+        self._empty.sync(len(data))
 
     # ── Excel export ──────────────────────────────────────────
     def _export_excel(self):

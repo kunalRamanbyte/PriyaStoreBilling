@@ -193,7 +193,7 @@ class CustomerScreen(ctk.CTkFrame):
         ctk.CTkLabel(dlg, text=f"{t('Edit', L) if customer else t('Add', L)} " + t("Customer", L),
                      font=FONTS["heading"], text_color=COLORS["btn_primary"]
                     ).pack(pady=(20, 6), padx=24, anchor="w")
-        ctk.CTkFrame(dlg, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=24, pady=(0, 14))
+        ctk.CTkFrame(dlg, fg_color=COLORS["hairline"], height=1).pack(fill="x", padx=24, pady=(0, 14))
 
         p = customer or {}
         entries = {}
@@ -391,7 +391,7 @@ class CustomerScreen(ctk.CTkFrame):
         ctk.CTkLabel(dlg, text=t("Customer", L) + f": {cust['name']}  |  " + t("Current Balance", L) + f": ₹{(cust.get('credit_balance') or 0):,.2f}",
                      font=FONTS["small"], text_color=COLORS["text_muted"]
                     ).pack(padx=24, anchor="w")
-        ctk.CTkFrame(dlg, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=24, pady=(8, 14))
+        ctk.CTkFrame(dlg, fg_color=COLORS["hairline"], height=1).pack(fill="x", padx=24, pady=(8, 14))
 
         def row(label, widget_fn):
             f = ctk.CTkFrame(dlg, fg_color="transparent")

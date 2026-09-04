@@ -172,7 +172,7 @@ class SupplierScreen(ctk.CTkFrame):
                      text=f"{header_prefix} {t('Supplier', L)}",
                      font=FONTS["heading"], text_color=COLORS["btn_primary"]
                     ).pack(pady=(18, 10), padx=24, anchor="w")
-        ctk.CTkFrame(scroll, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=24, pady=(0, 16))
+        ctk.CTkFrame(scroll, fg_color=COLORS["hairline"], height=1).pack(fill="x", padx=24, pady=(0, 16))
 
         p = supplier or {}
         entries = {}
@@ -296,7 +296,7 @@ class SupplierScreen(ctk.CTkFrame):
         ctk.CTkLabel(scroll, text=f"💰  {t('Record Payment', L)} — {sup['name']}",
                      font=FONTS["heading"], text_color=COLORS["btn_primary"]
                     ).pack(pady=(16, 6), padx=20, anchor="w")
-        ctk.CTkFrame(scroll, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=20, pady=(0, 12))
+        ctk.CTkFrame(scroll, fg_color=COLORS["hairline"], height=1).pack(fill="x", padx=20, pady=(0, 12))
 
         ctk.CTkLabel(scroll, text=t("Select Invoice:", L),
                      font=FONTS["label_form"], text_color=COLORS["text_dark"]

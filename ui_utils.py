@@ -178,3 +178,43 @@ def open_date_picker(parent, var, title="Select Date"):
     py = parent.winfo_rooty() + parent.winfo_height() // 2 - ph // 2
     popup.geometry(f"+{max(0, px)}+{max(0, py)}")
 
+
+
+class EmptyState:
+    """A message shown over an empty table.
+
+    Every table in this app except the POS cart used to render bare column
+    headers over blank white, which tells a shopkeeper nothing about whether
+    the filter is wrong, the day is quiet, or the app is broken.
+
+    Placed over the table's container rather than packed, so it never
+    disturbs the layout it sits on.
+    """
+
+    def __init__(self, parent, title, hint=None):
+        import customtkinter as ctk
+        from config import COLORS, FONTS
+        self._frame = ctk.CTkFrame(parent, fg_color="transparent")
+        ctk.CTkLabel(self._frame, text=title, font=FONTS["subheading"],
+                     text_color=COLORS["text_muted"]).pack()
+        if hint:
+            ctk.CTkLabel(self._frame, text=hint, font=FONTS["body"],
+                         text_color=COLORS["text_muted"],
+                         justify="center").pack(pady=(6, 0))
+        self._shown = False
+
+    def sync(self, row_count):
+        if row_count:
+            if self._shown:
+                self._frame.place_forget()
+                self._shown = False
+        elif not self._shown:
+            self._frame.place(relx=0.5, rely=0.5, anchor="center")
+            self._shown = True
+
+    def set_text(self, title, hint=None):
+        kids = self._frame.winfo_children()
+        if kids:
+            kids[0].configure(text=title)
+        if hint is not None and len(kids) > 1:
+            kids[1].configure(text=hint)

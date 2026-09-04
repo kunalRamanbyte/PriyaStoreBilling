@@ -179,7 +179,7 @@ class PurchaseScreen(ctk.CTkFrame):
         ctk.CTkLabel(right, text=t("GRN Summary", L),
                      font=FONTS["subheading"], text_color=COLORS["text_dark"]
                     ).pack(pady=(24, 4), padx=20, anchor="w")
-        ctk.CTkFrame(right, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=20, pady=(0, 16))
+        ctk.CTkFrame(right, fg_color=COLORS["hairline"], height=1).pack(fill="x", padx=20, pady=(0, 16))
 
         # Total items
         ctk.CTkLabel(right, text=t("Total Items:", L), font=FONTS["body"],
@@ -196,7 +196,7 @@ class PurchaseScreen(ctk.CTkFrame):
                      font=FONTS["num_lg"], text_color=COLORS["kpi_green"]
                     ).pack(anchor="w", padx=20, pady=(0, 24))
 
-        ctk.CTkFrame(right, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=20, pady=(0, 20))
+        ctk.CTkFrame(right, fg_color=COLORS["hairline"], height=1).pack(fill="x", padx=20, pady=(0, 20))
 
         ctk.CTkButton(right, text=t("✅  Save GRN\n(Update Stock)", L),
                       font=FONTS["button"], fg_color=COLORS["btn_success"],
@@ -210,7 +210,7 @@ class PurchaseScreen(ctk.CTkFrame):
                       command=self._clear_all
                      ).pack(fill="x", padx=20, pady=(0, 20))
 
-        ctk.CTkFrame(right, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=20, pady=(0, 16))
+        ctk.CTkFrame(right, fg_color=COLORS["hairline"], height=1).pack(fill="x", padx=20, pady=(0, 16))
         ctk.CTkLabel(right, text=t("📋  GRN History", L),
                      font=FONTS["subheading"], text_color=COLORS["text_dark"]
                     ).pack(anchor="w", padx=20, pady=(0, 8))
@@ -907,7 +907,7 @@ class PurchaseScreen(ctk.CTkFrame):
                      font=FONTS["body"], text_color=COLORS["text_muted"]
                     ).pack(anchor="w", padx=24, pady=(2, 16))
 
-        ctk.CTkFrame(scroll, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=24)
+        ctk.CTkFrame(scroll, fg_color=COLORS["hairline"], height=1).pack(fill="x", padx=24)
 
         # Items list
         for item in items:
@@ -921,7 +921,7 @@ class PurchaseScreen(ctk.CTkFrame):
                          font=FONTS["body"], text_color=COLORS["text_muted"]
                         ).pack(side="right")
 
-        ctk.CTkFrame(scroll, fg_color=COLORS["tbl_select"], height=2).pack(fill="x", padx=24, pady=8)
+        ctk.CTkFrame(scroll, fg_color=COLORS["hairline"], height=1).pack(fill="x", padx=24, pady=8)
         ctk.CTkLabel(scroll,
                      text=f"{t('Total Amount:', L)}  ₹{p['total_amount']:,.2f}",
                      font=FONTS["num_md"], text_color=COLORS["kpi_green"]

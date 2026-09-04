@@ -434,6 +434,29 @@ T = {
     "Sell":                 ["Sell",                     "বিক্রয়",              "बिक्री"],
     "Cost":                 ["Cost",                     "কেনা দাম",            "लागत"],
     "Search products…":     ["Search products…",         "প্রোডাক্ট সার্চ করো…",   "प्रोडक्ट सर्च करें…"],
+    "No bills yet":         ["No bills yet",             "এখনো কোনো বিল নেই",     "अभी तक कोई बिल नहीं"],
+    "Bills you save will appear here.":
+                            ["Bills you save will appear here.",
+                             "সেভ করা বিল এখানে দেখা যাবে।",
+                             "सेव किए बिल यहाँ दिखेंगे।"],
+    "No bills in this range":
+                            ["No bills in this range",
+                             "এই সময়ে কোনো বিল নেই",
+                             "इस अवधि में कोई बिल नहीं"],
+    "Try a wider date range, or clear the search.":
+                            ["Try a wider date range, or clear the search.",
+                             "সময়সীমা বাড়াও, বা সার্চ মুছে দাও।",
+                             "अवधि बढ़ाएँ, या सर्च हटाएँ।"],
+    "Nothing to show":      ["Nothing to show",          "দেখানোর কিছু নেই",      "दिखाने के लिए कुछ नहीं"],
+    "This report has no rows for the selected period.":
+                            ["This report has no rows for the selected period.",
+                             "নির্বাচিত সময়ে এই রিপোর্টে কিছু নেই।",
+                             "चुनी गई अवधि में इस रिपोर्ट में कुछ नहीं है।"],
+    "No products found":    ["No products found",        "কোনো প্রোডাক্ট পাওয়া যায়নি", "कोई प्रोडक्ट नहीं मिला"],
+    "Add your first product, or clear the filters.":
+                            ["Add your first product, or clear the filters.",
+                             "প্রথম প্রোডাক্ট যোগ করো, বা ফিল্টার মুছে দাও।",
+                             "पहला प्रोडक्ट जोड़ें, या फ़िल्टर हटाएँ।"],
     "Excel":                ["Excel",                    "এক্সেল",              "एक्सेल"],
     "CSV":                  ["CSV",                      "সিএসভি",              "सीएसवी"],
     "PDF":                  ["PDF",                      "পিডিএফ",              "पीडीएफ"],
