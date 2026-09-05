@@ -20,6 +20,7 @@
 - No gradient, blur, shadow or translucency on any *widget* — CustomTkinter cannot draw them. Window-level `-alpha` on a `Toplevel` is the one exception and is what the fade uses.
 - `python verify_screens.py` must stay at **16 passed | 0 failed** after every task.
 - Any test script that writes to the `settings` table must restore the previous values in a `finally:` block. A script that crashes before restoring leaves the shop's live database altered.
+- **Never assert on geometry without waiting for the widget to be mapped.** An unmapped Tk window reports `winfo_width() == 1`, which fails geometry checks intermittently and unreproducibly while every other check passes. Use the `wait_mapped()` helper in Task 3.
 
 ---
 
@@ -643,6 +644,30 @@ def app_pump(ms):
     while time.perf_counter() < end:
         app.update()
         time.sleep(0.005)
+
+
+def wait_mapped(widget, timeout=5.0):
+    """Block until a widget actually has a size.
+
+    An unmapped Tk window reports winfo_width() == 1, which silently fails
+    every geometry assertion while the non-geometry checks still pass. The
+    sidebar harness produced exactly that once — an 18/6 split where the six
+    failures were precisely the six geometry checks — and it was not
+    reproducible, because it depended on when the window manager got around
+    to realising the window. Never measure geometry without this.
+    """
+    end = time.perf_counter() + timeout
+    while time.perf_counter() < end:
+        app.update(); app.update_idletasks()
+        if widget.winfo_width() > 1 and widget.winfo_ismapped():
+            return
+        time.sleep(0.02)
+    raise AssertionError(
+        f"{widget} never mapped within {timeout}s "
+        f"(width={widget.winfo_width()}) — cannot measure geometry")
+
+
+wait_mapped(app.content_area)
 ```
 
 Then add these checks before the `for name, fn in [` list:
@@ -655,13 +680,14 @@ def test_every_screen_builds_and_shows_under_place():
         scr = app.screens[name]
         assert scr.winfo_manager() == "place", (
             f"{name} is managed by {scr.winfo_manager()!r}, expected 'place'")
-        assert scr.winfo_ismapped(), f"{name} is not mapped after navigation"
+        wait_mapped(scr)
 
 
 def test_navigation_leaves_the_screen_at_x_zero():
     for name in ALL_SCREENS:
         app.navigate_to(name)
         app_pump(400)
+        wait_mapped(app.screens[name])
         x = app.screens[name].winfo_x()
         assert x == 0, f"{name} settled at x={x}, expected 0"
 
