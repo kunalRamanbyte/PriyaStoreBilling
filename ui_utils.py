@@ -218,3 +218,106 @@ class EmptyState:
             kids[0].configure(text=title)
         if hint is not None and len(kids) > 1:
             kids[1].configure(text=hint)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Hover tooltip
+# ─────────────────────────────────────────────────────────────────────────────
+
+class Tooltip:
+    """A hover label for a control that carries no text of its own.
+
+    Built for the icon-only sidebar, where the nav pills are bare emoji and
+    the label they lost has to live somewhere. Uses a bare tk.Toplevel with
+    overrideredirect(True) rather than a CTkToplevel: it must not steal focus,
+    must not appear in the taskbar, and must never outlive the widget it
+    describes — the billing/GRN suggestion popups are the standing reminder of
+    what a stray Toplevel does to the screen you switch to next.
+
+    Bindings are attached with add="+" so CustomTkinter's own hover effects on
+    the button canvas keep working, and to the whole widget subtree because Tk
+    sends <Leave> to a parent the moment the pointer crosses onto its child.
+    """
+
+    def __init__(self, widget, text, delay=400, side="right"):
+        self.widget = widget
+        self.text   = text
+        self.delay  = delay
+        self.side   = side
+        self._after = None
+        self._tip   = None
+        self._bind_tree(widget)
+
+    def _bind_tree(self, w):
+        w.bind("<Enter>",    self._schedule, add="+")
+        w.bind("<Leave>",    self._hide,     add="+")
+        w.bind("<Button-1>", self._hide,     add="+")
+        w.bind("<Destroy>",  self._hide,     add="+")
+        for child in w.winfo_children():
+            self._bind_tree(child)
+
+    def _schedule(self, _event=None):
+        self._cancel()
+        try:
+            self._after = self.widget.after(self.delay, self._show)
+        except Exception:
+            self._after = None
+
+    def _cancel(self):
+        if self._after is not None:
+            try:
+                self.widget.after_cancel(self._after)
+            except Exception:
+                pass
+            self._after = None
+
+    def _show(self):
+        self._after = None
+        if self._tip is not None or not self.text:
+            return
+        import tkinter as tk
+        from config import COLORS, FONTS
+        try:
+            if not self.widget.winfo_exists() or not self.widget.winfo_ismapped():
+                return
+            tip = tk.Toplevel(self.widget.winfo_toplevel())
+            tip.overrideredirect(True)
+            tip.attributes("-topmost", True)
+            # A neutral dark chip, not one of the four meaning-locked hues —
+            # a tooltip carries no meaning of its own.
+            bg = COLORS["text_dark"]
+            tip.configure(bg=bg)
+            tk.Label(tip, text=self.text, bg=bg, fg="#FFFFFF",
+                     font=FONTS["caption"], padx=10, pady=5,
+                     justify="left").pack()
+            tip.update_idletasks()
+
+            if self.side == "right":
+                x = self.widget.winfo_rootx() + self.widget.winfo_width() + 8
+                y = (self.widget.winfo_rooty()
+                     + (self.widget.winfo_height() - tip.winfo_height()) // 2)
+            else:
+                x = self.widget.winfo_rootx()
+                y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+
+            # Keep the chip on-screen even for the last pill on a short display.
+            x = max(0, min(x, tip.winfo_screenwidth()  - tip.winfo_width()))
+            y = max(0, min(y, tip.winfo_screenheight() - tip.winfo_height()))
+            tip.geometry(f"+{x}+{y}")
+            self._tip = tip
+        except Exception:
+            self._tip = None
+
+    def _hide(self, _event=None):
+        self._cancel()
+        if self._tip is not None:
+            try:
+                self._tip.destroy()
+            except Exception:
+                pass
+            self._tip = None
+
+
+def attach_tooltip(widget, text, side="right"):
+    """Attach a hover tooltip to *widget*. Returns the Tooltip (usually ignored)."""
+    return Tooltip(widget, text, side=side)

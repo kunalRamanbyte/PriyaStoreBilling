@@ -30,6 +30,8 @@ T = {
     "Users":            ["Users",             "ইউজার্স",             "यूज़र्स"],
     "Activity Log":     ["Activity Log",      "অ্যাক্টিভিটি লগ",      "एक्टिविटी लॉग"],
     "Sign Out":         ["Sign Out",          "বের হও",            "बाहर जाओ"],
+    "Collapse menu":    ["Collapse menu",     "মেনু ছোট করো",     "मेनू छोटा करो"],
+    "Expand menu":      ["Expand menu",       "মেনু বড় করো",       "मेनू बड़ा करो"],
 
     # ══════════════════════════════════════════════════════════════
     # Common buttons / labels

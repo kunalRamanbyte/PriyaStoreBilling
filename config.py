@@ -44,6 +44,16 @@ def resource_path(*parts):
 WINDOW_WIDTH  = 1366
 WINDOW_HEIGHT = 768
 SIDEBAR_WIDTH = 236
+# Icon-only sidebar. The nav pills live in a CTkScrollableFrame (13 of
+# them never fit a 720p rail), and that frame reserves a fixed column
+# for its scrollbar — so the pills centre on a narrower axis than the
+# brand mark above them. The rail is therefore a 44px nav square, plus
+# that column, plus 8px either side, and every non-scrolling block is
+# padded right by the same amount to keep ONE optical centre running
+# down the rail. Measured, not guessed: without it the icons sit 8px
+# left of the brand mark and the avatar.
+SIDEBAR_SCROLLBAR_W    = 16
+SIDEBAR_WIDTH_COLLAPSED = 76
 
 # ─── Direction B Palette — "soft, rounded, colour with a job" ───────
 #
