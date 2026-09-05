@@ -31,7 +31,7 @@
 - Create: `verify_motion.py`
 
 **Interfaces:**
-- Consumes: nothing (leaf module; imports only `time` and, lazily, `config`)
+- Consumes: nothing (leaf module; imports only `time`)
 - Produces:
   - `ease_out_cubic(t: float) -> float`
   - `blend(c1: str, c2: str, t: float) -> str` — returns `"#rrggbb"`
@@ -853,9 +853,10 @@ def test_slide_moves_the_screen_and_settles_home():
 
 def test_slide_frame_budget_stays_under_33ms():
     from config import MOTION
-    scr = app.screens["bill_history"]
     app.navigate_to("bill_history")
     app_pump(400)
+    scr = app.screens["bill_history"]
+    wait_mapped(scr)
     px = MOTION["slide_px"]
     frames = []
     for i in range(21):
