@@ -722,6 +722,16 @@ def test_rapid_navigation_strands_nothing():
     stranded = [n for n in ALL_SCREENS
                 if n in app.screens and app.screens[n].winfo_x() != 0]
     assert not stranded, f"screens stranded off-position: {stranded}"
+
+    # The assertions above are bookkeeping and position; neither can see
+    # stacking order, so both would still pass with lift() deleted outright -
+    # the exact failure this task exists to prevent. `winfo children` returns
+    # siblings in stacking order, lowest first, so the last entry is the one
+    # actually on top.
+    top = app.content_area.winfo_children()[-1]
+    assert top is app.screens["products"], (
+        f"topmost screen is {top}, expected the products screen - "
+        f"lift() is not putting the target on top")
 ```
 
 And add to the `for name, fn in [...]` list:
@@ -742,7 +752,9 @@ try:
     for k, v in _saved.items():
         _db.set_setting(k, v)
 finally:
-    app.destroy()
+    # One destroy, not two: `root is app` here. Calling both raises
+    # TclError("application has been destroyed") and kills the script
+    # before it ever prints its pass/fail report.
     root.destroy()
 ```
 
