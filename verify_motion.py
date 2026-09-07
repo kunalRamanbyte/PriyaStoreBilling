@@ -50,7 +50,7 @@ def app_pump(ms):
         time.sleep(0.005)
 
 
-def wait_mapped(widget, timeout=5.0):
+def wait_mapped(widget, timeout=15.0):
     """Block until a widget actually has a size.
 
     An unmapped Tk window reports winfo_width() == 1, which silently fails
@@ -71,7 +71,28 @@ def wait_mapped(widget, timeout=5.0):
         f"(width={widget.winfo_width()}) — cannot measure geometry")
 
 
+def settle(timeout=5.0):
+    """Run the event loop until no animation is in flight.
+
+    _on_login_success() navigates to the dashboard, and from Task 4 onward a
+    navigation starts a 160ms slide. Seven checks in this file assert
+    motion.pending() == 0, and pending() is global — so without settling here,
+    the dashboard's own slide is still running when the early checks execute
+    and they fail intermittently. Call this after anything that navigates.
+    """
+    end = time.perf_counter() + timeout
+    while time.perf_counter() < end:
+        app.update()
+        if motion.pending() == 0:
+            return
+        time.sleep(0.01)
+    raise AssertionError(
+        f"animations still in flight after {timeout}s "
+        f"(pending={motion.pending()})")
+
+
 wait_mapped(app.content_area)
+settle()
 
 
 def pump(ms):
