@@ -81,7 +81,8 @@ def place_popup(dlg, logical_w: int, logical_h: int, parent=None):
     gx = round(x / window_scale)
     gy = round(y / window_scale)
     dlg.geometry(f"{gw}x{gh}+{gx}+{gy}")
-    motion.fade_in(dlg)
+    from config import MOTION
+    motion.fade_in(dlg, MOTION["fade_ms"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────

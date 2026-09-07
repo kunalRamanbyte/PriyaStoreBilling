@@ -91,9 +91,11 @@ Built installers are gitignored (`installer/*.exe`) — they are ~68 MB each and
 
 1. **Enforces role access** against `self._screen_roles` (built from the `NAV` list in `_build_sidebar`) and shows an "Access Denied" warning on failure — so non-sidebar entry points (dashboard quick actions, resume-draft) cannot escalate.
 2. Calls `on_hide()` on the outgoing screen if it defines one.
-3. Lazily instantiates the target screen on first visit and caches it in `self.screens`.
-4. `place()`s the target at `x=0, relwidth=1, relheight=1` on its first
-   visit, then calls `on_show()`, parks the screen 28px right, `lift()`s it,
+3. **`place_forget()`s every other cached screen.** Tk's focus ring (Tab / Shift-Tab) skips **unmapped** widgets only — a screen that is merely covered by the one on top of it is still fully Tab-reachable. Before this, Tab could walk a cashier out of the visible screen and into any of the twelve cached-but-hidden ones (worst case: Billing's `cart_tree`, which binds `<Delete>` to removing a cart line — an invisible focus there could silently edit a held bill). Any in-flight slide animation on the screen being forgotten is landed first via `motion.cancel()`, because a slide's tween keeps calling `place_configure()` on every tick — including its own last one — which would otherwise silently re-map a screen already forgotten.
+4. Lazily instantiates the target screen on first visit and caches it in `self.screens`.
+5. `place()`s the target at `x=0, relwidth=1, relheight=1` on its first
+   visit (or re-places it if this run's `place_forget()` pass unmapped it),
+   then calls `on_show()`, parks the screen 28px right, `lift()`s it,
    forces the repaint, and only then starts the slide home.
 
 > The order matters and is not arbitrary. `on_show()`'s reload and the first
@@ -218,6 +220,23 @@ dropdown appearing mid-keystroke needs. Don't route them through
 
 The `animations_enabled` setting (Settings → Language & Theme) turns all of it
 off; every helper then applies its final state immediately.
+
+### Categories reload guard (`screen_categories.py`)
+
+`_load_categories()` (called from `on_show()`) used to destroy and rebuild
+every category card on every visit — profiled at ~449ms, almost none of it
+the query. It now computes a signature tuple —
+`(category_id, name, colour_code, is_active)` per row — and returns
+immediately when the signature matches the previous visit's, leaving the
+existing card widgets untouched. `_cards_sig` is only written *after* the
+rebuild loop completes, not before, so a card-build exception can't cache a
+half-built grid and lock it in for the rest of the screen's life.
+
+> **Side effect worth knowing:** an unchanged revisit now returns before the
+> `yview_moveto(0)` call, so the card list keeps whatever scroll position the
+> user left it at instead of always snapping back to the top. This shipped as
+> a side effect of the reload guard, not a deliberate UX decision — arguably
+> an improvement, but undocumented until now.
 
 ### Activity Logging
 

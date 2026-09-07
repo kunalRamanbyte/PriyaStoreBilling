@@ -141,7 +141,6 @@ class CategoryScreen(ctk.CTkFrame):
                 c.get("is_active", 1)) for c in cats]
         if sig == getattr(self, "_cards_sig", None):
             return
-        self._cards_sig = sig
 
         for w in self.cat_cards_frame.winfo_children():
             w.destroy()
@@ -153,6 +152,13 @@ class CategoryScreen(ctk.CTkFrame):
         else:
             for cat in cats:
                 self._make_cat_card(cat)
+
+        # Only cache the signature once the grid actually matches it. If
+        # _make_cat_card() raised partway through, caching sig here (as it
+        # used to, before the loop) would lock in a half-built grid for the
+        # rest of the screen's life — on_show() would see sig == _cards_sig
+        # on every later visit and never redraw it.
+        self._cards_sig = sig
 
         self.cat_cards_frame.update_idletasks()
         self.list_frame._parent_canvas.yview_moveto(0)

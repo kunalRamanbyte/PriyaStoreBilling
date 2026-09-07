@@ -369,6 +369,28 @@ def test_active_pill_blends_and_lands_on_the_exact_token():
     assert app.nav_icons["customers"].cget("fg_color") == COLORS["sidebar_active"]
 
 
+def test_unchanged_pills_are_not_repainted_on_navigation():
+    app.navigate_to("dashboard")
+    app_pump(400)
+    untouched = "settings" if "settings" in app.nav_buttons else None
+    assert untouched, "expected a settings pill to observe"
+    before = app.nav_buttons[untouched].cget("fg_color")
+    calls = []
+    orig = app._set_pill
+    app._set_pill = lambda b, i, a: (calls.append(b), orig(b, i, a))[1]
+    try:
+        app.navigate_to("customers")
+        app_pump(400)
+    finally:
+        app._set_pill = orig
+    # Only the outgoing and incoming pills may be touched. Repainting the
+    # other eleven costs ~22ms of a navigation for no visible change.
+    assert len(calls) <= 2, (
+        f"_set_pill ran {len(calls)} times on one navigation; only the "
+        f"outgoing and incoming pills should be painted")
+    assert app.nav_buttons[untouched].cget("fg_color") == before
+
+
 def test_settings_toggle_persists_and_drives_motion():
     app.navigate_to("settings")
     app_pump(400)
@@ -495,6 +517,7 @@ for name, fn in [
     ("slide — moves the screen and settles home", test_slide_moves_the_screen_and_settles_home),
     ("slide — frame budget under 33ms", test_slide_frame_budget_stays_under_33ms),
     ("nav pill — blends and lands on the exact token", test_active_pill_blends_and_lands_on_the_exact_token),
+    ("nav — unchanged pills are not repainted", test_unchanged_pills_are_not_repainted_on_navigation),
     ("settings — animation toggle persists and takes effect", test_settings_toggle_persists_and_drives_motion),
     ("settings — init reads the persisted preference", test_init_reads_the_persisted_preference),
     ("categories — unchanged cards are not rebuilt", test_categories_does_not_rebuild_unchanged_cards),
