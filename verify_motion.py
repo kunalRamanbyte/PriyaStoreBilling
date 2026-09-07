@@ -253,19 +253,62 @@ def test_rapid_navigation_strands_nothing():
         app.update()            # deliberately no settling time
     app_pump(600)
     assert app.current_screen == "products"
-    stranded = [n for n in ALL_SCREENS
-                if n in app.screens and app.screens[n].winfo_x() != 0]
-    assert not stranded, f"screens stranded off-position: {stranded}"
+
+    # Only the visible (mapped) screen's position is meaningful. A screen
+    # navigated away from mid-slide is now place_forget()'d (the Critical
+    # fix, item 1) before its tween settles, and Tk never commits that
+    # tween's landing x=0 for a widget that is about to be unmanaged - so a
+    # forgotten screen's winfo_x() is just a stale snapshot of wherever its
+    # slide happened to be at the last moment it was still real geometry.
+    # That's harmless: navigate_to() always re-place()s at x=0 before a
+    # forgotten screen is ever shown again. Checking every cached screen's
+    # winfo_x() here (as this test used to) flags that harmless staleness as
+    # "stranded"; only the currently-visible screen's settled position says
+    # anything real.
+    target = app.screens["products"]
+    assert target.winfo_x() == 0, (
+        f"the visible screen settled at x={target.winfo_x()}, expected 0")
 
     # The assertions above are bookkeeping and position; neither can see
     # stacking order, so both would still pass with lift() deleted outright -
-    # the exact failure this task exists to prevent. `winfo children` returns
-    # siblings in stacking order, lowest first, so the last entry is the one
-    # actually on top.
+    # the exact failure this task exists to prevent.
+    #
+    # navigate_to() now place_forget()s every screen but the target (the
+    # Critical fix for Tab-reachable hidden screens), so winfo_ismapped()
+    # alone proves exclusivity but NOT that lift() ran - place_forget()/
+    # place() guarantees "only one screen mapped" all by itself, with or
+    # without a lift() call. Keep it anyway, because it is the assertion
+    # that actually proves the Critical fix (item 1) held under rapid,
+    # unsettled navigation.
+    mapped = [n for n in ALL_SCREENS
+              if n in app.screens and app.screens[n].winfo_ismapped()]
+    assert mapped == ["products"], (
+        f"expected only the target screen mapped after rapid navigation, "
+        f"found: {mapped}")
+
+    # Stacking order is untouched by place_forget()/place() - it is set
+    # purely by lift() - so this is the assertion that still exercises
+    # lift() itself. `winfo children` returns siblings in stacking order,
+    # lowest first, so the last entry is the one actually on top.
     top = app.content_area.winfo_children()[-1]
     assert top is app.screens["products"], (
         f"topmost screen is {top}, expected the products screen - "
         f"lift() is not putting the target on top")
+
+
+def test_focus_cannot_tab_into_a_hidden_screen():
+    app.navigate_to("products")
+    app_pump(500)
+    visible = app.screens["products"]
+    # Tk's focus ring skips unmapped widgets only. If a hidden screen is
+    # left mapped, Tab walks the cashier out of the visible screen into an
+    # invisible one — and billing's cart_tree binds <Delete> to removing a
+    # line, so an invisible focus there can silently edit a held cart.
+    mapped = [n for n, s in app.screens.items()
+              if n != "products" and s.winfo_ismapped()]
+    assert not mapped, (
+        f"hidden screens are still mapped and reachable by Tab: {mapped}")
+    assert visible.winfo_ismapped(), "the visible screen must be mapped"
 
 
 def test_slide_moves_the_screen_and_settles_home():
@@ -448,6 +491,7 @@ for name, fn in [
     ("nav — every screen builds and shows under place", test_every_screen_builds_and_shows_under_place),
     ("nav — navigation settles at x=0", test_navigation_leaves_the_screen_at_x_zero),
     ("nav — rapid navigation strands nothing", test_rapid_navigation_strands_nothing),
+    ("nav — focus cannot tab into a hidden screen", test_focus_cannot_tab_into_a_hidden_screen),
     ("slide — moves the screen and settles home", test_slide_moves_the_screen_and_settles_home),
     ("slide — frame budget under 33ms", test_slide_frame_budget_stays_under_33ms),
     ("nav pill — blends and lands on the exact token", test_active_pill_blends_and_lands_on_the_exact_token),

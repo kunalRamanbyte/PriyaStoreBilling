@@ -650,6 +650,23 @@ class BillingApp(ctk.CTk):
             except Exception:
                 pass
 
+        # Unmap every other cached screen. Tk's focus ring (Tab / Shift-Tab)
+        # only skips UNMAPPED widgets, not merely covered ones — a screen left
+        # placed-but-hidden under the current one stays fully Tab-reachable.
+        # place_forget() unmaps a widget without discarding anything; the
+        # target below is re-placed cheaply (and only when it wasn't already
+        # placed from a previous visit).
+        for name, scr in self.screens.items():
+            if name != screen_name and scr.winfo_manager() == "place":
+                # A screen navigated away from before its own 160ms slide-in
+                # finished still has a live tween ticking via after(). That
+                # tween's apply() calls place_configure() on every frame —
+                # including its own final one — which silently re-invokes the
+                # place geometry manager and re-maps a screen we just forgot.
+                # Land it first so nothing is left to resurrect the mapping.
+                motion.cancel(scr)
+                scr.place_forget()
+
         self._paint_nav(screen_name)
 
         if screen_name not in self.screens:
