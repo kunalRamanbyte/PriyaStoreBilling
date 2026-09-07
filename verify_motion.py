@@ -378,6 +378,42 @@ def test_categories_does_not_rebuild_unchanged_cards():
         f"an unchanged Categories reload still costs {reload_ms:.0f}ms")
 
 
+def test_categories_rebuilds_when_the_signature_changes():
+    app.navigate_to("categories")
+    app_pump(600)
+    scr = app.screens["categories"]
+    before = [str(w) for w in scr.cat_cards_frame.winfo_children()]
+    assert before, "no category cards were built at all"
+    # Force a signature mismatch without touching the database. Tk never
+    # reuses a destroyed widget's path name, so a genuine rebuild is
+    # visible as changed paths.
+    scr._cards_sig = None
+    scr.on_show()
+    app.update()
+    after = [str(w) for w in scr.cat_cards_frame.winfo_children()]
+    assert len(after) == len(before), (
+        f"rebuild produced {len(after)} cards, expected {len(before)}")
+    assert after != before, (
+        "a changed signature did not force a rebuild — the guard is "
+        "skipping redraws it must permit")
+
+
+def test_category_signature_covers_every_column():
+    # The guard compares a tuple of columns. If a later refactor narrows
+    # that tuple, edits to the dropped column would silently fail to
+    # redraw on a shop till. Pin it to the table's real schema.
+    import inspect
+    from screen_categories import CategoryScreen
+    with _db.get_conn() as conn:
+        columns = {r[1] for r in conn.execute(
+            "PRAGMA table_info(categories)").fetchall()}
+    src = inspect.getsource(CategoryScreen._load_categories)
+    missing = [c for c in columns if f'"{c}"' not in src]
+    assert not missing, (
+        f"_load_categories' signature ignores {missing} — an edit to "
+        f"those columns would not redraw the cards")
+
+
 for name, fn in [
     ("motion — easing endpoints", test_easing_endpoints),
     ("motion — blend endpoints and midpoint", test_blend_endpoints_and_midpoint),
@@ -400,6 +436,8 @@ for name, fn in [
     ("settings — animation toggle persists and takes effect", test_settings_toggle_persists_and_drives_motion),
     ("settings — init reads the persisted preference", test_init_reads_the_persisted_preference),
     ("categories — unchanged cards are not rebuilt", test_categories_does_not_rebuild_unchanged_cards),
+    ("categories — a changed signature forces a rebuild", test_categories_rebuilds_when_the_signature_changes),
+    ("categories — signature covers every column", test_category_signature_covers_every_column),
 ]:
     check(name, fn)
 
