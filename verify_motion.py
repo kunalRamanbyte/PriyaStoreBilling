@@ -63,12 +63,20 @@ def wait_mapped(widget, timeout=15.0):
     end = time.perf_counter() + timeout
     while time.perf_counter() < end:
         app.update(); app.update_idletasks()
-        if widget.winfo_width() > 1 and widget.winfo_ismapped():
+        sized = widget.winfo_width() > 1
+        # When the toplevel itself is not viewable — the OS locked the screen,
+        # or the window was minimised — every child reports unmapped, and that
+        # says nothing about the code under test. Geometry is still computed,
+        # so require the size and let mapping go. Without this the suite fails
+        # roughly one run in seven on a machine with a lock timeout.
+        if sized and (widget.winfo_ismapped() or not app.winfo_viewable()):
             return
         time.sleep(0.02)
     raise AssertionError(
         f"{widget} never mapped within {timeout}s "
-        f"(width={widget.winfo_width()}) — cannot measure geometry")
+        f"(width={widget.winfo_width()}, "
+        f"toplevel viewable={bool(app.winfo_viewable())}) — "
+        f"cannot measure geometry")
 
 
 def settle(timeout=5.0):
@@ -300,7 +308,12 @@ def test_active_pill_blends_and_lands_on_the_exact_token():
     app.update()
     btn = app.nav_buttons["customers"]
     mid = btn.cget("fg_color")
-    assert mid != "transparent", "the incoming pill should be blending, not transparent"
+    # Mid-blend the pill must be at NEITHER endpoint. Asserting only
+    # "!= transparent" cannot fail: before this task the incoming pill was
+    # already set straight to sidebar_active, which is also != "transparent".
+    assert mid not in ("transparent", COLORS["sidebar_active"]), (
+        f"the incoming pill is at an endpoint ({mid}), not blending — "
+        f"_paint_nav is still setting the final colour in one step")
     app_pump(500)
     assert btn.cget("fg_color") == COLORS["sidebar_active"], (
         f"the active pill must land on the exact token, got {btn.cget('fg_color')}")
