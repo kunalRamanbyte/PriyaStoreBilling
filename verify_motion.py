@@ -358,6 +358,26 @@ def test_init_reads_the_persisted_preference():
     assert motion.enabled() is True, "init() did not read a persisted 1"
 
 
+def test_categories_does_not_rebuild_unchanged_cards():
+    app.navigate_to("categories")
+    app_pump(600)
+    scr = app.screens["categories"]
+    before = [str(w) for w in scr.cat_cards_frame.winfo_children()]
+    assert before, "no category cards were built at all"
+
+    t0 = time.perf_counter()
+    scr.on_show()
+    app.update()
+    reload_ms = (time.perf_counter() - t0) * 1000
+
+    after = [str(w) for w in scr.cat_cards_frame.winfo_children()]
+    assert after == before, (
+        "unchanged categories were destroyed and rebuilt — the widget paths "
+        "changed, so on_show() is still tearing the grid down")
+    assert reload_ms < 60, (
+        f"an unchanged Categories reload still costs {reload_ms:.0f}ms")
+
+
 for name, fn in [
     ("motion — easing endpoints", test_easing_endpoints),
     ("motion — blend endpoints and midpoint", test_blend_endpoints_and_midpoint),
@@ -379,6 +399,7 @@ for name, fn in [
     ("nav pill — blends and lands on the exact token", test_active_pill_blends_and_lands_on_the_exact_token),
     ("settings — animation toggle persists and takes effect", test_settings_toggle_persists_and_drives_motion),
     ("settings — init reads the persisted preference", test_init_reads_the_persisted_preference),
+    ("categories — unchanged cards are not rebuilt", test_categories_does_not_rebuild_unchanged_cards),
 ]:
     check(name, fn)
 

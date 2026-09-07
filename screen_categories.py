@@ -129,10 +129,23 @@ class CategoryScreen(ctk.CTkFrame):
         self._load_categories()
 
     def _load_categories(self):
+        cats = self.db.get_categories(active_only=False)
+
+        # Rebuilding this grid destroys and re-creates about six
+        # CustomTkinter widgets per category. Profiled at ~449ms per
+        # on_show(), roughly 50x every other screen's reload, and almost none
+        # of it is the query — it is the teardown and redraw. The rows rarely
+        # change between visits, so redraw only when they actually did.
+        # No force flag is needed: an edit changes the signature by itself.
+        sig = [(c["category_id"], c["name"], c.get("colour_code"),
+                c.get("is_active", 1)) for c in cats]
+        if sig == getattr(self, "_cards_sig", None):
+            return
+        self._cards_sig = sig
+
         for w in self.cat_cards_frame.winfo_children():
             w.destroy()
 
-        cats = self.db.get_categories(active_only=False)
         if not cats:
             ctk.CTkLabel(self.cat_cards_frame, text="No categories yet.\nAdd one using the form →",
                          font=FONTS["body"], text_color=COLORS["text_muted"],
