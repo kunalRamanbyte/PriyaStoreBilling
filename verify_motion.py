@@ -5,7 +5,7 @@ Unlike verify_screens.py (which stubs FakeApp), these checks need the real
 BillingApp: navigation, the sidebar and the popup helper are what is under
 test. Run: python verify_motion.py
 """
-import sys, os, time, traceback
+import sys, os, time, traceback, statistics
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -239,6 +239,38 @@ def test_rapid_navigation_strands_nothing():
         f"lift() is not putting the target on top")
 
 
+def test_slide_moves_the_screen_and_settles_home():
+    app.navigate_to("dashboard")
+    app_pump(400)
+    app.navigate_to("products")
+    app.update()
+    scr = app.screens["products"]
+    from config import MOTION
+    assert scr.winfo_x() > 0, (
+        f"the incoming screen must start offset by {MOTION['slide_px']}px, "
+        f"found x={scr.winfo_x()}")
+    app_pump(500)
+    assert scr.winfo_x() == 0, f"the slide did not settle, x={scr.winfo_x()}"
+
+
+def test_slide_frame_budget_stays_under_33ms():
+    from config import MOTION
+    app.navigate_to("bill_history")
+    app_pump(400)
+    scr = app.screens["bill_history"]
+    wait_mapped(scr)
+    px = MOTION["slide_px"]
+    frames = []
+    for i in range(21):
+        t0 = time.perf_counter()
+        scr.place_configure(x=int(px * (1 - i / 20)))
+        app.update()
+        frames.append((time.perf_counter() - t0) * 1000)
+    scr.place_configure(x=0)
+    med = statistics.median(frames)
+    assert med < 33, f"slide frames cost {med:.1f}ms — below 30fps"
+
+
 for name, fn in [
     ("motion — easing endpoints", test_easing_endpoints),
     ("motion — blend endpoints and midpoint", test_blend_endpoints_and_midpoint),
@@ -255,6 +287,8 @@ for name, fn in [
     ("nav — every screen builds and shows under place", test_every_screen_builds_and_shows_under_place),
     ("nav — navigation settles at x=0", test_navigation_leaves_the_screen_at_x_zero),
     ("nav — rapid navigation strands nothing", test_rapid_navigation_strands_nothing),
+    ("slide — moves the screen and settles home", test_slide_moves_the_screen_and_settles_home),
+    ("slide — frame budget under 33ms", test_slide_frame_budget_stays_under_33ms),
 ]:
     check(name, fn)
 

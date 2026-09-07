@@ -230,3 +230,40 @@ def fade_in(win, ms=120):
             pass
 
     tween(win, ms, apply)
+
+
+# ─────────────────────────────────────────────────────────────
+# Screen slide
+# ─────────────────────────────────────────────────────────────
+#
+# Split into two calls on purpose. The widget has to be sitting at its start
+# offset BEFORE it is painted; parking and animating in one call would let Tk
+# paint it at x=0 first, and the opening frame would snap it sideways.
+
+def slide_start(widget, px):
+    """Park a placed widget px to the right. Returns the offset applied."""
+    if not _enabled or px <= 0:
+        return 0
+    try:
+        widget.place_configure(x=px)
+    except Exception:
+        return 0
+    return px
+
+
+def slide_home(widget, px, ms=160):
+    """Tween a parked widget back to x=0."""
+    if px <= 0 or not _enabled:
+        try:
+            widget.place_configure(x=0)
+        except Exception:
+            pass
+        return
+
+    def apply(p):
+        try:
+            widget.place_configure(x=int(round(px * (1.0 - p))))
+        except Exception:
+            pass
+
+    tween(widget, ms, apply)

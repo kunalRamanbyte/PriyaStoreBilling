@@ -514,6 +514,18 @@ METRICS = {
     "hairline"   : 1,
 }
 
+# --- Motion ---
+# Position and window alpha only: in Tk, translating costs 5-9ms a frame and
+# resizing costs 32-126ms, so nothing here ever animates a width or a height.
+# 28px rather than a full-width push — a till operator navigates all day, and
+# Tk has no cross-fade to soften a bigger move.
+MOTION = {
+    "slide_px" : 28,
+    "slide_ms" : 160,
+    "fade_ms"  : 120,
+    "blend_ms" : 120,
+}
+
 # --- Responsive breakpoints ---
 # Measured on the LOGICAL width (window px / widget scaling), because every
 # widget size in this app is expressed in logical units. A 1366px window at

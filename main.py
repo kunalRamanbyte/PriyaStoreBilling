@@ -31,12 +31,13 @@ except Exception:
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
 
-from config import (COLORS, FONTS, RADII, METRICS, APP_TITLE, APP_VERSION, SHOP_NAME,
+from config import (COLORS, FONTS, RADII, METRICS, MOTION, APP_TITLE, APP_VERSION, SHOP_NAME,
                     WINDOW_WIDTH, WINDOW_HEIGHT, SIDEBAR_WIDTH,
                     SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_SCROLLBAR_W,
                     resource_path)
 from database import Database
 from lang import t
+import motion
 from ui_utils import attach_tooltip
 from screen_login import LoginScreen
 from screen_dashboard import DashboardScreen
@@ -644,7 +645,16 @@ class BillingApp(ctk.CTk):
         if hasattr(screen, "on_show"):
             screen.on_show()
 
+        # Park the screen before it is painted, so its first frame is already
+        # offset — otherwise Tk paints it home and the slide snaps sideways.
+        px = motion.slide_start(screen, MOTION["slide_px"])
         screen.lift()
+
+        # Pay on_show()'s reload and the first repaint here, before a single
+        # frame is scheduled, so the slide runs on a clean budget.
+        self.update_idletasks()
+
+        motion.slide_home(screen, px, MOTION["slide_ms"])
 
         self.current_screen = screen_name
 
