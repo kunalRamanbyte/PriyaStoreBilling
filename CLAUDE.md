@@ -22,11 +22,19 @@ Optional (not in `requirements.txt`, guarded by try/import): `python-escpos`, `p
 
 ## Running Tests
 
+There are three suites:
+
 ```bash
-python verify_screens.py
+python verify_screens.py    # 16 checks — screens build, ROW_COLORS, styles
+python verify_motion.py     # 23 checks — the motion layer and navigation
+python verify_sidebar.py    # 24 checks — the collapsible sidebar
 ```
 
-This is the only test suite. It instantiates every screen with the **real** `billing_data.db`, calls `on_show()`, and asserts on the result. It runs headless (the root window is `withdraw()`n). Exit code is 0 on all pass, 1 on any failure.
+`verify_screens.py` instantiates every screen with the **real** `billing_data.db`, calls `on_show()`, and asserts on the result. It stubs a `FakeApp` (see below), so it never exercises the real sidebar or `navigate_to()` — it runs headless (the root window is `withdraw()`n). `verify_motion.py` and `verify_sidebar.py` both build the real `BillingApp` instead, to cover what the stub cannot: navigation, the motion layer, and the collapsible sidebar. All three exit 0 on success, 1 on any failure.
+
+> `verify_motion.py` writes to the `settings` table and restores it in a
+> `finally:` block. Keep that block — an earlier version crashed mid-run and
+> left the shop's live database on a different language and theme.
 
 Coverage is uneven, and worth knowing before you trust a green run:
 - **`ROW_COLORS` tags are asserted on 7 screens only** — Billing, Bill History, Products, Inventory, Suppliers, Purchase/GRN, Customers. Categories, Reports, Settings, Users, Activity Log and Dashboard are "loads without error" only, so a treeview on one of those can skip the tagging pattern and still pass.
@@ -84,7 +92,15 @@ Built installers are gitignored (`installer/*.exe`) — they are ~68 MB each and
 1. **Enforces role access** against `self._screen_roles` (built from the `NAV` list in `_build_sidebar`) and shows an "Access Denied" warning on failure — so non-sidebar entry points (dashboard quick actions, resume-draft) cannot escalate.
 2. Calls `on_hide()` on the outgoing screen if it defines one.
 3. Lazily instantiates the target screen on first visit and caches it in `self.screens`.
-4. `pack_forget()`s the others and `pack()`s the target, then calls `on_show()`.
+4. `place()`s the target at `x=0, relwidth=1, relheight=1` on its first visit,
+   then swaps screens with `lift()` and calls `on_show()`.
+
+> Screens are managed by **`place`, not `pack`**. `pack_forget()`/`pack()` made
+> Tk relayout the incoming screen's entire widget tree on every visit —
+> measured at 60–125ms of frozen UI per navigation, against ~9ms for
+> `on_show()`'s database reload. `lift()` is a stacking-order change and does
+> no geometry work. Never reintroduce `pack()` for a screen: it silently
+> restores the freeze.
 
 Screens are **never destroyed** between visits unless `rebuild_screen()` is called explicitly (which destroys and re-instantiates). `apply_language()` and `apply_theme()` destroy every cached screen and rebuild the whole main window.
 
@@ -166,6 +182,35 @@ Two helpers beyond `place_popup`:
 
 - **`open_date_picker(parent, var, title)`** — opens a `tkcalendar` popup and writes the selected date (YYYY-MM-DD) into a `tk.StringVar`. Requires `tkcalendar`; shows an install error if missing.
 - **`WebcamScanner`** in `webcam_scanner.py` — a reusable `CTkToplevel` that opens a live webcam feed, decodes QR/barcodes via `cv2`, and fires a callback on success.
+
+### Motion (`motion.py`)
+
+`config.MOTION` holds every timing: `slide_px` 28, `slide_ms` 160, `fade_ms`
+120, `blend_ms` 120. Never hardcode a duration in a screen.
+
+Two measurements govern this module:
+
+- **Translating is cheap, resizing is not.** `place_configure(x=…)` costs
+  5–9ms a frame; changing any width that participates in layout costs
+  32–126ms, because the geometry manager re-solves the containing window.
+  Animate position and window `-alpha` only. This is why the sidebar collapse
+  is *not* animated — a width tween on the rail measured 126ms per frame.
+- **Tweens are time-driven, never frame-driven.** Each tick computes
+  `t = elapsed / duration`. A `for i in range(20)` loop stretches a 160ms
+  animation into a 600ms crawl on slow hardware.
+
+`motion.cancel(widget)` lands a superseded animation on its end state rather
+than abandoning it, so rapid navigation cannot strand a screen off-position.
+Starting a second tween on the same widget cancels the first automatically.
+
+Popups fade through `place_popup()`, the single chokepoint for 21 dialog
+sites. The billing/GRN search-suggestion dropdowns are hand-built
+`tk.Toplevel`s that never call it, so they stay instant — which is what a
+dropdown appearing mid-keystroke needs. Don't route them through
+`place_popup()`.
+
+The `animations_enabled` setting (Settings → Language & Theme) turns all of it
+off; every helper then applies its final state immediately.
 
 ### Activity Logging
 
