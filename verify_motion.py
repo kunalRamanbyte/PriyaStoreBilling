@@ -24,8 +24,54 @@ def check(name, fn):
         results.append((FAIL_MARK, name, traceback.format_exc(limit=4)))
 
 
-root = ctk.CTk()
-root.withdraw()
+import main as M
+
+app = M.BillingApp()
+root = app
+_db = app.db
+_saved = {k: _db.get_setting(k, d) for k, d in
+          (("sidebar_collapsed", "0"), ("app_theme", "System"),
+           ("app_language", "English"), ("animations_enabled", "1"))}
+_user = _db.authenticate("admin", "admin123")
+assert _user, "admin/admin123 login failed — cannot verify navigation"
+app.sidebar_collapsed = False
+app._on_login_success(_user)
+app.update()
+
+ALL_SCREENS = ["dashboard", "billing", "bill_history", "products", "categories",
+               "inventory", "suppliers", "purchase", "customers", "reports",
+               "settings", "users", "activity_log"]
+
+
+def app_pump(ms):
+    end = time.perf_counter() + ms / 1000.0
+    while time.perf_counter() < end:
+        app.update()
+        time.sleep(0.005)
+
+
+def wait_mapped(widget, timeout=5.0):
+    """Block until a widget actually has a size.
+
+    An unmapped Tk window reports winfo_width() == 1, which silently fails
+    every geometry assertion while the non-geometry checks still pass. The
+    sidebar harness produced exactly that once — an 18/6 split where the six
+    failures were precisely the six geometry checks — and it was not
+    reproducible, because it depended on when the window manager got around
+    to realising the window. Never measure geometry without this.
+    """
+    end = time.perf_counter() + timeout
+    while time.perf_counter() < end:
+        app.update(); app.update_idletasks()
+        if widget.winfo_width() > 1 and widget.winfo_ismapped():
+            return
+        time.sleep(0.02)
+    raise AssertionError(
+        f"{widget} never mapped within {timeout}s "
+        f"(width={widget.winfo_width()}) — cannot measure geometry")
+
+
+wait_mapped(app.content_area)
 
 
 def pump(ms):
@@ -151,6 +197,38 @@ def test_fade_in_is_instant_when_disabled():
         motion.set_enabled(True)
 
 
+def test_every_screen_builds_and_shows_under_place():
+    for name in ALL_SCREENS:
+        app.navigate_to(name)
+        app_pump(250)
+        scr = app.screens[name]
+        assert scr.winfo_manager() == "place", (
+            f"{name} is managed by {scr.winfo_manager()!r}, expected 'place'")
+        wait_mapped(scr)
+
+
+def test_navigation_leaves_the_screen_at_x_zero():
+    for name in ALL_SCREENS:
+        app.navigate_to(name)
+        app_pump(400)
+        wait_mapped(app.screens[name])
+        x = app.screens[name].winfo_x()
+        assert x == 0, f"{name} settled at x={x}, expected 0"
+
+
+def test_rapid_navigation_strands_nothing():
+    order = ["dashboard", "billing", "products", "reports", "customers",
+             "inventory", "billing", "dashboard", "settings", "products"]
+    for name in order:
+        app.navigate_to(name)
+        app.update()            # deliberately no settling time
+    app_pump(600)
+    assert app.current_screen == "products"
+    stranded = [n for n in ALL_SCREENS
+                if n in app.screens and app.screens[n].winfo_x() != 0]
+    assert not stranded, f"screens stranded off-position: {stranded}"
+
+
 for name, fn in [
     ("motion — easing endpoints", test_easing_endpoints),
     ("motion — blend endpoints and midpoint", test_blend_endpoints_and_midpoint),
@@ -164,10 +242,22 @@ for name, fn in [
     ("motion — a raising apply() does not strand", test_apply_raising_does_not_strand_the_animation),
     ("popup — fade reaches full opacity", test_fade_in_reaches_full_opacity),
     ("popup — instant when animation is off", test_fade_in_is_instant_when_disabled),
+    ("nav — every screen builds and shows under place", test_every_screen_builds_and_shows_under_place),
+    ("nav — navigation settles at x=0", test_navigation_leaves_the_screen_at_x_zero),
+    ("nav — rapid navigation strands nothing", test_rapid_navigation_strands_nothing),
 ]:
     check(name, fn)
 
-root.destroy()
+# A script that writes to the settings table MUST restore it, even on a crash:
+# an earlier version of this harness died mid-run and left the shop's live
+# database on a different language and theme.
+try:
+    for k, v in _saved.items():
+        _db.set_setting(k, v)
+finally:
+    # root IS app (see the fixture above) - destroying it twice raises
+    # TclError: "application has been destroyed" on the second call.
+    root.destroy()
 
 print()
 print("=" * 64)
