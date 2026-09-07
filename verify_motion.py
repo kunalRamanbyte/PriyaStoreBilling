@@ -402,13 +402,31 @@ def test_category_signature_covers_every_column():
     # The guard compares a tuple of columns. If a later refactor narrows
     # that tuple, edits to the dropped column would silently fail to
     # redraw on a shop till. Pin it to the table's real schema.
+    import ast
     import inspect
+    import textwrap
     from screen_categories import CategoryScreen
     with _db.get_conn() as conn:
         columns = {r[1] for r in conn.execute(
             "PRAGMA table_info(categories)").fetchall()}
-    src = inspect.getsource(CategoryScreen._load_categories)
-    missing = [c for c in columns if f'"{c}"' not in src]
+    src = textwrap.dedent(inspect.getsource(CategoryScreen._load_categories))
+    tree = ast.parse(src)
+
+    sig_assign = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == "sig" for t in node.targets):
+            sig_assign = node
+            break
+    assert sig_assign is not None, (
+        "could not find the 'sig = ...' assignment in _load_categories — "
+        "has the guard been renamed or restructured?")
+
+    referenced = {
+        n.value for n in ast.walk(sig_assign.value)
+        if isinstance(n, ast.Constant) and isinstance(n.value, str)
+    }
+    missing = [c for c in columns if c not in referenced]
     assert not missing, (
         f"_load_categories' signature ignores {missing} — an edit to "
         f"those columns would not redraw the cards")

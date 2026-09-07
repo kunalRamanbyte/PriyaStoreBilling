@@ -92,8 +92,15 @@ Built installers are gitignored (`installer/*.exe`) — they are ~68 MB each and
 1. **Enforces role access** against `self._screen_roles` (built from the `NAV` list in `_build_sidebar`) and shows an "Access Denied" warning on failure — so non-sidebar entry points (dashboard quick actions, resume-draft) cannot escalate.
 2. Calls `on_hide()` on the outgoing screen if it defines one.
 3. Lazily instantiates the target screen on first visit and caches it in `self.screens`.
-4. `place()`s the target at `x=0, relwidth=1, relheight=1` on its first visit,
-   then swaps screens with `lift()` and calls `on_show()`.
+4. `place()`s the target at `x=0, relwidth=1, relheight=1` on its first
+   visit, then calls `on_show()`, parks the screen 28px right, `lift()`s it,
+   forces the repaint, and only then starts the slide home.
+
+> The order matters and is not arbitrary. `on_show()`'s reload and the first
+> repaint are both paid *before* a single animation frame is scheduled, so
+> the slide runs on a clean budget instead of stuttering on frame one. The
+> park must also happen before the repaint: park after it and Tk paints the
+> screen at home first, so the opening frame snaps it sideways.
 
 > Screens are managed by **`place`, not `pack`**. `pack_forget()`/`pack()` made
 > Tk relayout the incoming screen's entire widget tree on every visit —

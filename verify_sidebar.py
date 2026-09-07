@@ -49,12 +49,18 @@ def wait_mapped(timeout=5.0):
     end = time.perf_counter() + timeout
     while time.perf_counter() < end:
         app.update(); app.update_idletasks()
-        if app._sidebar.winfo_width() > 1 and app._sidebar.winfo_ismapped():
+        sized = app._sidebar.winfo_width() > 1
+        # When the toplevel itself is not viewable — the OS locked the screen,
+        # or the window was minimised — every child reports unmapped, and that
+        # says nothing about the code under test. Geometry is still computed,
+        # so require the size and let mapping go.
+        if sized and (app._sidebar.winfo_ismapped() or not app.winfo_viewable()):
             return
         time.sleep(0.02)
     raise AssertionError(
         f"sidebar never mapped within {timeout}s "
-        f"(width={app._sidebar.winfo_width()}) - cannot measure geometry")
+        f"(width={app._sidebar.winfo_width()}, "
+        f"toplevel viewable={bool(app.winfo_viewable())}) - cannot measure geometry")
 
 
 wait_mapped()
