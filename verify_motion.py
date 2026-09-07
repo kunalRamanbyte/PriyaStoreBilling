@@ -228,6 +228,16 @@ def test_rapid_navigation_strands_nothing():
                 if n in app.screens and app.screens[n].winfo_x() != 0]
     assert not stranded, f"screens stranded off-position: {stranded}"
 
+    # The assertions above are bookkeeping and position; neither can see
+    # stacking order, so both would still pass with lift() deleted outright -
+    # the exact failure this task exists to prevent. `winfo children` returns
+    # siblings in stacking order, lowest first, so the last entry is the one
+    # actually on top.
+    top = app.content_area.winfo_children()[-1]
+    assert top is app.screens["products"], (
+        f"topmost screen is {top}, expected the products screen - "
+        f"lift() is not putting the target on top")
+
 
 for name, fn in [
     ("motion — easing endpoints", test_easing_endpoints),
