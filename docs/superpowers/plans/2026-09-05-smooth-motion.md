@@ -114,10 +114,13 @@ def test_tween_reaches_exactly_one():
 def test_tween_is_time_driven_not_frame_driven():
     t0 = time.perf_counter()
     done = []
-    motion.tween(root, 120, lambda p: None, on_done=lambda: done.append(1))
+    # Timestamp inside on_done. Measuring after pump() would measure pump(),
+    # which blocks for its full duration no matter how fast the tween was.
+    motion.tween(root, 120, lambda p: None,
+                 on_done=lambda: done.append(time.perf_counter()))
     pump(500)
-    elapsed = (time.perf_counter() - t0) * 1000
     assert done, "on_done never fired"
+    elapsed = (done[0] - t0) * 1000
     assert elapsed < 400, f"a 120ms tween took {elapsed:.0f}ms — frame-driven?"
 
 
@@ -315,6 +318,20 @@ def _alive(widget):
         return False
 
 
+def _sweep():
+    """Drop registry entries whose widget is gone.
+
+    Destroying a widget deletes the Tcl command behind its pending after()
+    callback, so that tick never fires and never notices the widget died.
+    Without a sweep the registry keeps a dead entry for every widget
+    destroyed mid-animation — and apply_language()/apply_theme() destroy
+    every cached screen at once.
+    """
+    for key, anim in list(_running.items()):
+        if not _alive(anim.widget):
+            _running.pop(key, None)
+
+
 def _finish(anim):
     """Land an animation on its end state and fire its callback, once."""
     if _alive(anim.widget):
@@ -349,6 +366,7 @@ def cancel(widget):
 
 def pending():
     """How many animations are in flight. For tests."""
+    _sweep()
     return len(_running)
 
 
@@ -358,6 +376,7 @@ def tween(widget, ms, apply, on_done=None):
     apply() always receives exactly 1.0 as its final call, whether the tween
     ran to completion, was superseded, was disabled, or raised.
     """
+    _sweep()
     cancel(widget)
 
     if not _enabled or ms <= 0 or not _alive(widget):
