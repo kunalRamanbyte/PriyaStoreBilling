@@ -71,7 +71,10 @@ class BillingApp(ctk.CTk):
         # Icon-only sidebar. Off by default: a shopkeeper who has never
         # seen the rail should meet the labelled menu first.
         self.sidebar_collapsed = self.db.get_setting("sidebar_collapsed", "0") == "1"
-        
+        # Motion reads its own preference once; the tween loop must never
+        # touch the database.
+        motion.init(self.db)
+
         # Apply theme setting on startup
         ctk.set_appearance_mode(self.current_theme)
         from config import apply_theme_mode

@@ -257,6 +257,19 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
             self._theme_chips[mode] = chip
         # _load() sets _theme_var directly, so repaint from the variable.
         self._theme_var.trace_add("write", lambda *_: self._paint_theme_chips())
+
+        row = self._row(card, t("Smooth Animations", L))
+        ctk.CTkLabel(row,
+                     text=t("Slide and fade between screens and dialogs", L),
+                     font=FONTS["small"], text_color=COLORS["text_muted"],
+                     anchor="w", justify="left", wraplength=380
+                     ).pack(side="left", fill="x", expand=True)
+        self._anim_var = tk.BooleanVar(value=True)
+        ctk.CTkSwitch(row, text="", variable=self._anim_var,
+                      fg_color=COLORS["hairline"],
+                      progress_color=COLORS["accent_money"],
+                      button_color=COLORS["bg_white"],
+                      command=self._toggle_animations).pack(side="right")
         ctk.CTkFrame(card, fg_color="transparent", height=10).pack()
 
         # -- Backup -------------------------------------------
@@ -405,6 +418,9 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
         saved_theme = s.get("app_theme", "System")
         self._theme_var.set(saved_theme)
 
+        # Restore the animation toggle
+        self._anim_var.set(s.get("animations_enabled", "1") == "1")
+
         # Restore custom backup folder label
         custom = s.get("backup_folder", "")
         self._folder_label.configure(
@@ -493,6 +509,11 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
         self.db.set_setting("auto_backup_enabled", val)
         if hasattr(self.app, "update_auto_backup_schedule"):
             self.app.update_auto_backup_schedule()
+
+    # ── Animation toggle ─────────────────────────────────────
+    def _toggle_animations(self):
+        import motion
+        motion.set_enabled(self._anim_var.get(), self.db)
 
     # ── Manual backup ────────────────────────────────────────
     def _do_backup(self):

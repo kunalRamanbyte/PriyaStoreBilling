@@ -322,6 +322,38 @@ def test_active_pill_blends_and_lands_on_the_exact_token():
     assert app.nav_icons["customers"].cget("fg_color") == COLORS["sidebar_active"]
 
 
+def test_settings_toggle_persists_and_drives_motion():
+    app.navigate_to("settings")
+    app_pump(400)
+    scr = app.screens["settings"]
+    assert hasattr(scr, "_anim_var"), "Settings has no animations toggle"
+
+    scr._anim_var.set(False)
+    scr._toggle_animations()
+    assert _db.get_setting("animations_enabled") == "0"
+    assert motion.enabled() is False, "the toggle did not reach the motion layer"
+
+    # With motion off, navigation must be instant — no offset, ever.
+    app.navigate_to("products")
+    app.update()
+    assert app.screens["products"].winfo_x() == 0, (
+        "with animation off the screen must never be offset")
+
+    scr._anim_var.set(True)
+    scr._toggle_animations()
+    assert _db.get_setting("animations_enabled") == "1"
+    assert motion.enabled() is True
+
+
+def test_init_reads_the_persisted_preference():
+    _db.set_setting("animations_enabled", "0")
+    motion.init(_db)
+    assert motion.enabled() is False, "init() did not read a persisted 0"
+    _db.set_setting("animations_enabled", "1")
+    motion.init(_db)
+    assert motion.enabled() is True, "init() did not read a persisted 1"
+
+
 for name, fn in [
     ("motion — easing endpoints", test_easing_endpoints),
     ("motion — blend endpoints and midpoint", test_blend_endpoints_and_midpoint),
@@ -341,6 +373,8 @@ for name, fn in [
     ("slide — moves the screen and settles home", test_slide_moves_the_screen_and_settles_home),
     ("slide — frame budget under 33ms", test_slide_frame_budget_stays_under_33ms),
     ("nav pill — blends and lands on the exact token", test_active_pill_blends_and_lands_on_the_exact_token),
+    ("settings — animation toggle persists and takes effect", test_settings_toggle_persists_and_drives_motion),
+    ("settings — init reads the persisted preference", test_init_reads_the_persisted_preference),
 ]:
     check(name, fn)
 

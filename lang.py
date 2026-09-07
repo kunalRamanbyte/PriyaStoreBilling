@@ -33,6 +33,12 @@ T = {
     "Collapse menu":    ["Collapse menu",     "মেনু ছোট করো",     "मेनू छोटा करो"],
     "Expand menu":      ["Expand menu",       "মেনু বড় করো",       "मेनू बड़ा करो"],
 
+    "Smooth Animations": ["Smooth Animations", "স্মুথ অ্যানিমেশন",   "स्मूथ एनिमेशन"],
+    "Slide and fade between screens and dialogs":
+        ["Slide and fade between screens and dialogs",
+         "স্ক্রিন আর ডায়ালগ স্লাইড আর ফেড হয়ে আসবে",
+         "स्क्रीन और डायलॉग स्लाइड और फेड होकर आएंगे"],
+
     # ══════════════════════════════════════════════════════════════
     # Common buttons / labels
     # ══════════════════════════════════════════════════════════════
