@@ -292,6 +292,23 @@ def test_slide_frame_budget_stays_under_33ms():
     assert med < 33, f"slide frames cost {med:.1f}ms — below 30fps"
 
 
+def test_active_pill_blends_and_lands_on_the_exact_token():
+    from config import COLORS
+    app.navigate_to("dashboard")
+    app_pump(400)
+    app.navigate_to("customers")
+    app.update()
+    btn = app.nav_buttons["customers"]
+    mid = btn.cget("fg_color")
+    assert mid != "transparent", "the incoming pill should be blending, not transparent"
+    app_pump(500)
+    assert btn.cget("fg_color") == COLORS["sidebar_active"], (
+        f"the active pill must land on the exact token, got {btn.cget('fg_color')}")
+    assert app.nav_buttons["dashboard"].cget("fg_color") == "transparent", (
+        "the outgoing pill must land on literal 'transparent'")
+    assert app.nav_icons["customers"].cget("fg_color") == COLORS["sidebar_active"]
+
+
 for name, fn in [
     ("motion — easing endpoints", test_easing_endpoints),
     ("motion — blend endpoints and midpoint", test_blend_endpoints_and_midpoint),
@@ -310,6 +327,7 @@ for name, fn in [
     ("nav — rapid navigation strands nothing", test_rapid_navigation_strands_nothing),
     ("slide — moves the screen and settles home", test_slide_moves_the_screen_and_settles_home),
     ("slide — frame budget under 33ms", test_slide_frame_budget_stays_under_33ms),
+    ("nav pill — blends and lands on the exact token", test_active_pill_blends_and_lands_on_the_exact_token),
 ]:
     check(name, fn)
 

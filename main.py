@@ -558,31 +558,71 @@ class BillingApp(ctk.CTk):
         self._sidebar.grid(row=0, column=0, sticky="nsew")
         self._paint_nav(getattr(self, "current_screen", "dashboard"))
 
+    def _set_pill(self, btn, icon, is_active):
+        """Put a nav pill in its final state, no animation."""
+        btn.configure(
+            fg_color=COLORS["sidebar_active"] if is_active else "transparent",
+            border_width=0,
+            hover_color=(COLORS["sidebar_active"] if is_active
+                         else COLORS["sidebar_hover"]),
+            text_color=(COLORS["on_accent"] if is_active
+                        else COLORS["sidebar_text"]),
+            font=self._nav_font(is_active),
+        )
+        if icon is not None:
+            # The icon's fg_color must move with the pill. CTkLabel resolves
+            # "transparent" against its parent's fill at CREATION time, and
+            # these buttons are created transparent on the white sidebar — so
+            # an active icon kept a stale white background that covered the
+            # glyph entirely.
+            icon.configure(
+                text_color=COLORS["on_accent"] if is_active
+                else COLORS["sidebar_text"],
+                fg_color=COLORS["sidebar_active"] if is_active
+                else "transparent")
+
+    def _blend_pill(self, btn, icon, is_active):
+        """Fade a pill between its resting and active colours.
+
+        "transparent" cannot be interpolated, so the tween runs against the
+        sidebar's actual fill and _set_pill() restores the literal token on
+        the final frame. Font weight is a discrete change — no curve helps —
+        so it is applied up front.
+        """
+        base, fill = COLORS["bg_sidebar"], COLORS["sidebar_active"]
+        ink, on_fill = COLORS["sidebar_text"], COLORS["on_accent"]
+        c_from, c_to = (base, fill) if is_active else (fill, base)
+        k_from, k_to = (ink, on_fill) if is_active else (on_fill, ink)
+
+        btn.configure(font=self._nav_font(is_active), border_width=0,
+                      hover_color=(fill if is_active
+                                   else COLORS["sidebar_hover"]))
+
+        def apply(p):
+            c = motion.blend(c_from, c_to, p)
+            k = motion.blend(k_from, k_to, p)
+            btn.configure(fg_color=c, text_color=k)
+            if icon is not None:
+                icon.configure(fg_color=c, text_color=k)
+
+        motion.tween(btn, MOTION["blend_ms"], apply,
+                     on_done=lambda: self._set_pill(btn, icon, is_active))
+
     def _paint_nav(self, screen_name: str):
-        """Mark *screen_name* as the active pill and reset every other one."""
+        """Mark *screen_name* as the active pill and reset every other one.
+
+        Only the two pills that change are blended; the other eleven are set
+        instantly, because animating widgets whose appearance is identical
+        before and after is pure cost.
+        """
+        prev = getattr(self, "current_screen", None)
         for name, btn in self.nav_buttons.items():
             is_active = name == screen_name
-            btn.configure(
-                fg_color=COLORS["sidebar_active"] if is_active else "transparent",
-                border_width=0,
-                hover_color=(COLORS["sidebar_active"] if is_active
-                             else COLORS["sidebar_hover"]),
-                text_color=(COLORS["on_accent"] if is_active
-                            else COLORS["sidebar_text"]),
-                font=self._nav_font(is_active),
-            )
             icon = self.nav_icons.get(name)
-            if icon is not None:
-                # The icon's fg_color must move with the pill. CTkLabel
-                # resolves "transparent" against its parent's fill at
-                # CREATION time, and these buttons are created transparent on
-                # the white sidebar — so an active icon kept a stale white
-                # background that covered the glyph entirely.
-                icon.configure(
-                    text_color=COLORS["on_accent"] if is_active
-                    else COLORS["sidebar_text"],
-                    fg_color=COLORS["sidebar_active"] if is_active
-                    else "transparent")
+            if prev != screen_name and name in (prev, screen_name):
+                self._blend_pill(btn, icon, is_active)
+            else:
+                self._set_pill(btn, icon, is_active)
 
 
     # ─────────────────────────────────────────────────────────────
