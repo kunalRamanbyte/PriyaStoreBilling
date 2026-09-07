@@ -305,7 +305,11 @@ def test_active_pill_blends_and_lands_on_the_exact_token():
     app.navigate_to("dashboard")
     app_pump(400)
     app.navigate_to("customers")
-    app.update()
+    # Sample with NO pump in between. motion.tween() runs its first tick
+    # synchronously, so the blend's opening frame is already applied when
+    # navigate_to returns. Calling app.update() first makes this a race: it
+    # drains pending after() callbacks, and on a loaded machine the whole
+    # 120ms blend can finish before the sample — measured failing 2 runs in 7.
     btn = app.nav_buttons["customers"]
     mid = btn.cget("fg_color")
     # Mid-blend the pill must be at NEITHER endpoint. Asserting only
