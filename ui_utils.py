@@ -15,6 +15,7 @@ over the parent window.
 """
 
 import customtkinter as ctk
+import motion
 
 try:
     from customtkinter.windows.widgets.scaling.scaling_tracker import ScalingTracker
@@ -29,6 +30,14 @@ def place_popup(dlg, logical_w: int, logical_h: int, parent=None):
 
     Call right after creating the CTkToplevel (before/after grab_set is fine).
     """
+    # Hide the window before any geometry work: a Toplevel paints at its
+    # default position first, so without this the dialog visibly flashes at
+    # the wrong spot and then jumps.
+    try:
+        dlg.attributes("-alpha", 0.0)
+    except Exception:
+        pass
+
     widget_scale, window_scale = 1.0, 1.0
     if ScalingTracker is not None:
         try:
@@ -72,6 +81,7 @@ def place_popup(dlg, logical_w: int, logical_h: int, parent=None):
     gx = round(x / window_scale)
     gy = round(y / window_scale)
     dlg.geometry(f"{gw}x{gh}+{gx}+{gy}")
+    motion.fade_in(dlg)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

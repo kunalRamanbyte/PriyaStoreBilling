@@ -123,6 +123,34 @@ def test_apply_raising_does_not_strand_the_animation():
     assert motion.pending() == 0, "a raising apply() left the animation running"
 
 
+def test_fade_in_reaches_full_opacity():
+    from ui_utils import place_popup
+    dlg = ctk.CTkToplevel(root)
+    try:
+        place_popup(dlg, 300, 200, root)
+        alpha_at_start = float(dlg.attributes("-alpha"))
+        assert alpha_at_start < 0.9, (
+            f"popup must start transparent, got {alpha_at_start}")
+        pump(400)
+        assert float(dlg.attributes("-alpha")) == 1.0, "popup never reached full opacity"
+    finally:
+        dlg.destroy()
+
+
+def test_fade_in_is_instant_when_disabled():
+    from ui_utils import place_popup
+    motion.set_enabled(False)
+    dlg = ctk.CTkToplevel(root)
+    try:
+        place_popup(dlg, 300, 200, root)
+        assert float(dlg.attributes("-alpha")) == 1.0, (
+            "with animation off the popup must be opaque immediately")
+        assert motion.pending() == 0
+    finally:
+        dlg.destroy()
+        motion.set_enabled(True)
+
+
 for name, fn in [
     ("motion — easing endpoints", test_easing_endpoints),
     ("motion — blend endpoints and midpoint", test_blend_endpoints_and_midpoint),
@@ -134,6 +162,8 @@ for name, fn in [
     ("motion — disabled is instant", test_disabled_applies_final_state_immediately),
     ("motion — survives a destroyed widget", test_tween_survives_a_destroyed_widget),
     ("motion — a raising apply() does not strand", test_apply_raising_does_not_strand_the_animation),
+    ("popup — fade reaches full opacity", test_fade_in_reaches_full_opacity),
+    ("popup — instant when animation is off", test_fade_in_is_instant_when_disabled),
 ]:
     check(name, fn)
 

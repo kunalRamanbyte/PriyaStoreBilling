@@ -195,3 +195,38 @@ def tween(widget, ms, apply, on_done=None):
         anim.job = widget.after(_FRAME_MS, tick)
 
     tick()
+
+
+# ─────────────────────────────────────────────────────────────
+# Window fade
+# ─────────────────────────────────────────────────────────────
+
+def fade_in(win, ms=120):
+    """Fade a Toplevel from transparent to opaque.
+
+    Window alpha is the ONE kind of opacity available here: CustomTkinter
+    cannot draw translucency on a widget, but a Toplevel has a real -alpha
+    attribute. If the platform refuses it, the window is simply left opaque.
+    """
+    def alpha(v):
+        win.attributes("-alpha", v)
+
+    try:
+        alpha(0.0)
+    except Exception:
+        return                      # no alpha support: leave it fully opaque
+
+    if not _enabled:
+        try:
+            alpha(1.0)
+        except Exception:
+            pass
+        return
+
+    def apply(p):
+        try:
+            alpha(p)
+        except Exception:
+            pass
+
+    tween(win, ms, apply)
