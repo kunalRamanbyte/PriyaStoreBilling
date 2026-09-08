@@ -1,12 +1,12 @@
 [Setup]
 AppName=Priya Store Billing
-AppVersion=5.0
+AppVersion=7.0
 AppPublisher=Priya Store
 DefaultDirName=C:\PriyaStore
 DefaultGroupName=Priya Store Billing
 ; Paths below are relative to this .iss file, so the installer builds from any checkout
 OutputDir=installer
-OutputBaseFilename=PriyaStore_Setup_v5.0
+OutputBaseFilename=PriyaStore_Setup_v7.0
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

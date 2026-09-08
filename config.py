@@ -14,7 +14,7 @@ import sys as _sys, os as _os
 # ─── App Info ───────────────────────────────────────────────
 APP_TITLE   = "Priya Store — Billing System"
 # Keep in step with AppVersion / OutputBaseFilename in PriyaStore_installer.iss
-APP_VERSION = "5.0"
+APP_VERSION = "7.0"
 SHOP_NAME   = "Priya Store"
 
 # ─── DB Path — always absolute & writable ───────────────────
