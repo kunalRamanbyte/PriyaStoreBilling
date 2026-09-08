@@ -30,7 +30,7 @@ Optional (not in `requirements.txt`, guarded by try/import): `python-escpos`, `p
 
 ## Running Tests
 
-There are seven suites:
+There are nine suites:
 
 ```bash
 python verify_screens.py          # 16 checks — screens build, ROW_COLORS, styles
@@ -40,6 +40,8 @@ python verify_applog.py           # 21 checks — the crash recorder
 python verify_theme.py            # 8 checks  — the theme / language rebuild
 python verify_datepicker.py       # 36 checks — the date picker + licence audit
 python verify_single_instance.py  # 13 checks — one till per database
+python verify_timestamps.py       # 28 checks — stored times follow the system clock
+python verify_factory_reset.py    # 15 checks — a wipe stays wiped
 ```
 
 `verify_screens.py` instantiates every screen with the **real** `billing_data.db`, calls `on_show()`, and asserts on the result. It stubs a `FakeApp` (see below), so it never exercises the real sidebar or `navigate_to()` — it runs headless (the root window is `withdraw()`n). `verify_motion.py` and `verify_sidebar.py` both build the real `BillingApp` instead, to cover what the stub cannot: navigation, the motion layer, and the collapsible sidebar. All three exit 0 on success, 1 on any failure.
@@ -78,6 +80,25 @@ database** below). The rejection cases spawn a **real second interpreter** — a
 second `acquire()` in the same process would reuse the handle already held and
 prove nothing. It invents its paths and only hashes their names, so it never
 touches the shop's database.
+
+`verify_timestamps.py` covers **Stored times are local, not UTC** below. It
+builds a throwaway database, writes through every real save path, and compares
+what landed against `datetime.now()`. Two of its checks are structural — no
+table may declare `CURRENT_TIMESTAMP`, and every `INSERT` into a timestamped
+table must name its timestamp column — because on a machine sitting at UTC+0
+the behavioural checks pass with the bug fully present. It also rebuilds the
+schema with the old UTC defaults wound back, to prove the fix reaches a
+database that already exists rather than only a freshly created one — and that
+upgrading such a database converts none of its existing rows.
+
+> A run on this machine is **not** proof for a shop in another timezone. The
+> structural checks are the ones that travel.
+
+`verify_factory_reset.py` covers **Seeding happens once per database**
+below. It formats a throwaway database and reopens it, which is the case
+that used to bring the demo catalogue back. It also covers the upgrade
+path — a shop whose settings predate the seed marker must keep its own
+shelves, never have twelve demo rows poured in.
 
 There is no per-test CLI filter — to test one screen in isolation, replicate both stubs from `verify_screens.py`. `FakeApp` must carry `current_lang` and `current_theme`, because screens read them during construction; the user dict must carry `name`, because screens read `current_user["name"]`:
 
@@ -178,6 +199,62 @@ Key invariants:
 - `save_return()` re-validates returnable quantities *inside* the transaction against `sales_return_items` and raises `ValueError` if a line over-returns (guards a stale dialog).
 - `void_bill()` refuses (`return False`) when `bill_has_returns()` is true — returns have already restocked/refunded, so a full reversal would double-count.
 - Schema changes: add `CREATE TABLE IF NOT EXISTS` to the `executescript` block, new columns to the `migrations` list (`try/except` ALTER TABLE), and new indexes to the `Performance indexes` list — all inside `init_db()`.
+
+#### Stored times are local, not UTC
+
+**SQLite's `CURRENT_TIMESTAMP` is UTC.** Every timestamp column here is read
+back as if it were the shop's wall clock — the receipt prints `bill_date`
+directly, Bill History filters it against a date the cashier picked, reports
+group by `DATE(bill_date)` between two local dates — so a UTC default put the
+whole app 5h30m (IST) behind its own clock. A bill rung up at 16:24 printed
+10:54, with `datetime.now()` in the A4 footer contradicting it on the same
+sheet, and the day's takings rolled over at 05:30 rather than midnight.
+
+Two rules keep it right, and **both** are needed:
+
+1. Timestamp columns default to `(datetime('now','localtime'))`, not
+   `CURRENT_TIMESTAMP`. This covers a database created from now on.
+2. **Every `INSERT` names its timestamp column explicitly** and passes
+   `datetime('now','localtime')` as a SQL expression (not a bound parameter —
+   the surrounding parameter tuples stay untouched). This is what reaches the
+   databases already installed in shops: `CREATE TABLE IF NOT EXISTS` does not
+   revisit an existing table and **SQLite cannot `ALTER` a column default**, so
+   on every till already in the field rule 1 is inert and rule 2 is the entire
+   fix. `verify_timestamps.py` asserts both, and rebuilds the old schema to
+   prove the second.
+
+For the same reason no query compares a stored timestamp against a bare SQL
+`'now'` — that is UTC too. Use `DATE('now','localtime', …)` /
+`JULIANDAY('now','localtime', …)`; the ageing, slow-moving and expiry reports
+all do.
+
+> Rows written **before** this fix are still UTC and were left as they are —
+> they are the only times in the database that do not match the clock.
+
+#### Seeding happens once per database
+
+`init_db()` runs on **every** launch, so "should I seed the starter
+catalogue?" must not be answered by looking at whether the tables are
+empty — Factory Reset empties them deliberately. A shopkeeper who
+formatted to start clean reopened the till to find the ten demo
+categories and twelve sample products back, to be deleted one at a time.
+
+The seed is gated on the `initial_seed_done` setting instead:
+
+- **New database** — no marker, no catalogue → seed, then write the marker.
+- **Existing shop upgrading** — no marker but shelves full → adopt the
+  catalogue, write the marker, seed nothing. Never pour demo rows into a
+  live shop.
+- **After `factory_reset(keep_settings=True)`** — the marker survives with
+  the rest of the settings, so the wipe holds.
+- **After `factory_reset(keep_settings=False)`** — the marker goes with
+  every other setting, which is precisely what makes the file a fresh
+  install again.
+
+The marker is written whether or not anything was seeded, so the question
+is asked of a given database exactly once. Default *settings* and the
+default admin/cashier accounts are **not** gated on it — those must exist
+regardless.
 
 DB path: `billing_data.db` next to the script (or next to the `.exe` when frozen). `config.DB_PATH` resolves this correctly for both environments.
 
@@ -316,6 +393,38 @@ half-built grid and lock it in for the rest of the screen's life.
 > user left it at instead of always snapping back to the top. This shipped as
 > a side effect of the reload guard, not a deliberate UX decision — arguably
 > an improvement, but undocumented until now.
+
+### Settings sections build on demand (`screen_settings.py`)
+
+Settings stacks five section panels — Shop, Billing, Backup, Language &
+Theme, Danger Zone — and shows one at a time. `_build()` used to build all
+five bodies up front, which made it the most expensive screen in the app:
+**269 widgets, ~534ms** of Tcl round-trips inside `navigate_to()`, to show a
+shopkeeper a single card.
+
+Each body now builds the first time its section is opened. `_ensure_section(key)`
+runs the builder once and then calls `_load()` to fill the new widgets; measured
+in one session, construction is **81ms / 106 widgets** against **343ms / 269
+widgets** with every section opened. Opening all five still reaches exactly 269
+— nothing was removed, only deferred.
+
+Three things about it are load-bearing:
+
+- **`_save()` calls `_ensure_section("billing")` and `("shop")` first.** The
+  Save button lives in the header and is always reachable, but the fields it
+  reads (`bill_prefix`, `next_bill_no`) live in Billing — while Settings opens
+  on Shop. Without that, Save is a `KeyError` for any shopkeeper who never
+  opened the Billing card.
+- **`_load()` and `_refresh_problem_status()` guard every widget they touch**
+  with `getattr(self, "_x", None)`, because `on_show()` reaches both whether
+  or not the owning section has ever been shown.
+- **`_built` is recorded only *after* the builder returns**, the same rule the
+  Categories card grid follows, so a builder that raises partway cannot cache a
+  half-built panel and lock it in for the life of the screen.
+
+> A test that reaches for a widget without opening its section will now fail —
+> and should be fixed by opening the section, the way a user must.
+> `verify_motion.py`'s animation-toggle check needed exactly that.
 
 ### Activity Logging
 

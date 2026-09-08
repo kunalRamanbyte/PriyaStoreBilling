@@ -87,7 +87,7 @@ class Database:
                     password_hash TEXT    NOT NULL,
                     role          TEXT    NOT NULL DEFAULT 'cashier',
                     is_active     INTEGER DEFAULT 1,
-                    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
+                    created_at    DATETIME DEFAULT (datetime('now','localtime'))
                 );
 
                 CREATE TABLE IF NOT EXISTS categories (
@@ -104,7 +104,7 @@ class Database:
                     address        TEXT,
                     credit_balance REAL DEFAULT 0,
                     change_balance REAL DEFAULT 0,
-                    created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+                    created_at     DATETIME DEFAULT (datetime('now','localtime'))
                 );
 
                 CREATE TABLE IF NOT EXISTS products (
@@ -119,13 +119,13 @@ class Database:
                     current_stock  REAL DEFAULT 0,
                     reorder_level  REAL DEFAULT 5,
                     is_active      INTEGER DEFAULT 1,
-                    created_at     DATETIME DEFAULT CURRENT_TIMESTAMP
+                    created_at     DATETIME DEFAULT (datetime('now','localtime'))
                 );
 
                 CREATE TABLE IF NOT EXISTS bills (
                     bill_id      INTEGER PRIMARY KEY AUTOINCREMENT,
                     bill_number  TEXT UNIQUE NOT NULL,
-                    bill_date    DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    bill_date    DATETIME DEFAULT (datetime('now','localtime')),
                     customer_id  INTEGER REFERENCES customers(customer_id),
                     customer_name TEXT DEFAULT 'Walk-in Customer',
                     subtotal     REAL DEFAULT 0,
@@ -164,7 +164,7 @@ class Database:
                     user_id   INTEGER,
                     action    TEXT NOT NULL,
                     details   TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    timestamp DATETIME DEFAULT (datetime('now','localtime'))
                 );
 
                 CREATE TABLE IF NOT EXISTS suppliers (
@@ -177,13 +177,13 @@ class Database:
                     gst_number       TEXT,
                     notes            TEXT,
                     is_active        INTEGER DEFAULT 1,
-                    created_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+                    created_at       DATETIME DEFAULT (datetime('now','localtime'))
                 );
 
                 CREATE TABLE IF NOT EXISTS purchase_entries (
                     purchase_id     INTEGER PRIMARY KEY AUTOINCREMENT,
                     grn_number      TEXT UNIQUE NOT NULL,
-                    purchase_date   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    purchase_date   DATETIME DEFAULT (datetime('now','localtime')),
                     supplier_id     INTEGER REFERENCES suppliers(supplier_id),
                     supplier_name   TEXT DEFAULT 'Direct Purchase',
                     total_amount    REAL DEFAULT 0,
@@ -212,7 +212,7 @@ class Database:
                     qty_after       REAL NOT NULL,
                     reason          TEXT,
                     created_by      INTEGER REFERENCES users(user_id),
-                    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+                    created_at      DATETIME DEFAULT (datetime('now','localtime'))
                 );
 
                 CREATE TABLE IF NOT EXISTS customer_transactions (
@@ -223,14 +223,14 @@ class Database:
                     reference   TEXT,
                     notes       TEXT,
                     created_by  INTEGER REFERENCES users(user_id),
-                    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+                    created_at  DATETIME DEFAULT (datetime('now','localtime'))
                 );
 
                 CREATE TABLE IF NOT EXISTS supplier_payments (
                     payment_id  INTEGER PRIMARY KEY AUTOINCREMENT,
                     purchase_id INTEGER NOT NULL REFERENCES purchase_entries(purchase_id),
                     paid_amount REAL NOT NULL,
-                    paid_date   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    paid_date   DATETIME DEFAULT (datetime('now','localtime')),
                     notes       TEXT,
                     created_by  INTEGER REFERENCES users(user_id)
                 );
@@ -238,7 +238,7 @@ class Database:
                 CREATE TABLE IF NOT EXISTS sales_returns (
                     return_id     INTEGER PRIMARY KEY AUTOINCREMENT,
                     return_number TEXT UNIQUE NOT NULL,
-                    return_date   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    return_date   DATETIME DEFAULT (datetime('now','localtime')),
                     bill_id       INTEGER NOT NULL REFERENCES bills(bill_id),
                     bill_number   TEXT,
                     customer_id   INTEGER REFERENCES customers(customer_id),
@@ -313,13 +313,35 @@ class Database:
             ).fetchone()
             if not admin_exists:
                 cur.execute(
-                    "INSERT INTO users (name, username, password_hash, role) VALUES (?,?,?,?)",
+                    "INSERT INTO users (name, username, password_hash, role, created_at)"
+                    " VALUES (?,?,?,?,datetime('now','localtime'))",
                     ("Shop Owner", "admin", hash_password("admin123"), "admin")
                 )
                 cur.execute(
-                    "INSERT INTO users (name, username, password_hash, role) VALUES (?,?,?,?)",
+                    "INSERT INTO users (name, username, password_hash, role, created_at)"
+                    " VALUES (?,?,?,?,datetime('now','localtime'))",
                     ("Counter Staff", "cashier", hash_password("cash123"), "cashier")
                 )
+
+            # ── Has this database ever been given its starter catalogue? ──
+            # Gated on a marker, never on the tables being empty: Factory
+            # Reset empties them *deliberately*, and a shopkeeper who
+            # formatted to start clean used to reopen the till and find the
+            # ten demo categories and twelve sample products back, to be
+            # deleted one at a time. factory_reset(keep_settings=True) keeps
+            # this marker so the wipe holds; keep_settings=False drops it,
+            # which is exactly what makes the file a fresh install again.
+            seeded = cur.execute(
+                "SELECT 1 FROM settings WHERE key='initial_seed_done'").fetchone() is not None
+            if not seeded:
+                # An existing shop upgrading to this build has no marker yet.
+                # Adopt its catalogue rather than pouring demo rows into it.
+                # (A shop that formatted under an older build arrives here
+                # with empty tables and is seeded once more — the same thing
+                # that build already did, so nothing gets worse.)
+                seeded = cur.execute(
+                    "SELECT 1 FROM products LIMIT 1").fetchone() is not None or \
+                    cur.execute("SELECT 1 FROM categories LIMIT 1").fetchone() is not None
 
             # ── Seed default categories ──
             default_cats = [
@@ -334,11 +356,12 @@ class Database:
                 ("Cleaning",      "#0288D1"),
                 ("Other",         "#607D8B"),
             ]
-            for name, color in default_cats:
-                cur.execute(
-                    "INSERT OR IGNORE INTO categories (name, colour_code) VALUES (?,?)",
-                    (name, color)
-                )
+            if not seeded:
+                for name, color in default_cats:
+                    cur.execute(
+                        "INSERT OR IGNORE INTO categories (name, colour_code) VALUES (?,?)",
+                        (name, color)
+                    )
 
             # ── Seed default settings ──
             default_settings = [
@@ -358,8 +381,7 @@ class Database:
                 )
 
             # ── Seed sample products ──
-            prod_exists = cur.execute("SELECT COUNT(*) FROM products").fetchone()[0]
-            if prod_exists == 0:
+            if not seeded:
                 sample_products = [
                     ("PROD-001", "Aashirvaad Atta 5kg",   1, "Aashirvaad", "piece", 280, 255, 50, 10),
                     ("PROD-002", "Fortune Sunflower Oil 1L", 2, "Fortune",  "litre", 155, 140, 30,  8),
@@ -376,10 +398,16 @@ class Database:
                 ]
                 cur.executemany(
                     """INSERT OR IGNORE INTO products
-                       (product_code,name,category_id,brand,unit,selling_price,purchase_price,current_stock,reorder_level)
-                       VALUES (?,?,?,?,?,?,?,?,?)""",
+                       (product_code,name,category_id,brand,unit,selling_price,purchase_price,
+                        current_stock,reorder_level,created_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,datetime('now','localtime'))""",
                     sample_products
                 )
+
+            # Written whether or not anything was seeded just now, so the
+            # question is never asked of this database again.
+            cur.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('initial_seed_done','1')")
 
             conn.commit()
 
@@ -572,10 +600,11 @@ class Database:
             cur = conn.execute(
                 """INSERT INTO products
                    (product_code, name, category_id, brand, unit,
-                    selling_price, purchase_price, current_stock, reorder_level, expiry_date)
+                    selling_price, purchase_price, current_stock, reorder_level, expiry_date,
+                    created_at)
                    VALUES (:product_code,:name,:category_id,:brand,:unit,
                            :selling_price,:purchase_price,:current_stock,:reorder_level,
-                           :expiry_date)""",
+                           :expiry_date, datetime('now','localtime'))""",
                 {**data, "expiry_date": data.get("expiry_date")}
             )
             conn.commit()
@@ -643,8 +672,8 @@ class Database:
                 """INSERT INTO bills
                    (bill_number, customer_id, customer_name, subtotal, discount,
                     grand_total, payment_mode, amount_paid, change_due, status,
-                    udhaar_adjustment, change_adjustment, created_by)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    udhaar_adjustment, change_adjustment, created_by, bill_date)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))""",
                 (
                     bill_number,
                     bill_data.get("customer_id"),
@@ -709,8 +738,8 @@ class Database:
                 if credit_added > 0:
                     conn.execute(
                         """INSERT INTO customer_transactions
-                           (customer_id, txn_type, amount, reference, notes, created_by)
-                           VALUES (?,?,?,?,?,?)""",
+                           (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                           VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                         (cust_id, "Credit", credit_added,
                          bill_number, "Auto from bill", user_id)
                     )
@@ -722,8 +751,8 @@ class Database:
                 if udhaar_collected > 0:
                     conn.execute(
                         """INSERT INTO customer_transactions
-                           (customer_id, txn_type, amount, reference, notes, created_by)
-                           VALUES (?,?,?,?,?,?)""",
+                           (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                           VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                         (cust_id, "Payment", udhaar_collected,
                          bill_number, "Udhaar collected with bill", user_id)
                     )
@@ -736,8 +765,8 @@ class Database:
             if change_adj > 0 and bill_data.get("customer_id"):
                 conn.execute(
                     """INSERT INTO customer_transactions
-                       (customer_id, txn_type, amount, reference, notes, created_by)
-                       VALUES (?,?,?,?,?,?)""",
+                       (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                       VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                     (bill_data["customer_id"], "Change Clear", change_adj,
                      bill_number, "Change adjusted in bill", user_id)
                 )
@@ -751,8 +780,8 @@ class Database:
             if change_due > 0 and bill_data.get("customer_id"):
                 conn.execute(
                     """INSERT INTO customer_transactions
-                       (customer_id, txn_type, amount, reference, notes, created_by)
-                       VALUES (?,?,?,?,?,?)""",
+                       (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                       VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                     (bill_data["customer_id"], "Change Deposit", change_due,
                      bill_number, "Change from bill", user_id)
                 )
@@ -781,8 +810,8 @@ class Database:
                 """INSERT INTO bills
                    (bill_number, customer_id, customer_name, subtotal, discount,
                     grand_total, payment_mode, amount_paid, change_due, status,
-                    change_adjustment, created_by)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    change_adjustment, created_by, bill_date)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))""",
                 (
                     bill_number,
                     bill_data.get("customer_id"),
@@ -914,8 +943,8 @@ class Database:
                     )
                     conn.execute(
                         """INSERT INTO customer_transactions
-                           (customer_id, txn_type, amount, reference, notes, created_by)
-                           VALUES (?,?,?,?,?,?)""",
+                           (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                           VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                         (cust_id, "Payment", credit_added,
                          bill["bill_number"], "Auto-reversed: bill voided", user_id)
                     )
@@ -927,8 +956,8 @@ class Database:
                     )
                     conn.execute(
                         """INSERT INTO customer_transactions
-                           (customer_id, txn_type, amount, reference, notes, created_by)
-                           VALUES (?,?,?,?,?,?)""",
+                           (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                           VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                         (cust_id, "Credit", udhaar_collected,
                          bill["bill_number"], "Auto-reversed: udhaar collection voided", user_id)
                     )
@@ -941,8 +970,8 @@ class Database:
                 )
                 conn.execute(
                     """INSERT INTO customer_transactions
-                       (customer_id, txn_type, amount, reference, notes, created_by)
-                       VALUES (?,?,?,?,?,?)""",
+                       (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                       VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                     (bill["customer_id"], "Change Clear", change_due,
                      bill["bill_number"], "Auto-reversed: bill voided", user_id)
                 )
@@ -955,8 +984,8 @@ class Database:
                 )
                 conn.execute(
                     """INSERT INTO customer_transactions
-                       (customer_id, txn_type, amount, reference, notes, created_by)
-                       VALUES (?,?,?,?,?,?)""",
+                       (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                       VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                     (bill["customer_id"], "Change Deposit", change_adj,
                      bill["bill_number"], "Auto-reversed: change adjustment voided", user_id)
                 )
@@ -1061,8 +1090,8 @@ class Database:
             cur = conn.execute(
                 """INSERT INTO sales_returns
                    (return_number, bill_id, bill_number, customer_id, customer_name,
-                    total_amount, refund_mode, reason, created_by)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                    total_amount, refund_mode, reason, created_by, return_date)
+                   VALUES (?,?,?,?,?,?,?,?,?,datetime('now','localtime'))""",
                 (return_number, bill_id, return_data.get("bill_number"),
                  return_data.get("customer_id"), return_data.get("customer_name"),
                  total, return_data.get("refund_mode", "Cash"),
@@ -1101,8 +1130,8 @@ class Database:
                     )
                     conn.execute(
                         """INSERT INTO customer_transactions
-                           (customer_id, txn_type, amount, reference, notes, created_by)
-                           VALUES (?,?,?,?,?,?)""",
+                           (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                           VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                         (cust_id, "Payment", total, return_number,
                          "Return refund adjusted to Udhaar", user_id)
                     )
@@ -1113,16 +1142,16 @@ class Database:
                     )
                     conn.execute(
                         """INSERT INTO customer_transactions
-                           (customer_id, txn_type, amount, reference, notes, created_by)
-                           VALUES (?,?,?,?,?,?)""",
+                           (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                           VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                         (cust_id, "Store Credit", total, return_number,
                          "Return refund to store credit", user_id)
                     )
                 else:  # Cash
                     conn.execute(
                         """INSERT INTO customer_transactions
-                           (customer_id, txn_type, amount, reference, notes, created_by)
-                           VALUES (?,?,?,?,?,?)""",
+                           (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                           VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                         (cust_id, "Refund", total, return_number,
                          "Cash refund for return", user_id)
                     )
@@ -1164,7 +1193,8 @@ class Database:
     def log_activity(self, user_id, action: str, details: str = ""):
         with self.get_conn() as conn:
             conn.execute(
-                "INSERT INTO activity_log (user_id, action, details) VALUES (?,?,?)",
+                "INSERT INTO activity_log (user_id, action, details, timestamp)"
+                " VALUES (?,?,?,datetime('now','localtime'))",
                 (user_id, action, details)
             )
             conn.commit()
@@ -1221,8 +1251,9 @@ class Database:
             )
             conn.execute(
                 """INSERT INTO stock_adjustments
-                   (product_id, product_name, adj_type, qty_before, qty_change, qty_after, reason, created_by)
-                   VALUES (?,?,?,?,?,?,?,?)""",
+                   (product_id, product_name, adj_type, qty_before, qty_change, qty_after, reason,
+                    created_by, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,datetime('now','localtime'))""",
                 (product_id, row["name"], adj_type, qty_before,
                  qty_change, qty_after, reason, user_id)
             )
@@ -1255,8 +1286,9 @@ class Database:
         with self.get_conn() as conn:
             cur = conn.execute(
                 """INSERT INTO suppliers
-                   (name, contact_person, phone, email, city, gst_number, notes)
-                   VALUES (:name,:contact_person,:phone,:email,:city,:gst_number,:notes)""",
+                   (name, contact_person, phone, email, city, gst_number, notes, created_at)
+                   VALUES (:name,:contact_person,:phone,:email,:city,:gst_number,:notes,
+                           datetime('now','localtime'))""",
                 data
             )
             conn.commit()
@@ -1317,8 +1349,9 @@ class Database:
             )
             cur = conn.execute(
                 """INSERT INTO purchase_entries
-                   (grn_number, supplier_id, supplier_name, total_amount, notes, created_by)
-                   VALUES (?,?,?,?,?,?)""",
+                   (grn_number, supplier_id, supplier_name, total_amount, notes, created_by,
+                    purchase_date)
+                   VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                 (
                     grn_number,
                     purchase_data.get("supplier_id"),
@@ -1434,7 +1467,8 @@ class Database:
     def add_customer(self, data: dict) -> int:
         with self.get_conn() as conn:
             cur = conn.execute(
-                "INSERT INTO customers (name, phone, address) VALUES (:name,:phone,:address)",
+                "INSERT INTO customers (name, phone, address, created_at)"
+                " VALUES (:name,:phone,:address,datetime('now','localtime'))",
                 data
             )
             conn.commit()
@@ -1494,15 +1528,15 @@ class Database:
             # Log the automatic offsetting in the customer transaction history
             conn.execute(
                 """INSERT INTO customer_transactions
-                   (customer_id, txn_type, amount, reference, notes, created_by)
-                   VALUES (?,?,?,?,?,?)""",
+                   (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                   VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                 (customer_id, "Payment", netted_amt, reference,
                  "Auto-adjusted with Change Balance", user_id)
             )
             conn.execute(
                 """INSERT INTO customer_transactions
-                   (customer_id, txn_type, amount, reference, notes, created_by)
-                   VALUES (?,?,?,?,?,?)""",
+                   (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                   VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                 (customer_id, "Change Clear", netted_amt, reference,
                  "Auto-adjusted with Udhaar Balance", user_id)
             )
@@ -1512,8 +1546,8 @@ class Database:
         with self.get_conn() as conn:
             conn.execute(
                 """INSERT INTO customer_transactions
-                   (customer_id, txn_type, amount, reference, notes, created_by)
-                   VALUES (?,?,?,?,?,?)""",
+                   (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                   VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                 (customer_id, txn_type, amount, reference, notes, user_id)
             )
             if txn_type == "Credit":
@@ -1545,8 +1579,8 @@ class Database:
                         # Log a second transaction for the change deposit
                         conn.execute(
                             """INSERT INTO customer_transactions
-                               (customer_id, txn_type, amount, reference, notes, created_by)
-                               VALUES (?,?,?,?,?,?)""",
+                               (customer_id, txn_type, amount, reference, notes, created_by, created_at)
+                               VALUES (?,?,?,?,?,?,datetime('now','localtime'))""",
                             (customer_id, "Change Deposit", surplus, reference,
                              "Change deposit from surplus payment", user_id)
                         )
@@ -1797,7 +1831,8 @@ class Database:
         try:
             with self.get_conn() as conn:
                 cur = conn.execute(
-                    "INSERT INTO users (name, username, password_hash, role) VALUES (?,?,?,?)",
+                    "INSERT INTO users (name, username, password_hash, role, created_at)"
+                    " VALUES (?,?,?,?,datetime('now','localtime'))",
                     (name.strip(), username.strip().lower(),
                      hash_password(password), role)
                 )
@@ -2038,7 +2073,7 @@ class Database:
                     FROM bill_items bi
                     JOIN bills b ON bi.bill_id = b.bill_id
                     WHERE b.status = 'Active'
-                      AND DATE(b.bill_date) >= DATE('now',?)
+                      AND DATE(b.bill_date) >= DATE('now','localtime',?)
                     GROUP BY bi.product_id
                 ) last_sale ON p.product_id = last_sale.product_id
                 WHERE p.is_active = 1
@@ -2058,12 +2093,12 @@ class Database:
                        COALESCE(ROUND(SUM(sp.paid_amount),2), 0)  AS paid_amount,
                        ROUND(pe.total_amount -
                              COALESCE(SUM(sp.paid_amount),0), 2)  AS balance,
-                       CAST(JULIANDAY('now') -
+                       CAST(JULIANDAY('now','localtime') -
                             JULIANDAY(pe.purchase_date) AS INTEGER) AS age_days,
                        CASE
-                         WHEN CAST(JULIANDAY('now') - JULIANDAY(pe.purchase_date) AS INTEGER) <= 30
+                         WHEN CAST(JULIANDAY('now','localtime') - JULIANDAY(pe.purchase_date) AS INTEGER) <= 30
                               THEN '0-30 days'
-                         WHEN CAST(JULIANDAY('now') - JULIANDAY(pe.purchase_date) AS INTEGER) <= 60
+                         WHEN CAST(JULIANDAY('now','localtime') - JULIANDAY(pe.purchase_date) AS INTEGER) <= 60
                               THEN '31-60 days'
                          ELSE '60+ days'
                        END AS ageing
@@ -2092,22 +2127,22 @@ class Database:
                     SELECT customer_id, SUM(amount) AS amt
                     FROM customer_transactions
                     WHERE txn_type='Credit'
-                      AND DATE(created_at) >= DATE('now','-30 days')
+                      AND DATE(created_at) >= DATE('now','localtime','-30 days')
                     GROUP BY customer_id
                 ) b0_30  ON b0_30.customer_id  = c.customer_id
                 LEFT JOIN (
                     SELECT customer_id, SUM(amount) AS amt
                     FROM customer_transactions
                     WHERE txn_type='Credit'
-                      AND DATE(created_at) BETWEEN DATE('now','-60 days')
-                                               AND DATE('now','-31 days')
+                      AND DATE(created_at) BETWEEN DATE('now','localtime','-60 days')
+                                               AND DATE('now','localtime','-31 days')
                     GROUP BY customer_id
                 ) b31_60 ON b31_60.customer_id = c.customer_id
                 LEFT JOIN (
                     SELECT customer_id, SUM(amount) AS amt
                     FROM customer_transactions
                     WHERE txn_type='Credit'
-                      AND DATE(created_at) < DATE('now','-60 days')
+                      AND DATE(created_at) < DATE('now','localtime','-60 days')
                     GROUP BY customer_id
                 ) b60p   ON b60p.customer_id   = c.customer_id
                 LEFT JOIN (
@@ -2149,8 +2184,8 @@ class Database:
         with self.get_conn() as conn:
             conn.execute(
                 """INSERT INTO supplier_payments
-                   (purchase_id, paid_amount, notes, created_by)
-                   VALUES (?,?,?,?)""",
+                   (purchase_id, paid_amount, notes, created_by, paid_date)
+                   VALUES (?,?,?,?,datetime('now','localtime'))""",
                 (purchase_id, paid_amount, notes or None, created_by)
             )
             conn.commit()
@@ -2167,13 +2202,13 @@ class Database:
                        COALESCE(cat.name, '')       AS category_name,
                        p.current_stock,
                        p.expiry_date,
-                       CAST(JULIANDAY(p.expiry_date) - JULIANDAY('now') AS INTEGER) AS days_left
+                       CAST(JULIANDAY(p.expiry_date) - JULIANDAY('now','localtime') AS INTEGER) AS days_left
                 FROM products p
                 LEFT JOIN categories cat ON cat.category_id = p.category_id
                 WHERE p.is_active = 1
                   AND p.expiry_date IS NOT NULL
                   AND p.expiry_date != ''
-                  AND JULIANDAY(p.expiry_date) <= JULIANDAY('now', '+' || ? || ' days')
+                  AND JULIANDAY(p.expiry_date) <= JULIANDAY('now','localtime', '+' || ? || ' days')
                 ORDER BY p.expiry_date
             """, (days,)).fetchall()
             return [dict(r) for r in rows]
@@ -2186,6 +2221,6 @@ class Database:
                 WHERE is_active = 1
                   AND expiry_date IS NOT NULL
                   AND expiry_date != ''
-                  AND JULIANDAY(expiry_date) <= JULIANDAY('now', '+' || ? || ' days')
+                  AND JULIANDAY(expiry_date) <= JULIANDAY('now','localtime', '+' || ? || ' days')
             """, (days,)).fetchone()
             return row["cnt"] if row else 0
