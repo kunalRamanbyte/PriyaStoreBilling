@@ -587,6 +587,14 @@ class BillingApp(ctk.CTk):
                     icon.place(relx=0.5, rely=0.5, anchor="center")
                 else:
                     icon.place(x=16, rely=0.5, anchor="w")
+                # The btn.configure() above makes CustomTkinter re-draw the
+                # button's own canvas and text label. Those are SIBLINGS of
+                # this icon, and the redraw raises them above it -- so after
+                # one collapse/expand the icon was still the right size, in
+                # the right place, the right colour and mapped, and simply
+                # painted over. Re-placing does not restore the stacking
+                # order; only lift() does.
+                icon.lift()
             tip = self._nav_tips.get(screen)
             if tip is not None:
                 tip.text = label
@@ -613,6 +621,7 @@ class BillingApp(ctk.CTk):
             sb["logout_icon"].place(relx=0.5, rely=0.5, anchor="center")
         else:
             sb["logout_icon"].place(x=16, rely=0.5, anchor="w")
+        sb["logout_icon"].lift()          # same burial as the nav icons above
         sb["logout_tip"].set_active(narrow)
 
         # -- Re-pack the rail's own children, top to bottom -------
@@ -910,6 +919,33 @@ class BillingApp(ctk.CTk):
 
 
 if __name__ == "__main__":
+    # One till per database. A second copy cannot mint a duplicate bill number
+    # -- _claim_number() already guarantees that inside BEGIN IMMEDIATE -- but
+    # it CAN overwrite the file during a Restore, and it can commit into the
+    # WAL while the other copy is taking a backup, producing a backup that
+    # silently omits those bills. See single_instance.py.
+    #
+    # This lives inside __main__ on purpose: every verify_*.py builds
+    # BillingApp directly, and a claim taken at import time would make the
+    # test suites fight each other.
+    import single_instance
+    from config import DB_PATH
+
+    if not single_instance.acquire(DB_PATH):
+        applog.log.info("second instance refused; database already open")
+        if not single_instance.focus_existing(f"{APP_TITLE}   v{APP_VERSION}"):
+            # Nothing to raise -- the owner may still be starting up. Say so
+            # rather than exiting silently, which reads as "the icon is broken".
+            _lang = "English"
+            try:
+                _lang = Database().get_setting("app_language", "English")
+            except Exception:
+                applog.swallow("read language for the already-running notice",
+                               applog.DEBUG)
+            messagebox.showinfo(APP_TITLE,
+                                t("Priya Store is already running.", _lang))
+        sys.exit(0)
+
     app = BillingApp()
     app.mainloop()
     applog.log.info("clean exit")

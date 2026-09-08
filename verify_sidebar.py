@@ -161,6 +161,26 @@ check("stray tooltip torn down with the sidebar", had and len(toplevels()) == be
       f"raised={had} left={len(toplevels()) - before}")
 check("setting persisted back to 0", db.get_setting("sidebar_collapsed") == "0")
 
+print("")
+print("-- the icon must stay on top of its own pill --")
+# Collapsing and expanding reconfigures each CTkButton, which makes
+# CustomTkinter re-draw the button's internal canvas and text label. Those are
+# SIBLINGS of the icon we place on the button, and the redraw raises them ABOVE
+# it -- so every nav icon vanished behind its own pill after one
+# collapse/expand round trip, while still reporting the right size, position,
+# colour and mapped state. Only the stacking order gives it away.
+#
+# Tk keeps a parent's child list in stacking order, lowest first, so the icon
+# must be the LAST child of its button.
+app.update(); time.sleep(0.2); app.update()
+_buried = []
+for _name, _icon in app.nav_icons.items():
+    _kids = app.nav_buttons[_name].winfo_children()
+    if _icon in _kids and _kids[-1] is not _icon:
+        _buried.append((_name, [type(k).__name__ for k in _kids]))
+check("every nav icon is still the topmost child of its pill",
+      not _buried, f"{len(_buried)} buried, e.g. {_buried[:1]}")
+
 print("\n-- collapsed state survives theme and language switches --")
 app._toggle_sidebar(); app.update()
 app.apply_theme("Dark"); wait_mapped()

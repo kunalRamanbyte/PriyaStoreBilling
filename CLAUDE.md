@@ -30,15 +30,16 @@ Optional (not in `requirements.txt`, guarded by try/import): `python-escpos`, `p
 
 ## Running Tests
 
-There are six suites:
+There are seven suites:
 
 ```bash
-python verify_screens.py     # 16 checks — screens build, ROW_COLORS, styles
-python verify_motion.py      # the motion layer and navigation
-python verify_sidebar.py     # 24 checks — the collapsible sidebar
-python verify_applog.py      # 21 checks — the crash recorder
-python verify_theme.py       # 8 checks  — the theme / language rebuild
-python verify_datepicker.py  # 34 checks — the date picker + licence audit
+python verify_screens.py          # 16 checks — screens build, ROW_COLORS, styles
+python verify_motion.py           # the motion layer and navigation
+python verify_sidebar.py          # 25 checks — the collapsible sidebar
+python verify_applog.py           # 21 checks — the crash recorder
+python verify_theme.py            # 8 checks  — the theme / language rebuild
+python verify_datepicker.py       # 36 checks — the date picker + licence audit
+python verify_single_instance.py  # 13 checks — one till per database
 ```
 
 `verify_screens.py` instantiates every screen with the **real** `billing_data.db`, calls `on_show()`, and asserts on the result. It stubs a `FakeApp` (see below), so it never exercises the real sidebar or `navigate_to()` — it runs headless (the root window is `withdraw()`n). `verify_motion.py` and `verify_sidebar.py` both build the real `BillingApp` instead, to cover what the stub cannot: navigation, the motion layer, and the collapsible sidebar. All three exit 0 on success, 1 on any failure.
@@ -71,6 +72,12 @@ and focus** below). It runs against a copy of the database — `apply_theme()`
 writes `app_theme` to the settings table — and uses `applog` as its oracle: a
 Tk callback failure is precisely what the recorder captures, so the assertion
 is "the recorder logged nothing".
+
+`verify_single_instance.py` covers the startup guard (see **One till per
+database** below). The rejection cases spawn a **real second interpreter** — a
+second `acquire()` in the same process would reuse the handle already held and
+prove nothing. It invents its paths and only hashes their names, so it never
+touches the shop's database.
 
 There is no per-test CLI filter — to test one screen in isolation, replicate both stubs from `verify_screens.py`. `FakeApp` must carry `current_lang` and `current_theme`, because screens read them during construction; the user dict must carry `name`, because screens read `current_user["name"]`:
 
@@ -324,6 +331,42 @@ Actions written elsewhere that are *not* in the map — `PURCHASE_SAVED`, `CUSTO
 
 > **Known gap:** `screen_products.py`, `screen_inventory.py` and `screen_purchase.py` call `log_activity` **nowhere**, so product add/edit/delete and stock adjustments leave no audit trail at all. Only keys some code actually writes belong in the map — don't add a `PRODUCT_*` colour without first adding the logging calls.
 
+### One till per database (`single_instance.py`)
+
+`main.py` claims a Windows named mutex before building the app, and a second
+copy pointed at the same `billing_data.db` raises the running window and exits.
+
+The claim is keyed to the **database path**, not to the application: the shared
+resource is the file. That deliberately lets a developer run from source while
+the installed build is open, because they point at different databases.
+
+Ordinary billing already survived two copies — WAL supports several processes,
+and `save_bill()` claims its number inside `BEGIN IMMEDIATE`, so duplicate bill
+numbers were never possible. The guard exists for the three things that did not
+survive:
+
+- **Restore and Factory Reset** overwrite the database and delete the
+  `-wal`/`-shm` sidecars while another process holds the file open.
+- **Backups that look complete and are not.** `_run_backup()` copies only the
+  `.db`, never the `-wal`. Within one process that is safe — the copy runs on
+  the UI thread, so nothing else there can be writing. With two, the other copy
+  commits into the WAL mid-copy and those bills are simply absent.
+- **Two daily backup schedulers**, each pruning to the 10 most recent, halving
+  the retained history.
+
+> Use a **named mutex, never a lock file.** Windows drops the mutex when the
+> process dies, including on a crash. A stale lock file would block the till
+> from ever starting again — worse than the problem being solved.
+
+> The claim lives **inside `main.py`'s `if __name__ == "__main__"` block** and
+> must stay there. Every `verify_*.py` builds `BillingApp` directly, and a
+> claim taken at import time would make the suites fight each other.
+> `verify_single_instance.py` asserts this structurally, via AST.
+
+`acquire()` returns `True` whenever the answer is unknown (non-Windows, or the
+Win32 call failing). Refusing to start a till because the guard itself
+misbehaved would be far worse than the duplicate it prevents.
+
 ### Crash Logging & Diagnostics (`applog.py`)
 
 `main.py` calls `applog.install()` **before every other project import** — a
@@ -418,6 +461,19 @@ Restore validates the chosen file with `_is_valid_sqlite()` (header magic + `PRA
 > clipped login chips, and KPI cards overflowing 1366. Prefer a `CTkLabel` with
 > `fg_color`+`corner_radius` for a chip, and pass `width=1` when a card should
 > take its share of a row rather than demand 200px.
+
+> **A widget placed on a `CTkButton` is buried when that button is
+> reconfigured.** `CTkButton` is a composite — an internal `CTkCanvas` plus a
+> text `Label` — and those are *siblings* of anything you `place()` on the
+> button. Any `btn.configure()` that changes its appearance makes CustomTkinter
+> re-draw them, which raises them **above** your widget. The sidebar's 13 nav
+> icons and the sign-out icon all vanished behind their own pills after one
+> collapse/expand round trip, while still reporting the correct size, position,
+> colour and `winfo_ismapped()` — every property said "visible" and only the
+> pixels disagreed. `place_forget()` + `place()` does **not** restore the
+> order; call `.lift()` after re-placing. `verify_sidebar.py` asserts it
+> structurally: Tk keeps a parent's child list in stacking order (lowest
+> first), so each icon must be the **last** child of its button.
 
 > **`side="bottom"` does not reserve space.** Pack a footer bar *before* any
 > sibling packed with `expand=True`, or the expanding widget takes everything

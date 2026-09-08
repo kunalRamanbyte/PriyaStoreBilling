@@ -1209,9 +1209,11 @@ T = {
     "Next year": [
         "Next year",
         "পরের বছর",
-        "अगला साल"],
+        "अगला साल"],    "Priya Store is already running.": [
+        "Priya Store is already running.",
+        "প্রিয়া স্টোর আগে থেকেই চলছে।",
+        "प्रिया स्टोर पहले से चल रहा है।"],
 }
-
 # ── Internal index map ─────────────────────────────────────────────
 _LANG_INDEX = {"English": 0, "Bengali": 1, "Hindi": 2}
 
