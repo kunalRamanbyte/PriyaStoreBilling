@@ -80,6 +80,67 @@ def pump(app, cycles=25):
         time.sleep(0.02)
 
 
+def take_focus(widget, timeout=1.0):
+    """Put OS focus inside `widget` and wait until Tk agrees that it is there.
+
+    `focus_set()` only queues a focus change *within* the application; it says
+    nothing about whether the application holds focus at the OS level. While
+    any other window is in front, `focus_get()` returns None even though this
+    window is still viewable and its widgets still mapped — measured directly:
+    viewable=1, ismapped=1, focus_get()=None, while Tk's own focus_lastfor()
+    still names the entry. A developer machine hands focus to a notification
+    or a build window at any moment, so a fixed `pump()` followed by a single
+    `focus_get()` reads whatever happened to be true at that instant. That is
+    the whole of this check's flakiness: it failed with detail `None`.
+
+    Waiting for the real thing matters beyond this check. CustomTkinter
+    captures `self.focus_get()` before withdrawing the root
+    (`ctk_tk.py::_windows_set_titlebar_color`) — so with the window merely
+    unfocused it captures None, schedules no `after(1, widget.focus)`, and the
+    three theme checks below would pass without ever exercising the crash they
+    exist to catch. Never paper over this by asserting on `focus_lastfor()`
+    instead: it survives a focus loss precisely because it is *not* what
+    CustomTkinter reads.
+
+    So poll for the condition rather than assume it arrived, the same way
+    `ui_utils.open_date_picker` does before `focus_force()`/`grab_set()`:
+    wait for the window to be viewable (forcing focus onto an unmapped window
+    does not stick), re-assert the claim on every pass so a transient steal is
+    recovered from rather than being fatal, and stop the moment `focus_get()`
+    names a widget. Bounded, so a window that never gets focus cannot hang the
+    run — the caller still asserts on what is returned.
+    """
+    top = widget.winfo_toplevel()
+    end = time.perf_counter() + timeout
+    while time.perf_counter() < end:
+        if not top.winfo_viewable():
+            # Minimised or withdrawn — by a screen lock, a session switch, a
+            # stray taskbar click. Unlike OS focus, this is ours to reclaim:
+            # deiconify() acts on our own window and no foreground lock
+            # applies. Without it the loop below would spin out its whole
+            # budget waiting for a window nothing was going to restore.
+            try:
+                if top.state() != "normal":
+                    top.deiconify()
+                top.lift()
+            except Exception:
+                pass
+        top.update_idletasks()
+        top.update()
+        if top.winfo_viewable():
+            try:
+                widget.focus_force()      # CTkEntry delegates to its inner tk.Entry
+            except Exception:
+                pass
+            top.update_idletasks()
+            top.update()
+            got = top.focus_get()
+            if got is not None:
+                return got
+        time.sleep(0.02)
+    return top.focus_get()
+
+
 print("=" * 68)
 print("  theme / language rebuild verification")
 print("=" * 68)
@@ -97,9 +158,7 @@ pos = app.screens["billing"]
 
 # Focus must genuinely sit inside a POS field, because that is the widget
 # CustomTkinter captures and then tries to restore after the rebuild.
-pos.search_entry.focus_set()
-pump(app, 4)
-focused = app.focus_get()
+focused = take_focus(pos.search_entry)
 check("focus really is inside a POS entry",
       focused is not None and "billingscreen" in str(focused),
       str(focused))
@@ -117,11 +176,13 @@ for theme in ("Dark", "Light"):
           fresh[-300:])
     check(f"app still alive after switching to {theme}", bool(app.winfo_exists()))
 
-    # Put focus back into the rebuilt POS for the next iteration.
+    # Put focus back into the rebuilt POS for the next iteration, through the
+    # same helper: the second pass has to be as genuinely focused as the
+    # first, or the Light switch below captures None and verifies nothing
+    # while still reporting PASS.
     app.navigate_to("billing")
     pump(app, 6)
-    app.screens["billing"].search_entry.focus_set()
-    pump(app, 4)
+    take_focus(app.screens["billing"].search_entry)
 
 # Control: same destroy loop, no appearance change.
 before = len(read_log())

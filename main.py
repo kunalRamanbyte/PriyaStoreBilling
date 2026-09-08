@@ -790,7 +790,11 @@ class BillingApp(ctk.CTk):
 
         self._paint_nav(screen_name)
 
-        if screen_name not in self.screens:
+        # Building the screen is the expensive half of a first visit —
+        # 100-800ms of Tcl round-trips, measured. Remember whether we paid it
+        # here, because the slide below depends on it.
+        just_built = screen_name not in self.screens
+        if just_built:
             klasses = {
                 "dashboard"   : DashboardScreen,
                 "billing"     : BillingScreen,
@@ -828,7 +832,16 @@ class BillingApp(ctk.CTk):
 
         # Park the screen before it is painted, so its first frame is already
         # offset — otherwise Tk paints it home and the slide snaps sideways.
-        px = motion.slide_start(screen, MOTION["slide_px"])
+        #
+        # A screen built on THIS visit does not slide at all. Its constructor
+        # has just spent 100-800ms (Settings 534ms, Categories 357ms) and
+        # whatever repaint work spills past the update_idletasks() below then
+        # lands on the animation's opening frames — measured as gaps of
+        # 25-146ms against a 16ms budget, on first visits and nowhere else.
+        # Animating over that reads as a stutter, so the first visit gets a
+        # clean cut and every revisit (median 26ms) still slides.
+        # slide_home() with px=0 places the screen home without a tween.
+        px = 0 if just_built else motion.slide_start(screen, MOTION["slide_px"])
         screen.lift()
 
         # Pay on_show()'s reload and the first repaint here, before a single

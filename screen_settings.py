@@ -60,7 +60,11 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
         self.current_user = current_user
         self.app          = app
         self._entries     = {}
+        # _ensure_section() reloads values into freshly built widgets, but not
+        # while _build() is still running — _build() does its own _load().
+        self._ready       = False
         self._build()
+        self._ready       = True
 
     # ─────────────────────────────────────────────────────────
     # -- Direction B primitives ------------------------------
@@ -189,8 +193,30 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
         if self.current_user.get("role") == "admin":
             danger_p = make_section("danger", "Danger Zone", "\u26A0\uFE0F")
 
+        # Each section's BODY is built the first time that section is
+        # opened. Building all five up front made this the most expensive
+        # screen in the app — 269 widgets, ~534ms of Tcl round-trips inside
+        # navigate_to() — to show a shopkeeper a single card. The five panels
+        # created above are cheap; only their contents are not.
+        self._builders = {
+            "shop":     self._build_shop,
+            "billing":  self._build_billing,
+            "language": self._build_language,
+            "backup":   self._build_backup,
+            "danger":   self._build_danger,
+        }
+        self._built = set()
+
+
+        self._show_section("shop")
+        self._load()
+        self.bind_responsive()
+
+    def _build_shop(self, panel):
+        """Built on first open — see _ensure_section()."""
+        L = self.app.current_lang
         # -- Shop ---------------------------------------------
-        card = self._card(shop_p, t("Shop Information", L),
+        card = self._card(panel, t("Shop Information", L),
                           t("Printed at the top of every receipt.", L))
         pad = ctk.CTkFrame(card, fg_color="transparent", height=6)
         pad.pack()
@@ -203,8 +229,12 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
             self._entries[key] = ent
         ctk.CTkFrame(card, fg_color="transparent", height=10).pack()
 
+
+    def _build_billing(self, panel):
+        """Built on first open — see _ensure_section()."""
+        L = self.app.current_lang
         # -- Billing ------------------------------------------
-        card = self._card(bill_p, t("Bill Configuration", L))
+        card = self._card(panel, t("Bill Configuration", L))
         ctk.CTkFrame(card, fg_color="transparent", height=6).pack()
         for key, label, ph, sec in self.FIELDS:
             if sec != "bill":
@@ -220,8 +250,12 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
                 self._next_bill_hint.pack(side="left", padx=(14, 0))
         ctk.CTkFrame(card, fg_color="transparent", height=10).pack()
 
+
+    def _build_language(self, panel):
+        """Built on first open — see _ensure_section()."""
+        L = self.app.current_lang
         # -- Language & Theme ---------------------------------
-        card = self._card(lang_p, t("Language & Theme", L))
+        card = self._card(panel, t("Language & Theme", L))
         ctk.CTkFrame(card, fg_color="transparent", height=6).pack()
 
         row = self._row(card, t("Select Language", L))
@@ -273,8 +307,12 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
                       command=self._toggle_animations).pack(side="right")
         ctk.CTkFrame(card, fg_color="transparent", height=10).pack()
 
+
+    def _build_backup(self, panel):
+        """Built on first open — see _ensure_section()."""
+        L = self.app.current_lang
         # -- Backup -------------------------------------------
-        card = self._card(backup_p, t("Backup & Restore", L))
+        card = self._card(panel, t("Backup & Restore", L))
         ctk.CTkFrame(card, fg_color="transparent", height=6).pack()
 
         row = self._row(card, t("Last Backup", L))
@@ -323,7 +361,7 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
         # The app keeps a log; this is the only place a shopkeeper can reach
         # it. Everything here is read-only and carries no bill or customer
         # data, so it is safe to send to support as-is.
-        card = self._card(backup_p, t("Problem Reports", L),
+        card = self._card(panel, t("Problem Reports", L),
                           t("If something goes wrong, send these details for support.", L))
         ctk.CTkFrame(card, fg_color="transparent", height=6).pack()
 
@@ -345,34 +383,33 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
                    width=180, command=self._open_log_folder).pack(side="right")
         ctk.CTkFrame(card, fg_color="transparent", height=10).pack()
 
-        # -- Danger Zone (admin only) -------------------------
-        if danger_p is not None:
-            card = ctk.CTkFrame(danger_p, fg_color=COLORS["accent_danger_tint"],
-                                corner_radius=RADII["card"], border_width=1,
-                                border_color=COLORS["accent_danger"])
-            card.pack(fill="x", pady=(0, 14))
-            head = ctk.CTkFrame(card, fg_color="transparent")
-            head.pack(fill="x", padx=24, pady=(20, 0))
-            ctk.CTkLabel(head, text=t("Factory Reset / Format Data", L),
-                         font=FONTS["subheading"],
-                         text_color=COLORS["accent_danger"], anchor="w"
-                         ).pack(anchor="w")
-            ctk.CTkLabel(
-                head,
-                text=t("Permanently delete ALL bills, products, categories, "
-                       "customers, suppliers, stock data and non-admin users. "
-                       "Only admin accounts and settings are kept.", L),
-                font=FONTS["small"], text_color=COLORS["accent_danger"],
-                anchor="w", justify="left", wraplength=560
-            ).pack(anchor="w", pady=(4, 0))
-            self._pill(card, "\U0001F5D1\uFE0F  " + t("Format Data", L),
-                       kind="danger_solid", width=190, height=46,
-                       command=self._do_format_data).pack(anchor="w", padx=24,
-                                                          pady=(16, 22))
 
-        self._show_section("shop")
-        self._load()
-        self.bind_responsive()
+    def _build_danger(self, panel):
+        """Built on first open — see _ensure_section()."""
+        L = self.app.current_lang
+        # -- Danger Zone (admin only) -------------------------
+        card = ctk.CTkFrame(panel, fg_color=COLORS["accent_danger_tint"],
+                            corner_radius=RADII["card"], border_width=1,
+                            border_color=COLORS["accent_danger"])
+        card.pack(fill="x", pady=(0, 14))
+        head = ctk.CTkFrame(card, fg_color="transparent")
+        head.pack(fill="x", padx=24, pady=(20, 0))
+        ctk.CTkLabel(head, text=t("Factory Reset / Format Data", L),
+                     font=FONTS["subheading"],
+                     text_color=COLORS["accent_danger"], anchor="w"
+                     ).pack(anchor="w")
+        ctk.CTkLabel(
+            head,
+            text=t("Permanently delete ALL bills, products, categories, "
+                   "customers, suppliers, stock data and non-admin users. "
+                   "Only admin accounts and settings are kept.", L),
+            font=FONTS["small"], text_color=COLORS["accent_danger"],
+            anchor="w", justify="left", wraplength=560
+        ).pack(anchor="w", pady=(4, 0))
+        self._pill(card, "\U0001F5D1\uFE0F  " + t("Format Data", L),
+                   kind="danger_solid", width=190, height=46,
+                   command=self._do_format_data).pack(anchor="w", padx=24,
+                                                      pady=(16, 22))
 
     def on_breakpoint(self, bp, logical_w):
         g = GUTTERS[bp]
@@ -382,7 +419,29 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
         self._nav.configure(width=160 if bp == "compact" else 200)
 
     # -- Section switching ------------------------------------
+    def _ensure_section(self, key):
+        """Build a section's body the first time anything needs it.
+
+        Called by _show_section() and by _save(), which reads fields out of
+        the Billing section a shopkeeper may never have opened.
+
+        `_built` is recorded only AFTER the builder returns — the same rule
+        the Categories card grid follows — so a builder that raises partway
+        cannot cache a half-built panel and lock it in for the life of the
+        screen.
+        """
+        if key in self._built or key not in self._sections:
+            return
+        builder = self._builders.get(key)
+        if builder is None:
+            return
+        builder(self._sections[key])
+        self._built.add(key)
+        if self._ready:
+            self._load()        # new widgets arrive empty; _load() fills them
+
     def _show_section(self, key):
+        self._ensure_section(key)
         for name, panel in self._sections.items():
             if name == key:
                 panel.pack(fill="both", expand=True)
@@ -428,34 +487,34 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
             val = s.get(key, "")
             ent.delete(0, "end")
             ent.insert(0, val)
-        last = s.get("last_backup", "")
-        self._last_backup_label.configure(text=last if last else "No backup yet")
+        # Every widget below belongs to a section that may not be built
+        # yet, so each is fetched defensively. _ensure_section() calls _load()
+        # again once a section appears, which is what fills it in.
+        if getattr(self, "_last_backup_label", None) is not None:
+            last = s.get("last_backup", "")
+            self._last_backup_label.configure(
+                text=last if last else "No backup yet")
 
-        # Restore language selection
-        saved_lang = s.get("app_language", "English")
-        # Map DB value to display name
-        lang_display = "English"
-        for display, db_val in zip(LANGUAGES, LANG_DB_VALUES):
-            if db_val == saved_lang:
-                lang_display = display
-                break
-        self._lang_var.set(lang_display)
+        # -- Language & Theme section, if it has been built --------
+        if getattr(self, "_lang_var", None) is not None:
+            saved_lang = s.get("app_language", "English")
+            # Map DB value to display name
+            lang_display = "English"
+            for display, db_val in zip(LANGUAGES, LANG_DB_VALUES):
+                if db_val == saved_lang:
+                    lang_display = display
+                    break
+            self._lang_var.set(lang_display)
+            self._theme_var.set(s.get("app_theme", "System"))
+            self._anim_var.set(s.get("animations_enabled", "1") == "1")
 
-        # Restore theme selection
-        saved_theme = s.get("app_theme", "System")
-        self._theme_var.set(saved_theme)
-
-        # Restore the animation toggle
-        self._anim_var.set(s.get("animations_enabled", "1") == "1")
-
-        # Restore custom backup folder label
-        custom = s.get("backup_folder", "")
-        self._folder_label.configure(
-            text=custom if custom else "Default (app folder)")
-
-        # Restore auto-backup toggle
-        auto = s.get("auto_backup_enabled", "1")
-        self._auto_backup_var.set(auto == "1")
+        # -- Backup section, if it has been built ------------------
+        if getattr(self, "_folder_label", None) is not None:
+            custom = s.get("backup_folder", "")
+            self._folder_label.configure(
+                text=custom if custom else "Default (app folder)")
+            self._auto_backup_var.set(
+                s.get("auto_backup_enabled", "1") == "1")
 
         # Artboard shows the number the next bill will actually get, beside
         # the field, so a prefix/counter edit can be sanity-checked in place.
@@ -476,6 +535,11 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
 
     def _save(self):
         L = self.app.current_lang
+        # Bill numbering lives in the Billing section, but Save sits in the
+        # header and Settings opens on Shop — so this reads fields the user
+        # need never have looked at. Build them before reading them.
+        self._ensure_section("billing")
+        self._ensure_section("shop")
         bill_prefix = self._entries["bill_prefix"].get().strip() or "BILL"
         next_no = self._entries["next_bill_no"].get().strip()
         if not next_no.isdigit() or int(next_no) < 1:
@@ -718,6 +782,10 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
 
     # -- Problem reporting ------------------------------------
     def _refresh_problem_status(self):
+        # Lives on the Backup panel, which on_show() reaches whether or not
+        # the shopkeeper has ever opened that section.
+        if getattr(self, "_problem_label", None) is None:
+            return
         L = self.app.current_lang
         count, last = applog.problem_summary()
         if count:

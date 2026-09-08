@@ -264,8 +264,8 @@ class SupplierScreen(ctk.CTkFrame):
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
         ctk.CTkButton(btn_row, text=t("Cancel", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
-                      height=50, corner_radius=16,
-                      command=dlg.destroy).pack(side="left", width=110)
+                      height=50, width=110, corner_radius=16,
+                      command=dlg.destroy).pack(side="left")
 
     def _record_payment(self):
         L = self.app.current_lang
@@ -382,8 +382,8 @@ class SupplierScreen(ctk.CTkFrame):
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
         ctk.CTkButton(btn_row, text=t("Cancel", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
-                      height=50, corner_radius=10,
-                      command=dlg.destroy).pack(side="left", width=110)
+                      height=50, width=110, corner_radius=10,
+                      command=dlg.destroy).pack(side="left")
 
     def _deactivate(self):
         L = self.app.current_lang

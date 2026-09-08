@@ -258,8 +258,8 @@ class CustomerScreen(ctk.CTkFrame):
                       fg_color=COLORS["btn_success"], height=50, corner_radius=16,
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
         ctk.CTkButton(btn_row, text=t("Cancel", L), font=FONTS["button"],
-                      fg_color=COLORS["btn_secondary"], height=50, corner_radius=16,
-                      command=dlg.destroy).pack(side="left", width=110)
+                      fg_color=COLORS["btn_secondary"], height=50, width=110, corner_radius=16,
+                      command=dlg.destroy).pack(side="left")
 
     # ── Ledger popup ─────────────────────────────────────────
     def _open_ledger(self):
@@ -455,8 +455,8 @@ class CustomerScreen(ctk.CTkFrame):
                       fg_color=btn_color, height=50, corner_radius=16,
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
         ctk.CTkButton(btn_row, text=t("Cancel", L), font=FONTS["button"],
-                      fg_color=COLORS["btn_secondary"], height=50, corner_radius=16,
-                      command=dlg.destroy).pack(side="left", width=110)
+                      fg_color=COLORS["btn_secondary"], height=50, width=110, corner_radius=16,
+                      command=dlg.destroy).pack(side="left")
 
     def _clear_change(self):
         L = self.app.current_lang

@@ -12,7 +12,7 @@ from responsive import (ResponsiveMixin, fit_columns, widget_scaling,
                         autohide_scrollbar)
 from ui_utils import place_popup, open_date_picker
 from lang import t
-from ui_utils import EmptyState
+from ui_utils import EmptyState, SearchHint
 from webcam_scanner import WebcamScanner
 
 
@@ -98,14 +98,9 @@ class ProductScreen(ResponsiveMixin, ctk.CTkFrame):
             fg_color=COLORS["bg_white"], text_color=COLORS["text_dark"])
         self.search_entry.pack(side="left")
         # A textvariable suppresses CTkEntry's placeholder, so draw the hint.
-        self._search_hint = ctk.CTkLabel(
-            self.search_entry,
-            text="\U0001F50D  " + t("Search products\u2026", L),
-            font=FONTS["label_form"], text_color=COLORS["text_muted"],
-            fg_color="transparent")
-        self._search_hint.place(x=18, rely=0.5, anchor="w")
-        self._search_hint.bind("<Button-1>",
-                               lambda _e: self.search_entry.focus_set())
+        self._search_hint = SearchHint(
+            self.search_entry, "\U0001F50D  " + t("Search products\u2026", L),
+            font=FONTS["label_form"], x=18)
 
         # A filter is not the loudest thing on the screen: neutral surface,
         # not the solid blue that used to outshout every real action here.
@@ -256,6 +251,8 @@ class ProductScreen(ResponsiveMixin, ctk.CTkFrame):
         cat_sel = self.cat_filter_var.get()
         cat_id  = self._cats_map.get(cat_sel) if hasattr(self, "_cats_map") and cat_sel != t("All Categories", L) else None
         low     = self.low_stock_var.get()
+
+        self._search_hint.sync()
 
         prods = self.db.get_products(active_only=not low, search=search, category_id=cat_id)
         if low:
@@ -487,8 +484,8 @@ class ProductScreen(ResponsiveMixin, ctk.CTkFrame):
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
         ctk.CTkButton(btn_row, text=t("Cancel", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
-                      height=48, corner_radius=16,
-                      command=dlg.destroy).pack(side="left", width=100)
+                      height=48, width=100, corner_radius=16,
+                      command=dlg.destroy).pack(side="left")
 
     def _deactivate_product(self):
         pid = self._get_selected_product_id()

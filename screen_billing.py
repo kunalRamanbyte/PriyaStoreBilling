@@ -11,7 +11,7 @@ from tkinter import ttk, messagebox
 from datetime import datetime
 from config import COLORS, FONTS, RADII, METRICS, PAYMENT_MODES, GUTTERS
 from responsive import ResponsiveMixin, fit_columns, widget_scaling
-from ui_utils import place_popup
+from ui_utils import place_popup, SearchHint
 from lang import t
 from webcam_scanner import WebcamScanner
 
@@ -198,14 +198,9 @@ class BillingScreen(ResponsiveMixin, ctk.CTkFrame):
         self.search_entry.grid(row=0, column=0, sticky="ew", padx=(20, 8), pady=6)
         # Same story as Bill History: the textvariable driving the product
         # lookup suppresses CTkEntry's placeholder, so draw the hint.
-        self._search_hint = ctk.CTkLabel(
-            self.search_entry,
-            text=t("Scan barcode or search product…", L),
-            font=("Segoe UI", 17), text_color=COLORS["text_muted"],
-            fg_color="transparent")
-        self._search_hint.place(x=4, rely=0.5, anchor="w")
-        self._search_hint.bind("<Button-1>",
-                               lambda _e: self.search_entry.focus_set())
+        self._search_hint = SearchHint(
+            self.search_entry, t("Scan barcode or search product…", L),
+            font=("Segoe UI", 17), x=4)
 
         ctk.CTkLabel(search_frame, text="F2", font=FONTS["caption"],
                      fg_color=COLORS["accent_action_tint"],
@@ -805,17 +800,8 @@ class BillingScreen(ResponsiveMixin, ctk.CTkFrame):
                 parent=self.winfo_toplevel()
             )
 
-    def _sync_search_hint(self):
-        hint = getattr(self, "_search_hint", None)
-        if hint is None:
-            return
-        if self.search_var.get():
-            hint.place_forget()
-        else:
-            hint.place(x=4, rely=0.5, anchor="w")
-
     def _on_search_change(self, *_):
-        self._sync_search_hint()
+        self._search_hint.sync()
         # Debounce: avoid a DB query + popup rebuild on every keystroke. Closing
         # the popup on an empty box is immediate; the query is deferred.
         if getattr(self, "_search_job", None) is not None:

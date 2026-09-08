@@ -79,6 +79,65 @@ def wait_mapped(widget, timeout=15.0):
         f"cannot measure geometry")
 
 
+def require_viewable(timeout=2.0):
+    """Bring the app window back on screen and wait until Tk agrees it is.
+
+    `winfo_ismapped()` on a child is AND-ed with every ancestor's map state,
+    so while the toplevel is minimised — a stray taskbar click, a screen lock,
+    a session switch — EVERY screen reports unmapped, no matter what
+    navigate_to() actually did. Measured directly: driving the toplevel to
+    winfo_viewable()==0 turns a placed child's winfo_ismapped() to 0 while its
+    geometry stays correct. That is what turned "expected only the target
+    screen mapped" into "found: []" and "the visible screen must be mapped"
+    into a failure, on a clean tree, with nothing wrong with the code.
+
+    Note this is NOT the same condition as losing OS focus: a window that is
+    merely behind another one still reports viewable=1 and ismapped=1. Only
+    genuine non-viewability does this, which is why the guard is deiconify()
+    and not focus.
+
+    Unlike focus, viewability is ours to reclaim — deiconify() acts on our own
+    window and is not subject to Windows' foreground lock — so poll and
+    restore rather than sleeping a fixed amount, and the wait costs nothing on
+    a run where the window was never disturbed.
+    """
+    end = time.perf_counter() + timeout
+    while time.perf_counter() < end:
+        if not app.winfo_viewable():
+            try:
+                if app.state() != "normal":
+                    app.deiconify()
+                app.lift()
+            except Exception:
+                pass
+        app.update_idletasks(); app.update()
+        if app.winfo_viewable():
+            return True
+        time.sleep(0.02)
+    return bool(app.winfo_viewable())
+
+
+def mapped_screens(timeout=5.0):
+    """Every cached screen Tk reports as mapped, read while really on screen.
+
+    The read is taken only when the toplevel is viewable BOTH before and
+    after it: a minimise landing mid-measurement would otherwise report every
+    screen unmapped, which is indistinguishable from the real defect these
+    callers exist to catch. Re-read instead of trusting the first sample.
+    """
+    end = time.perf_counter() + timeout
+    while time.perf_counter() < end:
+        if require_viewable():
+            names = [n for n, scr in app.screens.items() if scr.winfo_ismapped()]
+            if app.winfo_viewable():        # still true after the read -> trustworthy
+                return names
+        time.sleep(0.02)
+    raise AssertionError(
+        f"the app window never stayed viewable for {timeout}s "
+        f"(state={app.state()!r}, viewable={bool(app.winfo_viewable())}) — "
+        f"cannot measure which screens are mapped")
+
+
 def settle(timeout=5.0):
     """Run the event loop until no animation is in flight.
 
@@ -280,8 +339,7 @@ def test_rapid_navigation_strands_nothing():
     # without a lift() call. Keep it anyway, because it is the assertion
     # that actually proves the Critical fix (item 1) held under rapid,
     # unsettled navigation.
-    mapped = [n for n in ALL_SCREENS
-              if n in app.screens and app.screens[n].winfo_ismapped()]
+    mapped = mapped_screens()
     assert mapped == ["products"], (
         f"expected only the target screen mapped after rapid navigation, "
         f"found: {mapped}")
@@ -299,16 +357,21 @@ def test_rapid_navigation_strands_nothing():
 def test_focus_cannot_tab_into_a_hidden_screen():
     app.navigate_to("products")
     app_pump(500)
-    visible = app.screens["products"]
     # Tk's focus ring skips unmapped widgets only. If a hidden screen is
     # left mapped, Tab walks the cashier out of the visible screen into an
     # invisible one — and billing's cart_tree binds <Delete> to removing a
     # line, so an invisible focus there can silently edit a held cart.
-    mapped = [n for n, s in app.screens.items()
-              if n != "products" and s.winfo_ismapped()]
+    #
+    # Both facts are read from ONE guarded sample. Re-reading
+    # app.screens["products"].winfo_ismapped() separately afterwards asserts
+    # nothing new and reopens the exact race this guard closes: the window
+    # can be minimised between the two reads.
+    on_screen = mapped_screens()
+    mapped = [n for n in on_screen if n != "products"]
     assert not mapped, (
         f"hidden screens are still mapped and reachable by Tab: {mapped}")
-    assert visible.winfo_ismapped(), "the visible screen must be mapped"
+    assert "products" in on_screen, (
+        f"the visible screen must be mapped; mapped screens: {on_screen}")
 
 
 def test_slide_moves_the_screen_and_settles_home():
@@ -347,6 +410,50 @@ def test_slide_frame_budget_stays_under_33ms():
     scr.place_configure(x=0)
     med = statistics.median(frames)
     assert med < 33, f"slide frames cost {med:.1f}ms — below 30fps"
+
+
+def test_a_screen_built_on_this_visit_does_not_slide():
+    """The build is the lag; sliding on top of it is what drops frames.
+
+    A first visit pays the screen's whole widget tree inside navigate_to() --
+    measured at 124-150ms median and 534ms for Settings, and it is Tcl
+    round-trips, not queries (7 DB round-trips across all 13 constructors).
+    Whatever repaint work spills past update_idletasks() then lands on the
+    slide's opening frames: measured gaps of 25-146ms against a 16ms budget,
+    on first visits only. So a screen constructed on this very visit is
+    placed home and not animated. A cached one still slides -- the test
+    below is what keeps this fix from quietly deleting the motion layer.
+    """
+    app.navigate_to("dashboard")
+    app_pump(400)
+    stale = app.screens.pop("users", None)
+    if stale is not None:
+        stale.destroy()          # force a genuine first visit
+    app.navigate_to("users")
+    # update_idletasks(), NOT update(): asserts on the transient parked state,
+    # for the same reason spelled out in the slide test above.
+    app.update_idletasks()
+    scr = app.screens["users"]
+    assert scr.winfo_x() == 0, (
+        "a screen constructed on this visit must not slide, "
+        f"found x={scr.winfo_x()}")
+
+
+def test_a_cached_screen_still_slides():
+    """Guard on the fix above: only the FIRST visit skips the animation."""
+    app.navigate_to("users")
+    app_pump(400)
+    app.navigate_to("dashboard")
+    app_pump(400)
+    app.navigate_to("users")                 # cached now -- must animate
+    app.update_idletasks()
+    scr = app.screens["users"]
+    from config import MOTION
+    assert scr.winfo_x() > 0, (
+        f"a cached screen must still start offset by {MOTION['slide_px']}px, "
+        f"found x={scr.winfo_x()}")
+    app_pump(500)
+    assert scr.winfo_x() == 0, f"the slide did not settle, x={scr.winfo_x()}"
 
 
 def test_active_pill_blends_and_lands_on_the_exact_token():
@@ -401,6 +508,11 @@ def test_settings_toggle_persists_and_drives_motion():
     app.navigate_to("settings")
     app_pump(400)
     scr = app.screens["settings"]
+    # The switch lives on the Language & Theme card, and Settings section
+    # bodies are built on first open — so reach it the way a shopkeeper does
+    # rather than expecting it to exist before its section has been shown.
+    scr._show_section("language")
+    app_pump(100)
     assert hasattr(scr, "_anim_var"), "Settings has no animations toggle"
 
     scr._anim_var.set(False)
@@ -522,6 +634,8 @@ for name, fn in [
     ("nav — focus cannot tab into a hidden screen", test_focus_cannot_tab_into_a_hidden_screen),
     ("slide — moves the screen and settles home", test_slide_moves_the_screen_and_settles_home),
     ("slide — frame budget under 33ms", test_slide_frame_budget_stays_under_33ms),
+    ("slide — a screen built on this visit does not slide", test_a_screen_built_on_this_visit_does_not_slide),
+    ("slide — a cached screen still slides", test_a_cached_screen_still_slides),
     ("nav pill — blends and lands on the exact token", test_active_pill_blends_and_lands_on_the_exact_token),
     ("nav — unchanged pills are not repainted", test_unchanged_pills_are_not_repainted_on_navigation),
     ("settings — animation toggle persists and takes effect", test_settings_toggle_persists_and_drives_motion),

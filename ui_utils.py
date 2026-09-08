@@ -511,3 +511,57 @@ def attach_tooltip(widget, text, side="right", active=True):
     """Attach a hover tooltip to *widget*. Returns the Tooltip, which callers
     keep when they need to switch it on and off later."""
     return Tooltip(widget, text, side=side, active=active)
+
+
+class SearchHint:
+    """Placeholder text for a search box that is driven by a textvariable.
+
+    CTkEntry suppresses its own `placeholder_text` the moment a `textvariable`
+    is set, and every search box in this app needs that variable to drive its
+    filter trace — so the hint has to be a CTkLabel placed on top of the field.
+
+    That label is a *sibling* of the entry's inner tk.Entry (CTkEntry is a
+    composite: CTkCanvas + Entry) and is created after it, so Tk stacks it on
+    top, and `fg_color="transparent"` paints the parent's fill rather than
+    letting anything through. It therefore hides two things, not one: the typed
+    text, and the blinking insertion caret sitting at the text origin.
+
+    So the hint is unmapped while the field has **focus** as well as while it
+    has content. Hiding it on content alone leaves a field that looks dead when
+    you click into it — the caret is there, blinking underneath an opaque
+    label. Ask for the state with sync() after anything that changes the text.
+    """
+
+    def __init__(self, entry, text, font=None, x=18):
+        import customtkinter as ctk
+        from config import COLORS, FONTS
+        self.entry    = entry
+        self._x       = x
+        self._focused = False
+        self.label = ctk.CTkLabel(entry, text=text,
+                                  font=font or FONTS["label_form"],
+                                  text_color=COLORS["text_muted"],
+                                  fg_color="transparent")
+        # The label covers most of the field, so its own click has to reach the
+        # entry underneath it.
+        self.label.bind("<Button-1>", lambda _e: entry.focus_set())
+        # CTkEntry.bind() forwards to the inner tk.Entry — which is the widget
+        # that actually takes focus, so these fire for real clicks and for Tab.
+        entry.bind("<FocusIn>",  self._on_focus_in)
+        entry.bind("<FocusOut>", self._on_focus_out)
+        self.sync()
+
+    def _on_focus_in(self, _e=None):
+        self._focused = True
+        self.sync()
+
+    def _on_focus_out(self, _e=None):
+        self._focused = False
+        self.sync()
+
+    def sync(self, *_):
+        """Show the hint only while the field is empty AND unfocused."""
+        if self._focused or self.entry.get():
+            self.label.place_forget()
+        else:
+            self.label.place(x=self._x, rely=0.5, anchor="w")

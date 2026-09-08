@@ -242,6 +242,104 @@ def test_settings():
 
 check("Settings — loads without error", test_settings)
 
+
+def _widget_count(w):
+    """Every descendant. CustomTkinter builds an internal canvas + label per
+    widget, so this tracks build cost closely: measured ~1.7-2.0ms each."""
+    n = 0
+    for c in w.winfo_children():
+        n += 1 + _widget_count(c)
+    return n
+
+
+def test_settings_builds_only_the_section_on_screen():
+    """Settings stacks five section panels and shows one at a time.
+
+    Building all five up front made it the most expensive screen in the app —
+    269 widgets and ~534ms of Tcl round-trips inside navigate_to() — for a
+    shopkeeper who normally wants a single card. Sections build when opened.
+    """
+    from screen_settings import SettingsScreen
+    frame = ctk.CTkFrame(root)
+    s = SettingsScreen(frame, db, user, app)
+    frame.pack()
+    root.update()
+    at_build = _widget_count(s)
+    for key in ("billing", "backup", "language"):
+        s._show_section(key)
+    root.update()
+    all_open = _widget_count(s)
+    frame.pack_forget()
+    assert all_open > at_build, (
+        f"opening three more sections built nothing new ({at_build} widgets "
+        f"before, {all_open} after) — every section is still built eagerly")
+    assert at_build < all_open * 0.7, (
+        f"construction built {at_build} of {all_open} widgets — too much of "
+        f"the screen is still eager for this to be worth the complexity")
+
+
+def test_settings_save_does_not_need_a_section_never_opened():
+    """The Save button sits in the header and is always reachable.
+
+    It reads bill_prefix and next_bill_no, which live in the *Billing*
+    section — while Settings opens on Shop. So saving without ever opening
+    Billing has to work, or lazy sections turn Save into a KeyError.
+    """
+    import screen_settings as SS
+    from screen_settings import SettingsScreen
+    frame = ctk.CTkFrame(root)
+    s = SettingsScreen(frame, db, user, app)
+    frame.pack()
+    root.update()
+
+    seen = {}
+
+    class _Box:                       # never touch the shop's real settings
+        @staticmethod
+        def showwarning(*a, **k): seen["warned"] = a
+        @staticmethod
+        def showinfo(*a, **k): seen["info"] = a
+        @staticmethod
+        def showerror(*a, **k): seen["error"] = a
+
+    real_box = SS.messagebox
+    SS.messagebox = _Box
+    db.save_settings_bulk = lambda data: seen.setdefault("data", data)
+    db.log_activity = lambda *a, **k: None
+    try:
+        s._save()
+    except Exception as e:
+        raise AssertionError(
+            f"_save() raised with the Billing section never opened: {e!r}")
+    finally:
+        SS.messagebox = real_box
+        for attr in ("save_settings_bulk", "log_activity"):
+            if attr in db.__dict__:
+                delattr(db, attr)
+        frame.pack_forget()
+
+    assert "bill_prefix" in s._entries, (
+        "_save() must build the sections it reads from before reading them")
+
+
+def test_settings_every_section_builds_when_opened():
+    """Lazy must still mean built — every field exists once its section opens."""
+    from screen_settings import SettingsScreen
+    frame = ctk.CTkFrame(root)
+    s = SettingsScreen(frame, db, user, app)
+    frame.pack()
+    for key in list(s._sections):
+        s._show_section(key)
+    root.update()
+    frame.pack_forget()
+    missing = [k for k, _l, _p, _s in SettingsScreen.FIELDS if k not in s._entries]
+    assert not missing, f"opened every section but these fields never built: {missing}"
+
+
+check("Settings — builds only the section on screen", test_settings_builds_only_the_section_on_screen)
+check("Settings — save works with a section never opened", test_settings_save_does_not_need_a_section_never_opened)
+check("Settings — every section builds when opened", test_settings_every_section_builds_when_opened)
+
 # ── 11. Users ─────────────────────────────────────────────────────────────────
 def test_users():
     from screen_users import UserScreen

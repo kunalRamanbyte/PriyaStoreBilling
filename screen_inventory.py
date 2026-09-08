@@ -332,8 +332,8 @@ class InventoryScreen(ctk.CTkFrame):
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
         ctk.CTkButton(btn_row, text=t("Cancel", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
-                      height=52, corner_radius=16,
-                      command=dlg.destroy).pack(side="left", width=110)
+                      height=52, width=110, corner_radius=16,
+                      command=dlg.destroy).pack(side="left")
 
     def _show_adj_history(self):
         L = self.app.current_lang

@@ -33,7 +33,7 @@ Optional (not in `requirements.txt`, guarded by try/import): `python-escpos`, `p
 There are nine suites:
 
 ```bash
-python verify_screens.py          # 16 checks — screens build, ROW_COLORS, styles
+python verify_screens.py          # 19 checks — screens build, ROW_COLORS, styles, lazy Settings
 python verify_motion.py           # the motion layer and navigation
 python verify_sidebar.py          # 25 checks — the collapsible sidebar
 python verify_applog.py           # 21 checks — the crash recorder
@@ -156,13 +156,35 @@ Built installers are gitignored (`installer/*.exe`) — they are ~68 MB each and
 5. `place()`s the target at `x=0, relwidth=1, relheight=1` on its first
    visit (or re-places it if this run's `place_forget()` pass unmapped it),
    then calls `on_show()`, parks the screen 28px right, `lift()`s it,
-   forces the repaint, and only then starts the slide home.
+   forces the repaint, and only then starts the slide home — **unless the
+   screen was constructed on this very visit, in which case it is placed
+   home and not animated at all** (`just_built` → `px = 0`).
 
 > The order matters and is not arbitrary. `on_show()`'s reload and the first
 > repaint are both paid *before* a single animation frame is scheduled, so
 > the slide runs on a clean budget instead of stuttering on frame one. The
 > park must also happen before the repaint: park after it and Tk paints the
 > screen at home first, so the opening frame snaps it sideways.
+
+> **A first visit does not slide.** Paying the reload and repaint up front
+> protects the animation but cannot protect it from the *constructor*: a
+> screen's whole widget tree costs 100–800ms to build, and whatever repaint
+> work spills past `update_idletasks()` lands on the slide's opening frames.
+> Measured under a real mainloop with a 4ms heartbeat: first visits dropped
+> frames on 11 of 13 screens (gaps of 25–146ms against a 16ms budget) while
+> revisits ran clean 16ms. The cost is Tcl round-trips, not queries — 7 DB
+> round-trips across all 13 constructors, against 16,933 `tkapp.call`s for
+> Settings alone — so it scales with widget count (~1.7–2.0ms per widget)
+> and cannot be optimised away at the animation layer. Animating over it
+> reads as a stutter, so the first visit gets a clean cut and every revisit
+> still slides. `verify_motion.py` asserts both halves; the second one is
+> what stops this quietly becoming "navigation never animates".
+
+> Pre-warming screens after login was measured and **rejected**: building all
+> twelve from chained `after()` calls froze the UI for 2956ms of a 3762ms
+> window (worst single stall 841ms). Tk is single-threaded and a constructor
+> cannot be chunked, so pre-warm does not remove the cost, it relocates it —
+> onto the moment the cashier is reaching for the POS screen.
 
 > Screens are managed by **`place`, not `pack`**. `pack_forget()`/`pack()` made
 > Tk relayout the incoming screen's entire widget tree on every visit —

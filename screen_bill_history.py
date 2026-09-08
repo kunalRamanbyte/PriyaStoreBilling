@@ -12,7 +12,7 @@ from responsive import (ResponsiveMixin, fit_columns, widget_scaling,
                         autohide_scrollbar)
 from ui_utils import place_popup
 from lang import t
-from ui_utils import EmptyState
+from ui_utils import EmptyState, SearchHint
 
 
 class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
@@ -104,14 +104,9 @@ class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
         # A textvariable suppresses CTkEntry's own placeholder, and this field
         # needs one to drive the filter trace. So draw the hint as a label over
         # the empty field; it never touches the variable.
-        self._search_hint = ctk.CTkLabel(
-            self.search_entry,
-            text="\U0001F50D  " + t("Bill no. or customer name", L),
-            font=FONTS["label_form"], text_color=COLORS["text_muted"],
-            fg_color="transparent")
-        self._search_hint.place(x=18, rely=0.5, anchor="w")
-        self._search_hint.bind("<Button-1>",
-                               lambda _e: self.search_entry.focus_set())
+        self._search_hint = SearchHint(
+            self.search_entry, "\U0001F50D  " + t("Bill no. or customer name", L),
+            font=FONTS["label_form"], x=18)
 
         # -- Filter row --------------------------------------
         fbar = ctk.CTkFrame(self, fg_color="transparent")
@@ -311,15 +306,6 @@ class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
         self.sel_label.configure(text=f"{vals[0]} {t('selected', L)}",
                                  text_color=COLORS["text_dark"])
 
-    def _sync_search_hint(self):
-        hint = getattr(self, "_search_hint", None)
-        if hint is None:
-            return
-        if self.search_var.get():
-            hint.place_forget()
-        else:
-            hint.place(x=18, rely=0.5, anchor="w")
-
     def _update_summary(self, bills, capped):
         """Header subtitle + the status count chips."""
         L = self.app.current_lang
@@ -410,6 +396,7 @@ class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
     def _load_bills(self):
         L = self.app.current_lang
         search    = self.search_var.get().strip()
+        self._search_hint.sync()
         date_from = self.from_var.get().strip() or None
         date_to   = self.to_var.get().strip()   or None
         # Validate any supplied date so a typo doesn't silently return 0 rows.
@@ -429,7 +416,6 @@ class BillHistoryScreen(ResponsiveMixin, ctk.CTkFrame):
         self._render_table(bills)
         self._update_summary(bills, capped=len(bills) >= self._LIMIT)
         self._update_selection_label()
-        self._sync_search_hint()
 
     def _render_table(self, bills):
         self.tree.delete(*self.tree.get_children())

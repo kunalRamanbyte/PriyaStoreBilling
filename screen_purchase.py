@@ -467,8 +467,8 @@ class PurchaseScreen(ctk.CTkFrame):
                       command=confirm).pack(side="left", fill="x", expand=True, padx=(0, 8))
         ctk.CTkButton(btn_row, text=t("Cancel", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
-                      height=50, corner_radius=16,
-                      command=dlg.destroy).pack(side="left", width=100)
+                      height=50, width=100, corner_radius=16,
+                      command=dlg.destroy).pack(side="left")
 
     def _edit_cart_item(self):
         sel = self.cart_tree.selection()
@@ -731,8 +731,8 @@ class PurchaseScreen(ctk.CTkFrame):
                       command=save).pack(side="left", fill="x", expand=True, padx=(0, 8))
         ctk.CTkButton(btn_row, text=t("Cancel", L),
                       font=FONTS["button"], fg_color=COLORS["btn_secondary"],
-                      height=48, corner_radius=16,
-                      command=dlg.destroy).pack(side="left", width=100)
+                      height=48, width=100, corner_radius=16,
+                      command=dlg.destroy).pack(side="left")
 
 
     # ─────────────────────────────────────────────────────────────
