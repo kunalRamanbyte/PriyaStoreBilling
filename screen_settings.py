@@ -14,6 +14,7 @@ from tkinter import messagebox, filedialog
 import os
 import shutil
 import sqlite3
+import applog
 from datetime import datetime
 from config import COLORS, FONTS, RADII, METRICS, GUTTERS
 from responsive import ResponsiveMixin
@@ -318,6 +319,32 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
                    width=170, command=self._do_restore).pack(side="right")
         ctk.CTkFrame(card, fg_color="transparent", height=10).pack()
 
+        # -- Problem Reports ----------------------------------
+        # The app keeps a log; this is the only place a shopkeeper can reach
+        # it. Everything here is read-only and carries no bill or customer
+        # data, so it is safe to send to support as-is.
+        card = self._card(backup_p, t("Problem Reports", L),
+                          t("If something goes wrong, send these details for support.", L))
+        ctk.CTkFrame(card, fg_color="transparent", height=6).pack()
+
+        row = self._row(card, t("Recent Problems", L))
+        self._problem_label = ctk.CTkLabel(
+            row, text="—", font=FONTS["body"],
+            text_color=COLORS["text_muted"], anchor="w")
+        self._problem_label.pack(side="left", fill="x", expand=True)
+        self._pill(row, "📋  " + t("Copy Details", L), kind="action",
+                   width=170, command=self._copy_diagnostics).pack(side="right")
+
+        row = self._row(card, t("Log File", L))
+        self._log_label = ctk.CTkLabel(
+            row, text=applog.log_file() or "—", font=FONTS["small"],
+            text_color=COLORS["text_muted"], anchor="w", wraplength=320,
+            justify="left")
+        self._log_label.pack(side="left", fill="x", expand=True)
+        self._pill(row, "📂  " + t("Open Log Folder", L), kind="plain",
+                   width=180, command=self._open_log_folder).pack(side="right")
+        ctk.CTkFrame(card, fg_color="transparent", height=10).pack()
+
         # -- Danger Zone (admin only) -------------------------
         if danger_p is not None:
             card = ctk.CTkFrame(danger_p, fg_color=COLORS["accent_danger_tint"],
@@ -573,7 +600,11 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
                     if os.path.exists(sidecar):
                         os.remove(sidecar)
                 except Exception:
-                    pass
+                    # A -wal left behind here replays the OLD database's
+                    # uncheckpointed frames into the file just restored. This
+                    # is the one silent failure in the app that can lose bills.
+                    applog.swallow(f"remove sidecar {sidecar!r} after restore",
+                                   applog.ERROR)
 
             # 3. Re-run init_db so new tables / migrations apply
             self.db.init_db()
@@ -685,8 +716,53 @@ class SettingsScreen(ResponsiveMixin, ctk.CTkFrame):
                 parent=self.winfo_toplevel(),
             )
 
+    # -- Problem reporting ------------------------------------
+    def _refresh_problem_status(self):
+        L = self.app.current_lang
+        count, last = applog.problem_summary()
+        if count:
+            # The translation carries a {n} placeholder; substitute rather than
+            # concatenate, so Bengali and Hindi keep their own word order.
+            txt = t("{n} problem(s) this session", L).replace("{n}", str(count))
+            if last is not None:
+                txt += f"   •   {last:%d %b  %I:%M %p}"
+            self._problem_label.configure(
+                text=txt, text_color=COLORS["accent_danger_fg"])
+        else:
+            self._problem_label.configure(
+                text=t("No problems recorded", L),
+                text_color=COLORS["text_muted"])
+        self._log_label.configure(text=applog.log_file() or "—")
+
+    def _copy_diagnostics(self):
+        L = self.app.current_lang
+        try:
+            text = applog.diagnostics_text(
+                db_path=self.db.db_path,
+                extra={"language": L, "theme": self.app.current_theme})
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            # Windows serves the clipboard from the owning process; without a
+            # pass through the event loop the text is gone the moment focus
+            # moves to WhatsApp.
+            self.update()
+            messagebox.showinfo(
+                t("Copied", L),
+                t("Problem details copied. Paste them into WhatsApp or email.", L),
+                parent=self.winfo_toplevel())
+        except Exception:
+            applog.swallow("copy diagnostics")
+
+    def _open_log_folder(self):
+        L = self.app.current_lang
+        if not applog.open_log_folder():
+            messagebox.showwarning(t("Problem Reports", L),
+                                   t("Could not open the log folder.", L),
+                                   parent=self.winfo_toplevel())
+
     def on_show(self):
         self._load()
+        self._refresh_problem_status()
 
 
 # ─── Shared backup helper (used by settings screen + main.py scheduler) ──────
@@ -725,8 +801,8 @@ def _run_backup(db, label: str = None) -> str:
             try:
                 os.remove(old)
             except Exception:
-                pass
+                applog.swallow(f"prune old backup {old!r}", applog.DEBUG)
     except Exception:
-        pass
+        applog.swallow("prune backup folder", applog.DEBUG)
 
     return dst

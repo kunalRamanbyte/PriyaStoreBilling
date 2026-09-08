@@ -10,6 +10,14 @@ Login: admin / admin123  (cashier: cashier / cash123)
 
 import os
 import sys
+
+# The black box goes in before every other import. A missing bundled module
+# raises during the imports below, and in the windowed build that used to end
+# the process with no window and no message -- the single hardest failure to
+# support remotely, because the shopkeeper has nothing to send.
+import applog
+applog.install()
+
 import shutil
 import ctypes
 import customtkinter as ctk
@@ -67,6 +75,7 @@ class BillingApp(ctk.CTk):
         self.current_user = None
         self.current_role = None
         self.current_lang = self.db.get_setting("app_language", "English")
+        applog.set_language(self.current_lang)
         self.current_theme = self.db.get_setting("app_theme", "System")
         # Icon-only sidebar. Off by default: a shopkeeper who has never
         # seen the rail should meet the labelled menu first.
@@ -207,7 +216,10 @@ class BillingApp(ctk.CTk):
             ts_display = datetime.now().strftime("%d %b %Y  %I:%M %p")
             self.db.set_setting("last_backup", ts_display)
         except Exception:
-            pass  # Never block close due to backup failure
+            # Never block close on a backup failure -- but never lose it
+            # either. A shop whose closing backup has been failing for weeks
+            # has no other way to find out.
+            applog.swallow("backup on close", applog.ERROR)
 
     # ── Scheduled daily backup ───────────────────────────────────────
     _BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000   # 24 hours in milliseconds
@@ -232,9 +244,9 @@ class BillingApp(ctk.CTk):
                         scr = self.screens["settings"]
                         scr._last_backup_label.configure(text=ts_display)
                     except Exception:
-                        pass
+                        applog.swallow("refresh last-backup label", applog.DEBUG)
             except Exception:
-                pass
+                applog.swallow("daily auto-backup", applog.ERROR)
         # Reschedule for next 24 hours
         self._daily_backup_job = self.after(
             self._BACKUP_INTERVAL_MS, self._daily_backup_tick
@@ -321,78 +333,74 @@ class BillingApp(ctk.CTk):
         44px nav pills where a solid blue fill — not a glow or a border —
         marks the screen you are on.
 
-        When self.sidebar_collapsed is set the same rail is built icon-only at
-        SIDEBAR_WIDTH_COLLAPSED: every pill becomes a centred 44px square and
-        the label it lost moves into a hover tooltip."""
-        narrow  = self.sidebar_collapsed
-        sidebar = ctk.CTkFrame(
-            parent, fg_color=COLORS["bg_sidebar"], corner_radius=0,
-            width=SIDEBAR_WIDTH_COLLAPSED if narrow else SIDEBAR_WIDTH)
+        Every widget is built ONCE here, in either mode, and the collapsed /
+        expanded difference is applied afterwards by _apply_sidebar_mode().
+        This used to rebuild the whole rail on every toggle — 13 pills, their
+        icons and tooltips, the brand block and the avatar — which froze the
+        UI for ~136ms of the ~313ms a collapse cost. Reconfiguring in place is
+        the same fix already applied to the Categories card grid."""
+        sidebar = ctk.CTkFrame(parent, fg_color=COLORS["bg_sidebar"],
+                               corner_radius=0, width=SIDEBAR_WIDTH)
         sidebar.pack_propagate(False)
 
-        # Rebuilt from scratch on every toggle, so drop the old widget handles
-        # rather than leaving _paint_nav() to configure destroyed buttons.
         self.nav_buttons = {}
         self.nav_icons   = {}
+        self._nav_tips   = {}
 
         NAV = [
-            ("🏠", "Dashboard",    "dashboard",    ["admin", "cashier", "stock_manager"]),
-            ("🧾", "New Bill",     "billing",      ["admin", "cashier"]),
-            ("📋", "Bill History", "bill_history", ["admin", "cashier", "stock_manager"]),
-            ("📦", "Products",     "products",     ["admin", "stock_manager"]),
-            ("🏷️", "Categories",  "categories",   ["admin", "stock_manager"]),
-            ("📊", "Inventory",    "inventory",    ["admin", "stock_manager"]),
-            ("🏭", "Suppliers",    "suppliers",    ["admin", "stock_manager"]),
-            ("🛒", "Purchase/GRN", "purchase",     ["admin", "stock_manager"]),
-            ("👥", "Customers",    "customers",    ["admin", "cashier"]),
-            ("📈", "Reports",      "reports",      ["admin", "stock_manager"]),
-            ("⚙️", "Settings",    "settings",     ["admin"]),
-            ("👤", "Users",        "users",        ["admin"]),
-            # 🕐, not the 📋 Bill History already owns: with the labels
+            ("\U0001F3E0", "Dashboard",    "dashboard",    ["admin", "cashier", "stock_manager"]),
+            ("\U0001F9FE", "New Bill",     "billing",      ["admin", "cashier"]),
+            ("\U0001F4CB", "Bill History", "bill_history", ["admin", "cashier", "stock_manager"]),
+            ("\U0001F4E6", "Products",     "products",     ["admin", "stock_manager"]),
+            ("\U0001F3F7\uFE0F", "Categories",  "categories",   ["admin", "stock_manager"]),
+            ("\U0001F4CA", "Inventory",    "inventory",    ["admin", "stock_manager"]),
+            ("\U0001F3ED", "Suppliers",    "suppliers",    ["admin", "stock_manager"]),
+            ("\U0001F6D2", "Purchase/GRN", "purchase",     ["admin", "stock_manager"]),
+            ("\U0001F465", "Customers",    "customers",    ["admin", "cashier"]),
+            ("\U0001F4C8", "Reports",      "reports",      ["admin", "stock_manager"]),
+            ("\u2699\uFE0F", "Settings",    "settings",     ["admin"]),
+            ("\U0001F464", "Users",        "users",        ["admin"]),
+            # \U0001F550, not the \U0001F4CB Bill History already owns: with the labels
             # gone, a duplicated glyph is the whole label.
-            ("🕐", "Activity Log", "activity_log", ["admin"]),
+            ("\U0001F550", "Activity Log", "activity_log", ["admin"]),
         ]
 
         # Authoritative screen->roles map, consulted by navigate_to() so that
         # non-sidebar entry points (dashboard quick actions, resume-draft, etc.)
         # cannot escalate a role past what the sidebar allows.
         self._screen_roles = {key: roles for _, _, key, roles in NAV}
+        # English label per screen; _nav_label() runs it through t() so a
+        # mode switch re-reads the current language rather than caching it.
+        self._screen_labels = {key: label for _, label, key, _ in NAV}
 
         # -- Brand block ------------------------------------------
+        # Mark, wordmark and toggle all live in this one row. The toggle is
+        # NOT reparented between modes — Tk cannot reparent — it just switches
+        # from packing right to packing below the mark.
         brand = ctk.CTkFrame(sidebar, fg_color="transparent")
-        brand.pack(fill="x",
-                   padx=(0, SIDEBAR_SCROLLBAR_W) if narrow else 20,
-                   pady=(18, 10) if narrow else (18, 14))
+        brand.pack(fill="x")
 
         mark = ctk.CTkFrame(brand, fg_color=COLORS["accent_action"],
                             corner_radius=RADII["bubble"],
                             width=METRICS["bubble"], height=METRICS["bubble"])
-        if narrow:
-            mark.pack()
-        else:
-            mark.pack(side="left", padx=(0, 11))
+        mark.pack(side="left", padx=(0, 11))
         mark.pack_propagate(False)
         ctk.CTkLabel(mark, text=SHOP_NAME[0].upper(),
                      font=("Segoe UI Semibold", 17, "bold"),
                      text_color=COLORS["on_accent"]
                     ).place(relx=0.5, rely=0.5, anchor="center")
 
-        if not narrow:
-            brand_text = ctk.CTkFrame(brand, fg_color="transparent")
-            brand_text.pack(side="left")
-            ctk.CTkLabel(brand_text, text=SHOP_NAME,
-                         font=("Segoe UI Semibold", 15, "bold"),
-                         text_color=COLORS["text_dark"]).pack(anchor="w")
-            ctk.CTkLabel(brand_text, text=f"Billing {APP_VERSION}",
-                         font=FONTS["caption"],
-                         text_color=COLORS["text_muted"]).pack(anchor="w")
+        brand_text = ctk.CTkFrame(brand, fg_color="transparent")
+        brand_text.pack(side="left")
+        ctk.CTkLabel(brand_text, text=SHOP_NAME,
+                     font=("Segoe UI Semibold", 15, "bold"),
+                     text_color=COLORS["text_dark"]).pack(anchor="w")
+        ctk.CTkLabel(brand_text, text=f"Billing {APP_VERSION}",
+                     font=FONTS["caption"],
+                     text_color=COLORS["text_muted"]).pack(anchor="w")
 
-        # -- Collapse / expand toggle -----------------------------
-        # Expanded it rides the right edge of the brand row; collapsed there is
-        # no room beside the mark, so it sits centred underneath it.
         toggle = ctk.CTkButton(
-            sidebar if narrow else brand,
-            text="»" if narrow else "«",
+            brand, text="\u00AB",
             font=("Segoe UI", 16, "bold"),
             width=30, height=30,
             fg_color="transparent",
@@ -402,14 +410,8 @@ class BillingApp(ctk.CTk):
             border_width=0,
             command=self._toggle_sidebar,
         )
-        if narrow:
-            toggle.pack(pady=(0, 8), padx=(0, SIDEBAR_SCROLLBAR_W))
-        else:
-            toggle.pack(side="right")
-        attach_tooltip(toggle,
-                       t("Expand menu" if narrow else "Collapse menu",
-                         self.current_lang),
-                       side="right" if narrow else "bottom")
+        toggle.pack(side="right")
+        toggle_tip = attach_tooltip(toggle, "", side="bottom", active=False)
 
         # -- Nav pills — inside a scrollable area so they never overflow on
         # low-res or short screens (mousewheel scrolls the nav list).
@@ -429,62 +431,43 @@ class BillingApp(ctk.CTk):
             text = t(label, self.current_lang)
             btn = ctk.CTkButton(
                 nav_scroll,
-                text="" if narrow else f"            {text}",
+                text=f"            {text}",
                 font=self._nav_font(False),
                 fg_color="transparent",
                 hover_color=COLORS["sidebar_hover"],
                 text_color=COLORS["sidebar_text"],
-                anchor="center" if narrow else "w",
-                width=METRICS["nav_item"] if narrow else 140,
+                anchor="w",
+                width=140,
                 height=METRICS["nav_item"],
                 corner_radius=RADII["sidebar"],
                 border_width=0,
                 command=lambda s=screen: self.navigate_to(s),
             )
-            if narrow:
-                btn.pack(pady=1)
-            else:
-                btn.pack(fill="x", padx=12, pady=1)
+            btn.pack(fill="x", padx=12, pady=1)
             self.nav_buttons[screen] = btn
 
             icon_lbl = ctk.CTkLabel(
-                btn,
-                text=icon,
-                font=("Segoe UI", 16),
-                text_color=COLORS["sidebar_text"],
-                fg_color="transparent"
-            )
-            if narrow:
-                icon_lbl.place(relx=0.5, rely=0.5, anchor="center")
-            else:
-                icon_lbl.place(x=16, rely=0.5, anchor="w")
+                btn, text=icon, font=("Segoe UI", 16),
+                text_color=COLORS["sidebar_text"], fg_color="transparent")
+            icon_lbl.place(x=16, rely=0.5, anchor="w")
             icon_lbl.bind("<Button-1>", lambda e, s=screen: self.navigate_to(s))
             self.nav_icons[screen] = icon_lbl
-
-            if narrow:
-                attach_tooltip(btn, text)
+            self._nav_tips[screen] = attach_tooltip(btn, text, active=False)
 
         # -- Divider ----------------------------------------------
-        ctk.CTkFrame(sidebar, fg_color=COLORS["sidebar_divider"],
-                     height=1).pack(
-            fill="x",
-            padx=(12, 12 + SIDEBAR_SCROLLBAR_W) if narrow else 20,
-            pady=(8, 10))
+        divider = ctk.CTkFrame(sidebar, fg_color=COLORS["sidebar_divider"],
+                               height=1)
+        divider.pack(fill="x", padx=20, pady=(8, 10))
 
         # -- Signed-in user ---------------------------------------
         # Direction B parks identity on the violet "counts" tint, the one
         # place that hue appears outside a count.
         who = ctk.CTkFrame(sidebar, fg_color="transparent")
-        who.pack(fill="x",
-                 padx=(0, SIDEBAR_SCROLLBAR_W) if narrow else 20,
-                 pady=(0, 8))
+        who.pack(fill="x", padx=20, pady=(0, 8))
 
         avatar = ctk.CTkFrame(who, fg_color=COLORS["accent_counts_tint"],
                               corner_radius=20, width=40, height=40)
-        if narrow:
-            avatar.pack()
-        else:
-            avatar.pack(side="left", padx=(0, 11))
+        avatar.pack(side="left", padx=(0, 11))
         avatar.pack_propagate(False)
         ctk.CTkLabel(avatar, text=self.current_user["name"][:1].upper(),
                      font=("Segoe UI Semibold", 15, "bold"),
@@ -492,74 +475,184 @@ class BillingApp(ctk.CTk):
                     ).place(relx=0.5, rely=0.5, anchor="center")
 
         role_text = self.current_role.replace("_", " ").title()
-        if narrow:
-            attach_tooltip(avatar, f"{self.current_user['name']}\n{role_text}")
-        else:
-            who_text = ctk.CTkFrame(who, fg_color="transparent")
-            who_text.pack(side="left", fill="x", expand=True)
-            ctk.CTkLabel(who_text, text=self.current_user["name"],
-                         font=("Segoe UI Semibold", 15, "bold"),
-                         text_color=COLORS["text_dark"], anchor="w",
-                         justify="left").pack(anchor="w", fill="x")
-            ctk.CTkLabel(who_text, text=role_text,
-                         font=FONTS["caption"],
-                         text_color=COLORS["text_muted"], anchor="w",
-                         justify="left").pack(anchor="w", fill="x")
+        who_text = ctk.CTkFrame(who, fg_color="transparent")
+        who_text.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(who_text, text=self.current_user["name"],
+                     font=("Segoe UI Semibold", 15, "bold"),
+                     text_color=COLORS["text_dark"], anchor="w",
+                     justify="left").pack(anchor="w", fill="x")
+        ctk.CTkLabel(who_text, text=role_text,
+                     font=FONTS["caption"],
+                     text_color=COLORS["text_muted"], anchor="w",
+                     justify="left").pack(anchor="w", fill="x")
+        avatar_tip = attach_tooltip(
+            avatar, f"{self.current_user['name']}\n{role_text}", active=False)
 
         # -- Sign out ---------------------------------------------
         signout = t("Sign Out", self.current_lang)
         logout_btn = ctk.CTkButton(
             sidebar,
-            text="" if narrow else f"            {signout}",
+            text=f"            {signout}",
             font=self._nav_font(False),
             fg_color="transparent",
             hover_color=COLORS["accent_danger_tint"],
             text_color=COLORS["accent_danger"],
-            anchor="center" if narrow else "w",
-            width=METRICS["nav_item"] if narrow else 140,
+            anchor="w",
+            width=140,
             height=METRICS["nav_item"],
             corner_radius=RADII["sidebar"],
             border_width=0,
             command=self.logout,
         )
-        if narrow:
-            logout_btn.pack(pady=(0, 14), padx=(0, SIDEBAR_SCROLLBAR_W))
-        else:
-            logout_btn.pack(fill="x", padx=12, pady=(0, 14))
+        logout_btn.pack(fill="x", padx=12, pady=(0, 14))
 
         logout_icon = ctk.CTkLabel(
-            logout_btn,
-            text="🚪",
-            font=("Segoe UI", 16),
-            text_color=COLORS["accent_danger"],
-            fg_color="transparent"
-        )
-        if narrow:
-            logout_icon.place(relx=0.5, rely=0.5, anchor="center")
-        else:
-            logout_icon.place(x=16, rely=0.5, anchor="w")
+            logout_btn, text="\U0001F6AA", font=("Segoe UI", 16),
+            text_color=COLORS["accent_danger"], fg_color="transparent")
+        logout_icon.place(x=16, rely=0.5, anchor="w")
         logout_icon.bind("<Button-1>", lambda e: self.logout())
+        logout_tip = attach_tooltip(logout_btn, signout, active=False)
 
-        if narrow:
-            attach_tooltip(logout_btn, signout)
-
+        # Everything the mode switch needs to reach, so _apply_sidebar_mode()
+        # never has to walk the widget tree looking for it.
+        self._sb = {
+            "sidebar": sidebar, "brand": brand, "mark": mark,
+            "nav_scroll": nav_scroll,
+            "brand_text": brand_text, "toggle": toggle,
+            "toggle_tip": toggle_tip, "divider": divider,
+            "who": who, "avatar": avatar, "who_text": who_text,
+            "avatar_tip": avatar_tip, "logout_btn": logout_btn,
+            "logout_icon": logout_icon, "logout_tip": logout_tip,
+            "signout_text": signout,
+        }
+        self._apply_sidebar_mode()
         return sidebar
 
-    def _toggle_sidebar(self):
-        """Swap the rail between the labelled 236px sidebar and the icon-only one.
+    def _apply_sidebar_mode(self):
+        """Switch the existing rail between labelled and icon-only.
 
-        Rebuilds the sidebar frame alone — the content area and every cached
-        screen are untouched, so a half-rung bill survives the toggle. The
-        active pill is repainted with _paint_nav() rather than by re-navigating,
-        which would re-run on_show() and reload the screen under the cashier."""
+        Reconfigures in place — no widget is created or destroyed — because
+        rebuilding the rail cost ~136ms of frozen UI on every toggle.
+
+        Everything is re-packed with pack(), never pack_configure(), and in
+        explicit order. CustomTkinter scales padx/pady by the widget-scaling
+        factor inside pack() but NOT inside pack_configure(), so a
+        pack_configure(padx=16) lands 16 RAW pixels where pack(padx=16) lands
+        21 — which pushed the pills ~2px off every other block's centre.
+        pack() re-appends to the parent's pack order, so each parent's
+        children are re-packed top to bottom in one pass."""
+        sb = getattr(self, "_sb", None)
+        if not sb:
+            return
+        narrow = self.sidebar_collapsed
+        pad_r = SIDEBAR_SCROLLBAR_W      # the scrollbar column the nav reserves
+
+        sb["sidebar"].configure(
+            width=SIDEBAR_WIDTH_COLLAPSED if narrow else SIDEBAR_WIDTH)
+
+        # -- Brand row: mark, wordmark, toggle --------------------
+        sb["mark"].pack_forget()
+        sb["brand_text"].pack_forget()
+        sb["toggle"].pack_forget()
+        if narrow:
+            sb["mark"].pack(side="top")
+            sb["toggle"].pack(side="top", pady=(8, 0))
+        else:
+            sb["mark"].pack(side="left", padx=(0, 11))
+            sb["brand_text"].pack(side="left")
+            sb["toggle"].pack(side="right")
+
+        sb["toggle"].configure(text="\u00BB" if narrow else "\u00AB")
+        sb["toggle_tip"].text = t("Expand menu" if narrow else "Collapse menu",
+                                  self.current_lang)
+        sb["toggle_tip"].side = "right" if narrow else "bottom"
+
+        # -- Nav pills --------------------------------------------
+        for screen, btn in self.nav_buttons.items():
+            label = self._nav_label(screen)
+            btn.configure(
+                text="" if narrow else f"            {label}",
+                anchor="center" if narrow else "w",
+                width=METRICS["nav_item"] if narrow else 140)
+            btn.pack_forget()
+            if narrow:
+                btn.pack(pady=1)
+            else:
+                btn.pack(fill="x", padx=12, pady=1)
+
+            icon = self.nav_icons.get(screen)
+            if icon is not None:
+                icon.place_forget()
+                if narrow:
+                    icon.place(relx=0.5, rely=0.5, anchor="center")
+                else:
+                    icon.place(x=16, rely=0.5, anchor="w")
+            tip = self._nav_tips.get(screen)
+            if tip is not None:
+                tip.text = label
+                tip.set_active(narrow)
+
+        # -- Identity block: avatar, name+role --------------------
+        sb["avatar"].pack_forget()
+        sb["who_text"].pack_forget()
+        if narrow:
+            sb["avatar"].pack(side="top")
+        else:
+            sb["avatar"].pack(side="left", padx=(0, 11))
+            sb["who_text"].pack(side="left", fill="x", expand=True)
+        sb["avatar_tip"].set_active(narrow)
+
+        # -- Sign out ---------------------------------------------
+        signout = sb["signout_text"]
+        sb["logout_btn"].configure(
+            text="" if narrow else f"            {signout}",
+            anchor="center" if narrow else "w",
+            width=METRICS["nav_item"] if narrow else 140)
+        sb["logout_icon"].place_forget()
+        if narrow:
+            sb["logout_icon"].place(relx=0.5, rely=0.5, anchor="center")
+        else:
+            sb["logout_icon"].place(x=16, rely=0.5, anchor="w")
+        sb["logout_tip"].set_active(narrow)
+
+        # -- Re-pack the rail's own children, top to bottom -------
+        # pack() appends, so the whole column is re-packed in one ordered
+        # pass rather than each block trying to hold its place.
+        for w in (sb["brand"], sb["nav_scroll"], sb["divider"],
+                  sb["who"], sb["logout_btn"]):
+            w.pack_forget()
+        sb["brand"].pack(fill="x",
+                         padx=(0, pad_r) if narrow else 20,
+                         pady=(18, 10) if narrow else (18, 14))
+        sb["nav_scroll"].pack(fill="both", expand=True, padx=0, pady=0)
+        sb["divider"].pack(fill="x",
+                           padx=(12, 12 + pad_r) if narrow else 20,
+                           pady=(8, 10))
+        sb["who"].pack(fill="x",
+                       padx=(0, pad_r) if narrow else 20,
+                       pady=(0, 8))
+        if narrow:
+            sb["logout_btn"].pack(pady=(0, 14), padx=(0, pad_r))
+        else:
+            sb["logout_btn"].pack(fill="x", padx=12, pady=(0, 14))
+
+    def _nav_label(self, screen):
+        """The translated label a pill carries when the rail is expanded."""
+        return t(self._screen_labels.get(screen, screen), self.current_lang)
+
+    def _toggle_sidebar(self):
+        """Swap the rail between the labelled sidebar and the icon-only one.
+
+        Reconfigures the existing widgets rather than rebuilding them. The
+        rebuild cost ~136ms of frozen UI per toggle on top of the layout pass
+        the width change forces; the rail is the same 13 pills either way, so
+        there was never anything to rebuild."""
         self.sidebar_collapsed = not self.sidebar_collapsed
         self.db.set_setting("sidebar_collapsed",
                             "1" if self.sidebar_collapsed else "0")
-
-        if getattr(self, "_sidebar", None) is not None:
-            self._sidebar.destroy()
-        self._sidebar = self._build_sidebar(self._body)
-        self._sidebar.grid(row=0, column=0, sticky="nsew")
+        self._apply_sidebar_mode()
+        # prev == screen_name here, so _paint_nav takes its instant
+        # all-pills path — a mode switch must not animate.
         self._paint_nav(getattr(self, "current_screen", "dashboard"))
 
     def _set_pill(self, btn, icon, is_active):
@@ -667,7 +760,7 @@ class BillingApp(ctk.CTk):
             try:
                 prev.on_hide()
             except Exception:
-                pass
+                applog.swallow(f"on_hide for screen {self.current_screen!r}")
 
         # Unmap every other cached screen. Tk's focus ring (Tab / Shift-Tab)
         # only skips UNMAPPED widgets, not merely covered ones — a screen left
@@ -747,6 +840,7 @@ class BillingApp(ctk.CTk):
     def apply_language(self, lang: str):
         """Switch UI language: save, rebuild sidebar + current screen."""
         self.current_lang = lang
+        applog.set_language(lang)
         self.db.set_setting("app_language", lang)
         # Destroy all cached screens so they rebuild with new language
         current = getattr(self, "current_screen", "dashboard")
@@ -759,7 +853,7 @@ class BillingApp(ctk.CTk):
             try:
                 scr.destroy()
             except Exception:
-                pass
+                applog.swallow(f"destroy screen {name!r} on rebuild", applog.DEBUG)
         self.screens = {}
         self.nav_buttons = {}
         # Rebuild the entire main window (sidebar + header + content)
@@ -769,6 +863,24 @@ class BillingApp(ctk.CTk):
         """Switch theme: save, set appearance, update config COLORS, update styles, and rebuild UI."""
         self.current_theme = theme
         self.db.set_setting("app_theme", theme)
+
+        # Park focus on the root BEFORE the appearance change, not after.
+        #
+        # On Windows CustomTkinter recolours the title bar by withdrawing and
+        # re-showing the root window. It captures focus_get() first, then
+        # schedules `after(1, widget.focus)` to put focus back
+        # (ctk_tk.py::_windows_set_titlebar_color). The rebuild below destroys
+        # every cached screen -- so a cashier who switched theme with the
+        # cursor in a POS field left that 1ms timer holding a destroyed widget:
+        #   TclError: bad window path name "...!billingscreen...!ctkentry.!entry"
+        # Handing CustomTkinter the root gives it a widget that still exists
+        # when the timer fires. apply_language() needs none of this: it runs
+        # the same destroy loop but never touches the appearance mode.
+        try:
+            self.focus_set()
+        except Exception:
+            applog.swallow("park focus before theme rebuild", applog.DEBUG)
+
         ctk.set_appearance_mode(theme)
         
         # Get active mode ("light" or "dark") and update config.COLORS
@@ -789,7 +901,7 @@ class BillingApp(ctk.CTk):
             try:
                 scr.destroy()
             except Exception:
-                pass
+                applog.swallow(f"destroy screen {name!r} on rebuild", applog.DEBUG)
         self.screens = {}
         self.nav_buttons = {}
         
@@ -800,3 +912,4 @@ class BillingApp(ctk.CTk):
 if __name__ == "__main__":
     app = BillingApp()
     app.mainloop()
+    applog.log.info("clean exit")

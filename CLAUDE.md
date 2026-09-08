@@ -16,18 +16,29 @@ Default credentials: `admin` / `admin123`, `cashier` / `cash123` (seeded on firs
 pip install -r requirements.txt
 ```
 
-Core packages (in `requirements.txt`): `customtkinter>=5.2.0`, `Pillow>=10.0.0`, `openpyxl>=3.1.0`, `reportlab>=4.0.0`, `tkcalendar>=1.6.0` (date picker), `opencv-contrib-python>=4.8.0` (webcam scanner — note the `-contrib` build, which bundles the QR/barcode detector).
+Core packages (in `requirements.txt`): `customtkinter>=5.2.0`, `Pillow>=10.0.0`, `openpyxl>=3.1.0`, `reportlab>=4.0.0`, `opencv-contrib-python>=4.8.0` (webcam scanner — note the `-contrib` build, which bundles the QR/barcode detector).
+
+> **Every dependency must be permissively licensed.** This app ships as a
+> closed-source binary, so a copyleft package (GPL / AGPL / LGPL) in the bundle
+> would legally require publishing the whole source. `tkcalendar` was removed
+> for exactly this reason — it is GPLv3, and it also dragged in `babel` purely
+> to name weekdays, which cost 35 MB in the built app. Before adding a
+> dependency, check its licence; `verify_datepicker.py` asserts that none of
+> the runtime packages is copyleft.
 
 Optional (not in `requirements.txt`, guarded by try/import): `python-escpos`, `pywin32` (thermal printer).
 
 ## Running Tests
 
-There are three suites:
+There are six suites:
 
 ```bash
-python verify_screens.py    # 16 checks — screens build, ROW_COLORS, styles
-python verify_motion.py     # 23 checks — the motion layer and navigation
-python verify_sidebar.py    # 24 checks — the collapsible sidebar
+python verify_screens.py     # 16 checks — screens build, ROW_COLORS, styles
+python verify_motion.py      # the motion layer and navigation
+python verify_sidebar.py     # 24 checks — the collapsible sidebar
+python verify_applog.py      # 21 checks — the crash recorder
+python verify_theme.py       # 8 checks  — the theme / language rebuild
+python verify_datepicker.py  # 34 checks — the date picker + licence audit
 ```
 
 `verify_screens.py` instantiates every screen with the **real** `billing_data.db`, calls `on_show()`, and asserts on the result. It stubs a `FakeApp` (see below), so it never exercises the real sidebar or `navigate_to()` — it runs headless (the root window is `withdraw()`n). `verify_motion.py` and `verify_sidebar.py` both build the real `BillingApp` instead, to cover what the stub cannot: navigation, the motion layer, and the collapsible sidebar. All three exit 0 on success, 1 on any failure.
@@ -39,6 +50,27 @@ python verify_sidebar.py    # 24 checks — the collapsible sidebar
 Coverage is uneven, and worth knowing before you trust a green run:
 - **`ROW_COLORS` tags are asserted on 7 screens only** — Billing, Bill History, Products, Inventory, Suppliers, Purchase/GRN, Customers. Categories, Reports, Settings, Users, Activity Log and Dashboard are "loads without error" only, so a treeview on one of those can skip the tagging pattern and still pass.
 - **Every treeview's `style=` name is checked** against `styles.STYLE_NAMES` (`test_tree_styles_registered` walks the built widget tree), so a missing style registration fails loudly.
+
+`verify_applog.py` covers the crash recorder (see **Crash Logging & Diagnostics**
+below). It redirects the log to a throwaway directory and stubs the dialog, so it
+touches neither the shop's log nor its database. The cases that matter are the
+ones that used to leave nothing behind: an exception inside a Tk callback, one
+inside an `after()` tick, and a windowed build where `sys.stderr` is `None`.
+
+> Two traps if you extend it. `CTkButton.invoke()` calls the command directly and
+> never reaches Tk's callback dispatcher, so it does not exercise the hook at all;
+> and `CTkButton` is a composite, so a `bind()` on the wrapper and an
+> `event_generate()` on the wrapper need not meet — bind a plain `tk` widget and
+> dispatch a real event at it, with the window parked offscreen rather than
+> withdrawn (`when="now"` only delivers to a *viewable* widget). Also count log
+> **records**, not message occurrences: a traceback echoes the offending source
+> line, so every message appears twice.
+
+`verify_theme.py` guards the theme and language rebuild (see **Theme rebuild
+and focus** below). It runs against a copy of the database — `apply_theme()`
+writes `app_theme` to the settings table — and uses `applog` as its oracle: a
+Tk callback failure is precisely what the recorder captures, so the assertion
+is "the recorder logged nothing".
 
 There is no per-test CLI filter — to test one screen in isolation, replicate both stubs from `verify_screens.py`. `FakeApp` must carry `current_lang` and `current_theme`, because screens read them during construction; the user dict must carry `name`, because screens read `current_user["name"]`:
 
@@ -183,13 +215,53 @@ The language setting is stored in the `settings` table as `app_language` with va
 
 ### Dark / Light Theme
 
+> **Theme rebuild and focus.** `apply_theme()` parks focus on the root
+> (`self.focus_set()`) **before** calling `ctk.set_appearance_mode()`. This is
+> not cosmetic. On Windows, CustomTkinter recolours the title bar by
+> withdrawing and re-showing the root window; it captures `focus_get()` first
+> and then schedules `after(1, widget.focus)` to restore it
+> (`ctk_tk.py::_windows_set_titlebar_color`). `apply_theme()` then destroys
+> every cached screen — so a cashier who switched theme with the cursor in a
+> POS field left that 1 ms timer holding a destroyed widget, and it fired as
+> `TclError: bad window path name "...!billingscreen...!ctkentry.!entry"`.
+> Note the captured widget is a CTkEntry's *inner* `tk.Entry`, which is why the
+> traceback shows `Misc.focus_set` with no CustomTkinter frame above it.
+> `apply_language()` needs none of this: same destroy loop, no appearance
+> change, nothing scheduled. `verify_theme.py` regression-tests both.
+
+> **Tk does not cancel `after()` jobs when a widget is destroyed.** Any pending
+> job that touches a widget belonging to a screen must be cancelled in
+> `on_hide()`, or survive the widget's death. `screen_login.py`'s
+> `after(100, self.username_entry.focus)` is the same shape and is only safe
+> because no human logs in within 100ms of the screen appearing.
+
+
+
 Theme is stored in the `settings` table as `app_theme`. On startup, `main.py` applies it via `ctk.set_appearance_mode()` and then calls `apply_theme_mode(mode)` from `config.py`, which swaps the global `COLORS` dict between `LIGHT_COLORS` and `DARK_COLORS`. All screen files read colours from `COLORS` at widget-creation time, so theme changes take effect on a full rebuild. Never read from `LIGHT_COLORS` or `DARK_COLORS` directly in screen files — always use `COLORS`.
 
 ### Shared UI Helpers (`ui_utils.py`)
 
 Two helpers beyond `place_popup`:
 
-- **`open_date_picker(parent, var, title)`** — opens a `tkcalendar` popup and writes the selected date (YYYY-MM-DD) into a `tk.StringVar`. Requires `tkcalendar`; shows an install error if missing.
+- **`open_date_picker(parent, var, title, lang)`** — opens a calendar popup and
+  writes the selected date (YYYY-MM-DD) into a `tk.StringVar`; Clear writes `""`
+  and Cancel leaves it untouched. Built on the stdlib `calendar` module (see the
+  licence note under Installing Dependencies). Sunday-first. Month and weekday
+  names go through `lang.py`, so it must be passed `app.current_lang` — the old
+  tkcalendar version took no `locale=` and always drew English.
+
+  Three things in it are load-bearing and easy to undo:
+  - The 42 day cells are built once and **reconfigured** on every month change,
+    not destroyed and rebuilt — the same lesson as the sidebar and the
+    Categories card grid.
+  - Focus and `grab_set()` **poll for `winfo_viewable()`** before they run
+    (bounded to ~1s). `focus_force()` on an unmapped window does not stick, and
+    without focus Tk sends key events elsewhere, which left every keyboard
+    shortcut in the dialog dead.
+  - The dialog **measures its footer labels and sizes itself**. Bengali and
+    Hindi labels are much wider than English; at a fixed width the Bengali
+    Select button lost its last syllable. Three of the four footer keys are
+    shared with other screens, so they cannot be reworded to fit.
 - **`WebcamScanner`** in `webcam_scanner.py` — a reusable `CTkToplevel` that opens a live webcam feed, decodes QR/barcodes via `cv2`, and fires a callback on success.
 
 ### Motion (`motion.py`)
@@ -251,6 +323,56 @@ Coloured keys: `LOGIN`, `LOGOUT`, `BILL_SAVED`, `BILL_VOID`, `RETURN_SAVED`, `CU
 Actions written elsewhere that are *not* in the map — `PURCHASE_SAVED`, `CUSTOMER_ADDED/UPDATED/DELETED`, `SUPPLIER_ADDED/UPDATED/DELETED/DEACTIVATED`, `SUPPLIER_PAYMENT` — fall through to the default row colour, which is deliberately distinct from `BILL_SAVED` in both themes.
 
 > **Known gap:** `screen_products.py`, `screen_inventory.py` and `screen_purchase.py` call `log_activity` **nowhere**, so product add/edit/delete and stock adjustments leave no audit trail at all. Only keys some code actually writes belong in the map — don't add a `PRODUCT_*` colour without first adding the logging calls.
+
+### Crash Logging & Diagnostics (`applog.py`)
+
+`main.py` calls `applog.install()` **before every other project import** — a
+missing PyInstaller `hiddenimport` raises during those imports, and without the
+hooks in place first the frozen app simply never shows a window.
+
+It writes `logs/priya_store.log` next to the database (falling back to
+`%LOCALAPPDATA%` + `\PriyaStore\logs` if that directory is not writable),
+rotating at 512 KB with 3 backups, so the log is capped at roughly 2 MB.
+`logs/` is gitignored.
+
+Four hooks are installed:
+
+| Hook | Catches |
+|---|---|
+| `tk.Tk.report_callback_exception` | **the important one** — every widget callback and `after()` tick |
+| `sys.excepthook` | uncaught exceptions on the main thread |
+| `threading.excepthook` | uncaught exceptions in worker threads |
+| `sys.unraisablehook` | failures inside `__del__` / GC |
+
+> The build sets `console=False`, so in the installed `.exe` **`sys.stderr` is
+> `None`**. `print(..., file=sys.stderr)` is then a silent no-op and
+> `traceback.print_exc()` writes nowhere — which is exactly where Tk's default
+> callback handler used to send every crash. Never diagnose with `print()`; use
+> `applog.log` or `applog.swallow()`. For the same reason `install()` attaches a
+> `StreamHandler` only when `sys.stderr` is not `None`.
+
+A dialog is shown on top of the logging, but **rate-limited**: deduplicated by
+`(exception type, file, line)` and hard-capped at 3 per session. A failing
+`after()` loop would otherwise raise a dialog every tick and lock the shopkeeper
+out of their own till. The log records every occurrence regardless.
+
+**`except: pass` blocks.** Use `applog.swallow("what was being attempted")`
+inside the `except` where continuing really is right but the failure still
+matters — a backup that did not run, a receipt that never printed. Pick the
+level deliberately: `applog.ERROR` for anything touching money or data safety,
+`applog.WARNING` for a degraded feature, `applog.DEBUG` for something expected
+(the `ALTER TABLE` migrations raise on every launch after the first by design).
+Genuinely benign swallows — `after_cancel` on a job that already fired, a
+`destroy()` during teardown, a `strptime` fallback on a display date — are
+deliberately left as bare `pass`; logging them would bury the real entries.
+
+**Diagnostics UI.** Settings → Backup → *Problem Reports* shows how many
+problems occurred this session, the log path, an **Open Log Folder** button, and
+a **Copy Details** button that puts `applog.diagnostics_text()` on the clipboard
+for the shopkeeper to paste into WhatsApp. That text reads nothing from the
+database beyond its file size — but a traceback quotes the exception's own
+message, so a failure raised *about* a record can carry that fragment with it.
+Say so before telling a shop it is safe to send.
 
 ### Config & Styling
 

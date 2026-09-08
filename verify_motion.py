@@ -315,7 +315,13 @@ def test_slide_moves_the_screen_and_settles_home():
     app.navigate_to("dashboard")
     app_pump(400)
     app.navigate_to("products")
-    app.update()
+    # update_idletasks(), NOT update(): this asserts on a *transient* state --
+    # the screen parked at slide_px before the tween starts walking it home.
+    # update() runs pending after() callbacks, so on a loaded machine enough
+    # wall-clock passed for the time-driven tween to finish and the assertion
+    # saw x=0. update_idletasks() runs the geometry pass without letting any
+    # timer fire, so the parked position is observed deterministically.
+    app.update_idletasks()
     scr = app.screens["products"]
     from config import MOTION
     assert scr.winfo_x() > 0, (

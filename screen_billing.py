@@ -6,6 +6,7 @@ Large fonts, colorful, designed for 60+ age users.
 
 import customtkinter as ctk
 import tkinter as tk
+import applog
 from tkinter import ttk, messagebox
 from datetime import datetime
 from config import COLORS, FONTS, RADII, METRICS, PAYMENT_MODES, GUTTERS
@@ -1844,7 +1845,9 @@ class BillingScreen(ResponsiveMixin, ctk.CTkFrame):
             self.clock_label.configure(text=now)
             self.after(1000, self._update_clock)
         except Exception:
-            pass
+            # The reschedule lives inside the try, so a failure here stops the
+            # clock permanently rather than repeating -- it logs exactly once.
+            applog.swallow("POS clock tick")
 
     def _set_status(self, text: str):
         """Update the status bar message."""

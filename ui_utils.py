@@ -14,7 +14,11 @@ the SAME scale as its contents, clamping it to the screen, and centring it
 over the parent window.
 """
 
+import calendar
+
 import customtkinter as ctk
+
+import applog
 import motion
 
 try:
@@ -86,109 +90,268 @@ def place_popup(dlg, logical_w: int, logical_h: int, parent=None):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Calendar date picker helper
+# Calendar date picker
+#
+# Hand-built on the stdlib `calendar` module rather than tkcalendar, which is
+# GPLv3 -- linking it into a closed-source binary would have forced the whole
+# app to be published under the GPL. It also dragged in babel purely to name
+# weekdays; tkcalendar is 108 KB, babel is 31 MB, and dropping the pair took
+# the built app from 237 MB to 202 MB.
+#
+# The replacement is also the first version of this dialog that speaks the
+# shop's language: tkcalendar was constructed without a `locale=` argument, so
+# it always drew English month names regardless of the app's setting, and the
+# three buttons underneath it were hardcoded English too.
 # ─────────────────────────────────────────────────────────────────────────────
 
-def open_date_picker(parent, var, title="Select Date"):
+# Sunday-first, the ordering a shop counter in India expects. `calendar`'s own
+# default is Monday-first, so this is set explicitly rather than inherited.
+_CAL = calendar.Calendar(firstweekday=6)
+
+_MONTHS = ["January", "February", "March", "April", "May", "June", "July",
+           "August", "September", "October", "November", "December"]
+_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+_GRID_ROWS = 6          # the most weeks any month can span
+
+
+def open_date_picker(parent, var, title="Select Date", lang="English"):
     """Open a calendar popup and write the selected date (YYYY-MM-DD) into *var*.
 
     *parent* — any tkinter widget (used for positioning).
-    *var*    — a tk.StringVar whose value will be set.
+    *var*    — a tk.StringVar whose value will be set; "" when cleared.
+    *lang*   — app.current_lang, so month and weekday names follow the shop.
+
+    The contract is the one the old tkcalendar version had: parse *var* as an
+    ISO date (falling back to today), write back an ISO date on Select, write
+    an empty string on Clear, and stay modal until dismissed.
     """
-    import tkinter as tk
-    from datetime import date
+    from datetime import date, timedelta
+    from config import COLORS, FONTS, RADII, METRICS
+    from lang import t
 
     try:
-        from tkcalendar import Calendar
-    except ImportError:
-        from tkinter import messagebox
-        messagebox.showerror(
-            "Missing Library",
-            "tkcalendar is required.\nRun:  pip install tkcalendar",
-            parent=parent.winfo_toplevel(),
-        )
-        return
-
-    popup = tk.Toplevel(parent.winfo_toplevel())
-    popup.title(title)
-    popup.resizable(False, False)
-    popup.grab_set()
-    popup.attributes("-topmost", True)
-
-    # Start date: parse from var, or use today
-    try:
-        start = date.fromisoformat(var.get().strip())
+        selected = date.fromisoformat(var.get().strip())
     except (ValueError, AttributeError):
-        start = date.today()
+        selected = date.today()
 
-    from config import COLORS
-    bg_pop = COLORS.get("bg_white", "#FFFFFF")
-    fg_pop = COLORS.get("text_dark", "#000000")
-    bg_input = COLORS.get("bg_input", "#F1F5F9")
-    btn_prim = COLORS.get("btn_primary", "#1D4ED8")
-    btn_succ = COLORS.get("btn_success", "#16A34A")
-    btn_dang = COLORS.get("btn_danger", "#EF4444")
-    btn_sec = COLORS.get("btn_secondary", "#94A3B8")
-    border_col = COLORS.get("border", "#CBD5E1")
+    today = date.today()
+    shown = [selected.year, selected.month]      # list so the closures can write
 
-    cal = Calendar(
-        popup,
-        selectmode="day",
-        year=start.year,
-        month=start.month,
-        day=start.day,
-        date_pattern="yyyy-mm-dd",
-        font=("Segoe UI", 14),
-        background=btn_prim,
-        foreground="white",
-        # The weekday header used to borrow bg_sidebar, which was deep
-        # navy. Direction B's sidebar is white, so it needs its own tint
-        # with dark ink rather than white-on-white.
-        headersbackground=COLORS["accent_action_tint"],
-        headersforeground=COLORS["accent_action_deep"],
-        selectbackground=btn_succ,
-        selectforeground="white",
-        normalbackground=bg_pop,
-        normalforeground=fg_pop,
-        weekendbackground=bg_input,
-        weekendforeground=fg_pop,
-        bordercolor=border_col,
-    )
-    cal.pack(padx=10, pady=10)
+    # The footer holds four equal buttons, and Bengali and Hindi labels are far
+    # wider than the English ones -- at a fixed 420 the Bengali "Select" needed
+    # 127px in an 86px cell and lost its last syllable. Three of the four keys
+    # (Today / Clear / Cancel) are shared with other screens and must not be
+    # reworded to fit, so the dialog measures the text and sizes itself.
+    # Measured with the unscaled font, because place_popup applies widget
+    # scaling to the logical size it is given.
+    import tkinter.font as tkfont
+    try:
+        _f = tkfont.Font(font=FONTS["button"])
+        _btn = max(_f.measure(t(k, lang))
+                   for k in ("Today", "Clear", "Cancel", "Select")) + 30
+    except Exception:
+        _btn = 96
+    _width = max(420, _btn * 4 + 5 * 3 + 56)     # 3 gaps + card and dialog padding
 
-    popup.configure(bg=bg_pop)
-    btn_frame = tk.Frame(popup, bg=bg_pop)
-    btn_frame.pack(fill="x", padx=10, pady=(0, 10))
+    dlg = ctk.CTkToplevel(parent.winfo_toplevel())
+    dlg.title(title)
+    dlg.resizable(False, False)
+    dlg.configure(fg_color=COLORS["bg_main"])
+    place_popup(dlg, _width, 428, parent.winfo_toplevel())
+    dlg.transient(parent.winfo_toplevel())
+
+    card = ctk.CTkFrame(dlg, fg_color=COLORS["bg_card"],
+                        corner_radius=RADII["card"], border_width=1,
+                        border_color=COLORS["hairline"])
+    card.pack(fill="both", expand=True, padx=14, pady=14)
+
+    # ── Month / year navigation ──────────────────────────────────
+    nav = ctk.CTkFrame(card, fg_color="transparent")
+    nav.pack(fill="x", padx=14, pady=(14, 4))
+
+    def _nav_btn(text, command, tip):
+        b = ctk.CTkButton(nav, text=text, width=32, height=32, corner_radius=16,
+                          font=FONTS["button"], fg_color="transparent",
+                          hover_color=COLORS["accent_action_tint"],
+                          text_color=COLORS["text_muted"], border_width=0,
+                          command=command)
+        attach_tooltip(b, tip)
+        return b
+
+    def _shift_month(delta):
+        m = shown[1] + delta
+        y = shown[0] + (m - 1) // 12
+        shown[0], shown[1] = y, (m - 1) % 12 + 1
+        _render()
+
+    def _shift_year(delta):
+        shown[0] += delta
+        _render()
+
+    _nav_btn("«", lambda: _shift_year(-1),
+             t("Previous year", lang)).pack(side="left")
+    _nav_btn("‹", lambda: _shift_month(-1),
+             t("Previous month", lang)).pack(side="left", padx=(2, 0))
+    _nav_btn("»", lambda: _shift_year(1),
+             t("Next year", lang)).pack(side="right")
+    _nav_btn("›", lambda: _shift_month(1),
+             t("Next month", lang)).pack(side="right", padx=(0, 2))
+
+    title_lbl = ctk.CTkLabel(nav, text="", font=FONTS["subheading"],
+                             text_color=COLORS["text_dark"])
+    title_lbl.pack(side="left", fill="x", expand=True)
+
+    # ── Weekday header ───────────────────────────────────────────
+    head = ctk.CTkFrame(card, fg_color="transparent")
+    head.pack(fill="x", padx=14, pady=(6, 0))
+    for col, wd in enumerate(_WEEKDAYS):
+        head.grid_columnconfigure(col, weight=1, uniform="day")
+        ctk.CTkLabel(head, text=t(wd, lang).upper(), font=FONTS["small"],
+                     text_color=COLORS["text_muted"], height=22
+                     ).grid(row=0, column=col, sticky="nsew")
+
+    # ── Day grid ─────────────────────────────────────────────────
+    # Built once and reconfigured on every month change. Destroying and
+    # rebuilding 42 buttons per arrow press is the same mistake the sidebar
+    # and the Categories card grid were both fixed for.
+    grid = ctk.CTkFrame(card, fg_color="transparent")
+    grid.pack(fill="both", expand=True, padx=14, pady=(2, 6))
+    cells = []
+    for r in range(_GRID_ROWS):
+        grid.grid_rowconfigure(r, weight=1)
+        for c in range(7):
+            if r == 0:
+                grid.grid_columnconfigure(c, weight=1, uniform="day")
+            b = ctk.CTkButton(grid, text="", width=46, height=40,
+                              corner_radius=RADII["badge"], font=FONTS["body"],
+                              fg_color="transparent", border_width=0)
+            b.grid(row=r, column=c, sticky="nsew", padx=1, pady=1)
+            cells.append(b)
+
+    def _pick(d):
+        nonlocal selected
+        selected = d
+        shown[0], shown[1] = d.year, d.month
+        _render()
+
+    def _render():
+        title_lbl.configure(
+            text=f"{t(_MONTHS[shown[1] - 1], lang)}  {shown[0]}")
+        weeks = _CAL.monthdayscalendar(shown[0], shown[1])
+        flat = [d for wk in weeks for d in wk]
+        flat += [0] * (_GRID_ROWS * 7 - len(flat))
+        for i, day in enumerate(flat):
+            b = cells[i]
+            if day == 0:
+                b.configure(text="", state="disabled", fg_color="transparent",
+                            hover=False, command=None)
+                continue
+            d = date(shown[0], shown[1], day)
+            if d == selected:
+                fg, ink, hov = (COLORS["accent_action"], COLORS["on_accent"],
+                                COLORS["btn_primary_h"])
+            elif d == today:
+                fg, ink, hov = (COLORS["accent_action_tint"],
+                                COLORS["accent_action_fg"],
+                                COLORS["accent_action_tint"])
+            else:
+                fg, ink, hov = ("transparent", COLORS["text_dark"],
+                                COLORS["accent_action_tint"])
+            b.configure(text=str(day), state="normal", fg_color=fg,
+                        text_color=ink, hover=True, hover_color=hov,
+                        command=lambda dd=d: _pick(dd))
+
+    # ── Footer ───────────────────────────────────────────────────
+    foot = ctk.CTkFrame(card, fg_color="transparent")
+    foot.pack(fill="x", padx=14, pady=(0, 14))
+
+    def _pill(text, kind, command):
+        tints = {
+            "primary": (COLORS["accent_action"], COLORS["btn_primary_h"],
+                        COLORS["on_accent"]),
+            "action":  (COLORS["accent_action_tint"], COLORS["glass_glow"],
+                        COLORS["accent_action_fg"]),
+            "danger":  (COLORS["accent_danger_tint"], COLORS["accent_danger_tint"],
+                        COLORS["accent_danger_fg"]),
+            "plain":   (COLORS["bg_main"], COLORS["glass_glow"],
+                        COLORS["text_dark"]),
+        }
+        fg, hov, ink = tints[kind]
+        h = METRICS["control_sm"]
+        return ctk.CTkButton(foot, text=text, font=FONTS["button"], fg_color=fg,
+                             hover_color=hov, text_color=ink, height=h,
+                             width=1, corner_radius=h // 2, border_width=0,
+                             command=command)
 
     def confirm():
-        var.set(cal.get_date())
-        popup.destroy()
+        var.set(selected.isoformat())
+        _close()
 
     def clear():
         var.set("")
-        popup.destroy()
+        _close()
 
-    tk.Button(btn_frame, text="✅  Select", font=("Segoe UI", 13, "bold"),
-              bg=btn_succ, fg="white", relief="flat", padx=16, pady=6,
-              cursor="hand2", command=confirm
-             ).pack(side="left", padx=(0, 6))
-    tk.Button(btn_frame, text="🗑  Clear", font=("Segoe UI", 13),
-              bg=btn_dang, fg="white", relief="flat", padx=16, pady=6,
-              cursor="hand2", command=clear
-             ).pack(side="left", padx=(0, 6))
-    tk.Button(btn_frame, text="Cancel", font=("Segoe UI", 13),
-              bg=btn_sec, fg="white", relief="flat", padx=16, pady=6,
-              cursor="hand2", command=popup.destroy
-             ).pack(side="left")
+    def _close():
+        try:
+            dlg.grab_release()
+        except Exception:
+            applog.swallow("release date picker grab", applog.DEBUG)
+        dlg.destroy()
 
-    # Centre over parent
-    popup.update_idletasks()
-    pw = popup.winfo_width()
-    ph = popup.winfo_height()
-    px = parent.winfo_rootx() + parent.winfo_width() // 2 - pw // 2
-    py = parent.winfo_rooty() + parent.winfo_height() // 2 - ph // 2
-    popup.geometry(f"+{max(0, px)}+{max(0, py)}")
+    # Four equal columns rather than pack. Packing these starved the last two:
+    # Select and Cancel each took CTkButton's default 140px width and left
+    # Clear 30px and Today 1px. width=1 stops each button demanding that
+    # default, and the uniform grid gives them an equal share -- which also
+    # survives Bengali and Hindi, whose labels are longer than the English.
+    for c in range(4):
+        foot.grid_columnconfigure(c, weight=1, uniform="foot")
+    for col, (label, kind, cmd) in enumerate((
+            (t("Today", lang), "action", lambda: _pick(date.today())),
+            (t("Clear", lang), "danger", clear),
+            (t("Cancel", lang), "plain", _close),
+            (t("Select", lang), "primary", confirm))):
+        _pill(label, kind, cmd).grid(row=0, column=col, sticky="ew",
+                                     padx=(0 if col == 0 else 5, 0))
 
+    # ── Keyboard ─────────────────────────────────────────────────
+    def _move(days):
+        _pick(selected + timedelta(days=days))
+
+    dlg.bind("<Escape>",    lambda e: _close())
+    dlg.bind("<Return>",    lambda e: confirm())
+    dlg.bind("<KP_Enter>",  lambda e: confirm())
+    dlg.bind("<Left>",      lambda e: _move(-1))
+    dlg.bind("<Right>",     lambda e: _move(1))
+    dlg.bind("<Up>",        lambda e: _move(-7))
+    dlg.bind("<Down>",      lambda e: _move(7))
+    dlg.bind("<Prior>",     lambda e: _shift_month(-1))
+    dlg.bind("<Next>",      lambda e: _shift_month(1))
+
+    _render()
+
+    def _make_modal(attempt=0):
+        # Wait for the window to actually be MAPPED before taking focus and
+        # the grab. A fixed delay is not enough: focus_force() on an unmapped
+        # window does not stick, focus falls back to the main window, and then
+        # every binding below -- Escape, Return, the arrow keys -- is dead,
+        # because Tk routes key events to the focus widget. grab_set() on an
+        # unmapped window fails outright. Poll the condition instead, bounded
+        # so a window that never maps cannot leave a timer running forever.
+        try:
+            if not dlg.winfo_exists():
+                return
+            if not dlg.winfo_viewable():
+                if attempt < 50:                       # ~1s at 20ms
+                    dlg.after(20, lambda: _make_modal(attempt + 1))
+                return
+            dlg.focus_force()
+            dlg.grab_set()
+        except Exception:
+            applog.swallow("focus/grab date picker", applog.DEBUG)
+
+    dlg.after(10, _make_modal)
+    return dlg
 
 
 class EmptyState:
@@ -250,14 +413,27 @@ class Tooltip:
     sends <Leave> to a parent the moment the pointer crosses onto its child.
     """
 
-    def __init__(self, widget, text, delay=400, side="right"):
+    def __init__(self, widget, text, delay=400, side="right", active=True):
         self.widget = widget
         self.text   = text
         self.delay  = delay
         self.side   = side
+        self.active = active
         self._after = None
         self._tip   = None
         self._bind_tree(widget)
+
+    def set_active(self, flag):
+        """Turn the tooltip on or off without rebinding anything.
+
+        The sidebar toggles between a labelled rail and an icon-only one. Only
+        the icon-only mode needs tooltips — a hover label over a pill whose
+        text is already visible is noise — and rebinding on every toggle would
+        stack duplicate handlers on a widget that now survives the switch.
+        """
+        self.active = bool(flag)
+        if not self.active:
+            self._hide()
 
     def _bind_tree(self, w):
         w.bind("<Enter>",    self._schedule, add="+")
@@ -269,6 +445,8 @@ class Tooltip:
 
     def _schedule(self, _event=None):
         self._cancel()
+        if not self.active:
+            return
         try:
             self._after = self.widget.after(self.delay, self._show)
         except Exception:
@@ -329,6 +507,7 @@ class Tooltip:
             self._tip = None
 
 
-def attach_tooltip(widget, text, side="right"):
-    """Attach a hover tooltip to *widget*. Returns the Tooltip (usually ignored)."""
-    return Tooltip(widget, text, side=side)
+def attach_tooltip(widget, text, side="right", active=True):
+    """Attach a hover tooltip to *widget*. Returns the Tooltip, which callers
+    keep when they need to switch it on and off later."""
+    return Tooltip(widget, text, side=side, active=active)

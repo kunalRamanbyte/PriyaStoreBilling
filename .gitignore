@@ -37,3 +37,7 @@ crash_log.txt
 Thumbs.db
 
 .impeccable/
+
+# Crash / diagnostic log written by applog.py at runtime (see CLAUDE.md).
+# Per-machine and can contain tracebacks -- never committed.
+logs/

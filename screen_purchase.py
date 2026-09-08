@@ -652,7 +652,8 @@ class PurchaseScreen(ctk.CTkFrame):
         ctk.CTkButton(exp_f, text="📅", width=44, height=40,
                       font=("Segoe UI", 18), corner_radius=10,
                       fg_color=COLORS["btn_primary"],
-                      command=lambda: open_date_picker(exp_f, exp_var, t("Select Expiry Date", L))
+                      command=lambda: open_date_picker(exp_f, exp_var,
+                                                       t("Select Expiry Date", L), L)
                      ).pack(side="left")
 
         err_lbl = ctk.CTkLabel(scroll, text="", font=FONTS["small"],

@@ -24,6 +24,7 @@ Usage:
 """
 
 import customtkinter as ctk
+import applog
 from config import breakpoint_for, GUTTERS
 
 
@@ -81,12 +82,11 @@ class ResponsiveMixin:
             self.on_breakpoint(bp, lw)
         except Exception:
             # A layout callback must never take the till down mid-sale, but
-            # swallowing it silently would hide a real layout bug, so it goes
-            # to stderr rather than nowhere.
-            import traceback, sys as _sys
-            print(f"[responsive] {type(self).__name__}.on_breakpoint({bp}) failed:",
-                  file=_sys.stderr)
-            traceback.print_exc()
+            # swallowing it silently would hide a real layout bug. This used to
+            # print to sys.stderr, which is None in the windowed build -- so
+            # "nowhere" is exactly where it went. Now it lands in the log.
+            applog.swallow(
+                f"{type(self).__name__}.on_breakpoint({bp})", applog.ERROR)
 
     # Subclasses override.
     def on_breakpoint(self, bp, logical_w):

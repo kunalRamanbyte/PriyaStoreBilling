@@ -4,6 +4,7 @@ Uses raw sqlite3 (no ORM) for simplicity and speed.
 """
 
 import sqlite3
+import applog
 import hashlib
 import hmac
 import os
@@ -274,7 +275,12 @@ class Database:
                     conn.execute(migration)
                     conn.commit()
                 except Exception:
-                    pass
+                    # Expected on every launch after the first: ALTER TABLE
+                    # raises once the column exists. DEBUG so a migration that
+                    # fails for a *real* reason is still on the record without
+                    # writing a warning per column at every startup.
+                    applog.swallow(f"migration {migration[:60]!r}",
+                                   applog.DEBUG, exc_info=False)
 
             # ── Performance indexes ───────────────────────────────
             for idx in [
@@ -297,7 +303,9 @@ class Database:
                     conn.execute(idx)
                     conn.commit()
                 except Exception:
-                    pass
+                    # These are IF NOT EXISTS, so a failure here is real and
+                    # costs the shop query speed silently.
+                    applog.swallow(f"index {idx[:60]!r}", applog.WARNING)
 
             # ── Seed default admin user ──
             admin_exists = cur.execute(

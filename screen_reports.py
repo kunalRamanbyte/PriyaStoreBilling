@@ -6,6 +6,7 @@ Designed for 60+ age users: large buttons, clear layout.
 
 import customtkinter as ctk
 import tkinter as tk
+import applog
 from tkinter import ttk, messagebox, filedialog
 from datetime import date, timedelta
 import os
@@ -608,7 +609,7 @@ class ReportScreen(ResponsiveMixin, ctk.CTkFrame):
         try:
             os.startfile(path)
         except Exception:
-            pass
+            applog.swallow(f"open exported file {path!r}", applog.DEBUG)
 
     # ── CSV export ────────────────────────────────────────────
     def _export_csv(self):
@@ -641,7 +642,7 @@ class ReportScreen(ResponsiveMixin, ctk.CTkFrame):
             import os
             os.startfile(path)
         except Exception:
-            pass
+            applog.swallow(f"open exported CSV {path!r}", applog.DEBUG)
 
     # ── PDF export ────────────────────────────────────────────
     def _export_pdf(self):

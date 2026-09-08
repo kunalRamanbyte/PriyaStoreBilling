@@ -1040,6 +1040,176 @@ T = {
         "Default: admin / admin123",
         "ডিফল্ট: admin / admin123",
         "डिफ़ॉल्ट: admin / admin123"],
+    # ══════════════════════════════════════════
+    # Problem reporting / diagnostics (applog.py)
+    # ══════════════════════════════════════════
+    "Log File": [
+        "Log File",
+        "লগ ফাইল",
+        "लॉग फाइल"],
+    "Problem Reports": [
+        "Problem Reports",
+        "সমস্যার রিপোর্ট",
+        "प्रॉब्लम रिपोर्ट"],
+    "If something goes wrong, send these details for support.": [
+        "If something goes wrong, send these details for support.",
+        "কিছু গন্ডগোল হলে এই ডিটেইলস পাঠিয়ে দিন",
+        "कुछ गड़बड़ हो तो ये डिटेल्स भेज दें"],
+    "Recent Problems": [
+        "Recent Problems",
+        "সাম্প্রতিক সমস্যা",
+        "हाल की प्रॉब्लम"],
+    "No problems recorded": [
+        "No problems recorded",
+        "কোনো সমস্যা রেকর্ড হয়নি",
+        "कोई प्रॉब्लम रिकॉर्ड नहीं हुई"],
+    "{n} problem(s) this session": [
+        "{n} problem(s) this session",
+        "এই সেশনে {n}টা সমস্যা",
+        "इस सेशन में {n} प्रॉब्लम"],
+    "Open Log Folder": [
+        "Open Log Folder",
+        "লগ ফোল্ডার খোলো",
+        "लॉग फोल्डर खोलो"],
+    "Copy Details": [
+        "Copy Details",
+        "ডিটেইলস কপি করো",
+        "डिटेल्स कॉपी करो"],
+    "Copied": [
+        "Copied",
+        "কপি হয়েছে",
+        "कॉपी हो गया"],
+    "Problem details copied. Paste them into WhatsApp or email.": [
+        "Problem details copied. Paste them into WhatsApp or email.",
+        "সমস্যার ডিটেইলস কপি হয়েছে। WhatsApp বা ইমেইলে পেস্ট করুন।",
+        "प्रॉब्लम डिटेल्स कॉपी हो गईं। WhatsApp या ईमेल में पेस्ट करें।"],
+    "Could not open the log folder.": [
+        "Could not open the log folder.",
+        "লগ ফোল্ডার খোলা গেল না।",
+        "लॉग फोल्डर नहीं खुला।"],
+    "Something went wrong. Your saved data is safe.": [
+        "Something went wrong. Your saved data is safe.",
+        "কিছু একটা গন্ডগোল হয়েছে। আপনার সেভ করা ডেটা ঠিক আছে।",
+        "कुछ गड़बड़ हो गई। आपका सेव किया डेटा सुरक्षित है।"],
+    "The app hit a problem it could not recover from.": [
+        "The app hit a problem it could not recover from.",
+        "অ্যাপে এমন একটা সমস্যা হয়েছে যেটা ঠিক করা গেল না।",
+        "ऐप में ऐसी प्रॉब्लम आई जो ठीक नहीं हो सकी।"],
+    "Details were written to the log file:": [
+        "Details were written to the log file:",
+        "ডিটেইলস লগ ফাইলে লেখা হয়েছে:",
+        "डिटेल्स लॉग फाइल में लिखी गई हैं:"],
+    "Settings > Backup > Problem Reports has a Copy Details button.": [
+        "Settings > Backup > Problem Reports has a Copy Details button.",
+        "সেটিংস > ব্যাকআপ > সমস্যার রিপোর্ট-এ ডিটেইলস কপি করার বাটন আছে।",
+        "सेटिंग्स > बैकअप > प्रॉब्लम रिपोर्ट में डिटेल्स कॉपी करने का बटन है।"],
+    "Priya Store — Problem": [
+        "Priya Store — Problem",
+        "প্রিয়া স্টোর — সমস্যা",
+        "प्रिया स्टोर — प्रॉब्लम"],
+    # ══════════════════════════════════════════════════════════════
+    # Calendar date picker (ui_utils.open_date_picker)
+    # ══════════════════════════════════════════════════════════════
+    "January": [
+        "January",
+        "জানুয়ারি",
+        "जनवरी"],
+    "February": [
+        "February",
+        "ফেব্রুয়ারি",
+        "फ़रवरी"],
+    "March": [
+        "March",
+        "মার্চ",
+        "मार्च"],
+    "April": [
+        "April",
+        "এপ্রিল",
+        "अप्रैल"],
+    "May": [
+        "May",
+        "মে",
+        "मई"],
+    "June": [
+        "June",
+        "জুন",
+        "जून"],
+    "July": [
+        "July",
+        "জুলাই",
+        "जुलाई"],
+    "August": [
+        "August",
+        "আগস্ট",
+        "अगस्त"],
+    "September": [
+        "September",
+        "সেপ্টেম্বর",
+        "सितंबर"],
+    "October": [
+        "October",
+        "অক্টোবর",
+        "अक्टूबर"],
+    "November": [
+        "November",
+        "নভেম্বর",
+        "नवंबर"],
+    "December": [
+        "December",
+        "ডিসেম্বর",
+        "दिसंबर"],
+    "Sun": [
+        "Sun",
+        "রবি",
+        "रवि"],
+    "Mon": [
+        "Mon",
+        "সোম",
+        "सोम"],
+    "Tue": [
+        "Tue",
+        "মঙ্গল",
+        "मंगल"],
+    "Wed": [
+        "Wed",
+        "বুধ",
+        "बुध"],
+    "Thu": [
+        "Thu",
+        "বৃহঃ",
+        "गुरु"],
+    "Fri": [
+        "Fri",
+        "শুক্র",
+        "शुक्र"],
+    "Sat": [
+        "Sat",
+        "শনি",
+        "शनि"],
+    "Select": [
+        "Select",
+        "সিলেক্ট",
+        "सिलेक्ट"],
+    "Select Date": [
+        "Select Date",
+        "তারিখ বাছো",
+        "तारीख चुनो"],
+    "Previous month": [
+        "Previous month",
+        "আগের মাস",
+        "पिछला महीना"],
+    "Next month": [
+        "Next month",
+        "পরের মাস",
+        "अगला महीना"],
+    "Previous year": [
+        "Previous year",
+        "আগের বছর",
+        "पिछला साल"],
+    "Next year": [
+        "Next year",
+        "পরের বছর",
+        "अगला साल"],
 }
 
 # ── Internal index map ─────────────────────────────────────────────

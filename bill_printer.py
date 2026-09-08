@@ -7,6 +7,7 @@ Handles:
 """
 
 import os
+import applog
 import sys
 import time
 import tempfile
@@ -36,9 +37,9 @@ def _prune_temp(days: int = 7):
                 if os.path.isfile(p) and os.path.getmtime(p) < cutoff:
                     os.remove(p)
             except Exception:
-                pass
+                applog.swallow(f"prune temp receipt {f!r}", applog.DEBUG)
     except Exception:
-        pass
+        applog.swallow("prune temp receipt folder", applog.DEBUG)
 
 
 def _new_temp(suffix: str, text: bool = False):
@@ -701,10 +702,11 @@ def print_thermal(bill: dict, items: list, settings: dict,
         # failure must not trigger the fallback (that would print a 2nd copy).
         if wrote:
             return True, _default_name or "printer"
-        try:
-            print(f"[bill_printer] ESC/POS path failed, using plain-text fallback: {escpos_err}")
-        except Exception:
-            pass
+        # This used to be print(), which in the windowed build writes to a
+        # None stdout and vanishes -- so "the printer does not work" arrived
+        # with no reason attached.
+        applog.log.warning("ESC/POS path failed, using plain-text fallback: %s",
+                           escpos_err)
 
     # Plain-text fallback via Windows print spooler (RAW mode)
     txt = "\n".join(_render_plain_lines(rows, char_width))
@@ -906,10 +908,8 @@ def print_thermal_return(return_doc: dict, items: list, settings: dict,
     except Exception as escpos_err:
         if wrote:
             return True, _default_name or "printer"
-        try:
-            print(f"[bill_printer] ESC/POS return path failed, using fallback: {escpos_err}")
-        except Exception:
-            pass
+        applog.log.warning("ESC/POS return path failed, using fallback: %s",
+                           escpos_err)
 
     # Plain-text fallback via Windows spooler (RAW), then notepad
     txt = "\n".join(_render_plain_lines(rows, char_width))
