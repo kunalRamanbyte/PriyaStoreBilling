@@ -30,7 +30,7 @@ Optional (not in `requirements.txt`, guarded by try/import): `python-escpos`, `p
 
 ## Running Tests
 
-There are nine suites:
+There are eleven suites:
 
 ```bash
 python verify_screens.py          # 19 checks — screens build, ROW_COLORS, styles, lazy Settings
@@ -42,6 +42,8 @@ python verify_datepicker.py       # 36 checks — the date picker + licence audi
 python verify_single_instance.py  # 13 checks — one till per database
 python verify_timestamps.py       # 28 checks — stored times follow the system clock
 python verify_factory_reset.py    # 15 checks — a wipe stays wiped
+python verify_dialogs.py          # 10 checks — no widget option reaches a geometry manager
+python verify_money_model.py      # 10 checks — udhaar/change invariants on every write path
 ```
 
 `verify_screens.py` instantiates every screen with the **real** `billing_data.db`, calls `on_show()`, and asserts on the result. It stubs a `FakeApp` (see below), so it never exercises the real sidebar or `navigate_to()` — it runs headless (the root window is `withdraw()`n). `verify_motion.py` and `verify_sidebar.py` both build the real `BillingApp` instead, to cover what the stub cannot: navigation, the motion layer, and the collapsible sidebar. All three exit 0 on success, 1 on any failure.
@@ -99,6 +101,20 @@ below. It formats a throwaway database and reopens it, which is the case
 that used to bring the demo catalogue back. It also covers the upgrade
 path — a shop whose settings predate the seed marker must keep its own
 shelves, never have twelve demo rows poured in.
+
+`verify_dialogs.py` covers the `pack()`/`grid()` contract: those take
+*placement* options only, and Tk raises on a stray `width=` rather than
+ignoring it. Because such a call sat last in eight dialog builders, each
+dialog opened with no Cancel button and a crash box over it. It proves the
+rule with an oracle, enforces it with an AST scan of every source file, and
+opens the six dialogs reachable from real rows.
+
+`verify_money_model.py` covers **Customer Money Model** below — the one
+invariant with real money behind it. It asserts the udhaar/change offset on
+the paths that write a balance, and that a held bill keeps the udhaar it was
+told to collect. Both defects it was written for were silent: they never
+raised, logged, or showed a dialog, and both survived because nothing
+exercised void, return or netting arithmetic.
 
 There is no per-test CLI filter — to test one screen in isolation, replicate both stubs from `verify_screens.py`. `FakeApp` must carry `current_lang` and `current_theme`, because screens read them during construction; the user dict must carry `name`, because screens read `current_user["name"]`:
 
@@ -289,6 +305,11 @@ A customer carries two balances: `credit_balance` (udhaar owed to the shop) and 
 **Invariant: a customer can never hold positive credit *and* positive change at once.** `_net_customer_balances(conn, customer_id, user_id, reference)` offsets them and logs both sides of the netting. Call it at the end of any transaction that touches either balance — `save_bill()`, `void_bill()`, and `add_customer_transaction()` all do.
 
 `void_bill()` mirrors the exact credit/change arithmetic that `save_bill()` applied and writes reversing transactions, so keep the two in sync if you change either.
+`save_return()` nets too — a "Store Credit" refund to a customer who owes
+money would otherwise leave both balances positive at once. It was the one
+balance-writing path that skipped the call; `verify_money_model.py` now
+asserts it.
+
 
 ### Sales Returns / Refunds
 

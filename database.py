@@ -806,12 +806,18 @@ class Database:
             prefix = pfx["value"] if pfx else "BILL"
             bill_number = self._claim_number(conn, "next_bill_no", prefix)
             change_adj = float(bill_data.get("change_adjustment") or 0)
+            # Held bills carry the udhaar the cashier agreed to collect, the
+            # same as completed ones. Leaving it out of this INSERT let it
+            # default to 0, so resuming a held bill collected nothing while
+            # the badge — which reads the live balance by another route —
+            # still showed the customer owing it.
+            udhaar_adj = float(bill_data.get("udhaar_adjustment") or 0)
             cur = conn.execute(
                 """INSERT INTO bills
                    (bill_number, customer_id, customer_name, subtotal, discount,
                     grand_total, payment_mode, amount_paid, change_due, status,
-                    change_adjustment, created_by, bill_date)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))""",
+                    udhaar_adjustment, change_adjustment, created_by, bill_date)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))""",
                 (
                     bill_number,
                     bill_data.get("customer_id"),
@@ -823,6 +829,7 @@ class Database:
                     bill_data.get("amount_paid", 0),
                     bill_data.get("change_due", 0),
                     "Draft",
+                    udhaar_adj,
                     change_adj,
                     user_id,
                 )
@@ -1155,6 +1162,14 @@ class Database:
                         (cust_id, "Refund", total, return_number,
                          "Cash refund for return", user_id)
                     )
+
+            # Offset udhaar against change, exactly as save_bill() and
+            # void_bill() do at the end of their own transactions. Without
+            # this, a "Store Credit" refund to a customer who owes money
+            # leaves them holding udhaar AND change at once — the one state
+            # the money model forbids.
+            if cust_id:
+                self._net_customer_balances(conn, cust_id, user_id, return_number)
 
             return return_id, return_number
 
