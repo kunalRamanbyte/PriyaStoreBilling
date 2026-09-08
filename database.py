@@ -38,8 +38,19 @@ def verify_password(password: str, stored: str) -> bool:
             return hmac.compare_digest(dk.hex(), hash_hex)
         except Exception:
             return False
-    # Legacy unsalted SHA-256 (constant-time compare)
-    return hmac.compare_digest(_legacy_sha256(password), stored)
+    # Legacy unsalted SHA-256 (constant-time compare).
+    #
+    # Guarded for the same reason as the PBKDF2 branch above, and it is not
+    # theoretical: compare_digest raises TypeError on a str holding non-ASCII
+    # characters. `stored` is a bare TEXT column with no format constraint, so
+    # a corrupted or hand-edited row used to propagate that TypeError out of
+    # authenticate() and into the login handler — locking every user out of
+    # the till with no route back from inside the app. A malformed hash must
+    # fail this one login, not the whole shop.
+    try:
+        return hmac.compare_digest(_legacy_sha256(password), stored)
+    except Exception:
+        return False
 
 
 def is_legacy_hash(stored: str) -> bool:

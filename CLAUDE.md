@@ -30,7 +30,7 @@ Optional (not in `requirements.txt`, guarded by try/import): `python-escpos`, `p
 
 ## Running Tests
 
-There are eleven suites:
+There are twelve suites:
 
 ```bash
 python verify_screens.py          # 19 checks — screens build, ROW_COLORS, styles, lazy Settings
@@ -44,6 +44,7 @@ python verify_timestamps.py       # 28 checks — stored times follow the system
 python verify_factory_reset.py    # 15 checks — a wipe stays wiped
 python verify_dialogs.py          # 10 checks — no widget option reaches a geometry manager
 python verify_money_model.py      # 10 checks — udhaar/change invariants on every write path
+python verify_auth.py             # 24 checks — login, password format, legacy upgrade
 ```
 
 `verify_screens.py` instantiates every screen with the **real** `billing_data.db`, calls `on_show()`, and asserts on the result. It stubs a `FakeApp` (see below), so it never exercises the real sidebar or `navigate_to()` — it runs headless (the root window is `withdraw()`n). `verify_motion.py` and `verify_sidebar.py` both build the real `BillingApp` instead, to cover what the stub cannot: navigation, the motion layer, and the collapsible sidebar. All three exit 0 on success, 1 on any failure.
@@ -115,6 +116,14 @@ the paths that write a balance, and that a held bill keeps the udhaar it was
 told to collect. Both defects it was written for were silent: they never
 raised, logged, or showed a dialog, and both survived because nothing
 exercised void, return or netting arithmetic.
+
+`verify_auth.py` covers **Auth & Passwords** below: the stored PBKDF2
+format and its iteration count, that `authenticate()` strips the hash
+before returning, and that a legacy bare SHA-256 hash still verifies, is
+upgraded on login, and verifies again afterwards. It also pins the case it
+was written for — a malformed `password_hash` must refuse that one login
+rather than raise out of `authenticate()`, which used to lock every user
+out of the till.
 
 There is no per-test CLI filter — to test one screen in isolation, replicate both stubs from `verify_screens.py`. `FakeApp` must carry `current_lang` and `current_theme`, because screens read them during construction; the user dict must carry `name`, because screens read `current_user["name"]`:
 
@@ -318,6 +327,14 @@ Returns are driven from **Bill History** (`_return_bill`, admin-only), not a ded
 ### Auth & Passwords
 
 Passwords are salted **PBKDF2-HMAC-SHA256** (200k iterations), stored as `pbkdf2_sha256$iters$salt$hash` — see `hash_password()` / `verify_password()` in `database.py`. `authenticate()` also accepts legacy bare SHA-256 hashes (constant-time compare) and **transparently re-hashes them to PBKDF2 on successful login**; never widen this fallback. It strips `password_hash` before returning the user dict.
+
+> `verify_password()` guards **both** branches. `hmac.compare_digest`
+> raises `TypeError` on a `str` holding non-ASCII, and `password_hash` is a
+> bare `TEXT` column with no format constraint — so before that guard, one
+> corrupted row propagated out of `authenticate()` and locked every user out
+> of the app with no way back in. A malformed hash fails one login, never
+> the till.
+
 
 `is_default_admin_active()` reports whether `admin` still uses `admin123` — the login screen only shows the credentials hint while that is true.
 
